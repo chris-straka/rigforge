@@ -28,3 +28,8 @@ Game export: with a generated rig active, Armature properties >
 Rigforge Game Export > Export Game GLB — writes a deform-bones-only
 GLB (Godot-friendly settings) with all meshes bound via Armature
 modifiers. Headless: `bpy.ops.wm.rigforge_game_export(filepath=...)`.
+
+Presets: `hll_hero` (stylized biped, Andras-scale) and `hll_stalker`
+(quadruped, stalker-scale) metarigs in Add > Armature > Rigify
+Meta-Rigs. Generated modules — rebuild with
+`--python tools/make_hll_presets.py -- .` after tuning constants.

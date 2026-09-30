@@ -125,6 +125,50 @@ if non_def_joints:
 if len(joint_names) != len(def_bones):
     fail(f"GLB has {len(joint_names)} joints, rig has {len(def_bones)} DEF bones")
 
+# 5b. Baked animation: key two control bones, export, verify the GLB
+# carries the clip on DEF joints only.
+scene = bpy.context.scene
+scene.frame_start = 1
+scene.frame_end = 10
+for ctl in ('root', 'torso'):
+    if ctl not in rig.pose.bones:
+        fail(f"control bone {ctl!r} missing from generated rig")
+action = bpy.data.actions.new("TestAnim")
+rig.animation_data_create()
+rig.animation_data.action = action
+scene.frame_set(1)
+rig.pose.bones['torso'].location = (0.0, 0.0, 0.0)
+rig.pose.bones['torso'].keyframe_insert('location')
+rig.pose.bones['root'].location = (0.0, 0.0, 0.0)
+rig.pose.bones['root'].keyframe_insert('location')
+scene.frame_set(10)
+rig.pose.bones['torso'].location = (0.0, 0.0, 0.1)
+rig.pose.bones['torso'].keyframe_insert('location')
+rig.pose.bones['root'].location = (0.0, 0.5, 0.0)
+rig.pose.bones['root'].keyframe_insert('location')
+anim_path = "/tmp/rigforge_export_anim.glb"
+if os.path.exists(anim_path):
+    os.remove(anim_path)
+bpy.ops.wm.rigforge_game_export(filepath=anim_path)
+with open(anim_path, 'rb') as f:
+    anim_raw = f.read()
+anim_len = struct.unpack('<I', anim_raw[12:16])[0]
+anim = json.loads(anim_raw[20:20 + anim_len])
+anims = anim.get('animations', [])
+print(f"anim: {len(anims)} clips")
+if not anims:
+    fail("animated export contains no animation clips")
+n_channels = 0
+for clip in anims:
+    for ch in clip['channels']:
+        n_channels += 1
+        target = anim['nodes'][ch['target']['node']].get('name') or ''
+        if not target.startswith("DEF-"):
+            fail(f"animation targets non-DEF node: {target!r}")
+print(f"anim: {n_channels} channels, all on DEF joints")
+if n_channels < 10:
+    fail(f"only {n_channels} animation channels baked")
+
 # 6. Round-trip: re-import and verify the armature + skinned mesh.
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete(use_global=False)
