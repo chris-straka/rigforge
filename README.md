@@ -10,7 +10,7 @@ in Blender, exported clean.
 - Day-0 state: pristine copy + headless smoke test (register, add human
   metarig, generate). See TODO.md.
 
-Layout: `rigify/` is the addon. Zip that folder for Install-from-Disk.
+Layout: `rigforge/` is the addon. Zip that folder for Install-from-Disk.
 
 Smoke test:
 
