@@ -15,8 +15,8 @@ beat upstream on auto-placement, skinning, presets, and export.
   script at `/tmp/rigforge_smoke.py`, recreate if missing).
 - Blender binary: `/Applications/Blender.app/Contents/MacOS/Blender`.
   Headless only unless the user approves a GUI launch.
-- Local commits are fine; there is no remote yet — do not create
-  GitHub repos or remotes without being asked.
+- Remote: `github.com/chris-straka/rigforge` (private). Commit
+  locally when asked; push only when asked.
 
 ## Siblings (separate repos, separate sessions)
 
