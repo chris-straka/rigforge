@@ -2,24 +2,27 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import json
-
-from typing import Optional, Sequence
+from collections.abc import Sequence
 from itertools import count
 
-from ...rig_ui_template import PanelLayout
-from ...utils.bones import put_bone, flip_bone, align_chain_x_axis, set_bone_widget_transform
-from ...utils.naming import make_derived_name
-from ...utils.widgets import create_widget
-from ...utils.widgets_basic import create_circle_widget, create_sphere_widget
-from ...utils.misc import map_list
-from ...utils.layers import ControlLayersOption
-from ...utils.switch_parent import SwitchParentBuilder
-from ...utils.animation import add_generic_snap, add_fk_ik_snap_buttons
+import bpy
 
 from ...base_rig import stage
-
+from ...rig_ui_template import PanelLayout
+from ...utils.animation import add_fk_ik_snap_buttons, add_generic_snap
+from ...utils.bones import (
+    align_chain_x_axis,
+    flip_bone,
+    put_bone,
+    set_bone_widget_transform,
+)
+from ...utils.layers import ControlLayersOption
+from ...utils.misc import map_list
+from ...utils.naming import make_derived_name
+from ...utils.switch_parent import SwitchParentBuilder
+from ...utils.widgets import create_widget
+from ...utils.widgets_basic import create_circle_widget, create_sphere_widget
 from ..chain_rigs import SimpleChainRig
 
 
@@ -35,7 +38,7 @@ class Rig(SimpleChainRig):
         self.make_ik = self.params.make_extra_ik_control
 
     def prepare_bones(self):
-        if self.params.primary_rotation_axis == 'automatic':
+        if self.params.primary_rotation_axis == "automatic":
             align_chain_x_axis(self.obj, self.bones.org)
 
     def parent_bones(self):
@@ -45,18 +48,15 @@ class Rig(SimpleChainRig):
     # BONES
 
     class CtrlBones(SimpleChainRig.CtrlBones):
-        master: str                    # Master control
-        ik: str                        # IK control (@make_ik)
+        master: str  # Master control
+        ik: str  # IK control (@make_ik)
 
     class MchBones(SimpleChainRig.MchBones):
-        stretch: list[str]             # Stretch system
-        bend: list[str]                # Bend system
+        stretch: list[str]  # Stretch system
+        bend: list[str]  # Bend system
 
     bones: SimpleChainRig.ToplevelBones[
-        list[str],
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        list[str]
+        list[str], "Rig.CtrlBones", "Rig.MchBones", list[str]
     ]
 
     ##############################
@@ -65,7 +65,9 @@ class Rig(SimpleChainRig):
     @stage.generate_bones
     def make_master_control(self):
         orgs = self.bones.org
-        name = self.copy_bone(orgs[0], make_derived_name(orgs[0], 'ctrl', '_master'), parent=True)
+        name = self.copy_bone(
+            orgs[0], make_derived_name(orgs[0], "ctrl", "_master"), parent=True
+        )
         self.bones.ctrl.master = name
 
         first_bone = self.get_bone(orgs[0])
@@ -88,8 +90,15 @@ class Rig(SimpleChainRig):
         w = create_widget(self.obj, master_name)
         if w is not None:
             mesh = w.data
-            verts = [(0, 0, 0), (0, 1, 0), (0.05, 1, 0), (0.05, 1.1, 0), (-0.05, 1.1, 0), (-0.05, 1, 0)]
-            if 'Z' in self.params.primary_rotation_axis:
+            verts = [
+                (0, 0, 0),
+                (0, 1, 0),
+                (0.05, 1, 0),
+                (0.05, 1.1, 0),
+                (-0.05, 1.1, 0),
+                (-0.05, 1, 0),
+            ]
+            if "Z" in self.params.primary_rotation_axis:
                 # Flip x/z coordinates
                 temp = []
                 for v in verts:
@@ -109,10 +118,10 @@ class Rig(SimpleChainRig):
         self.bones.ctrl.fk += [self.make_tip_control_bone(orgs[-1], orgs[0])]
 
     def make_control_bone(self, i: int, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'ctrl'), inherit_scale=True)
+        return self.copy_bone(org, make_derived_name(org, "ctrl"), inherit_scale=True)
 
     def make_tip_control_bone(self, org: str, name_org: str):
-        name = self.copy_bone(org, make_derived_name(name_org, 'ctrl'), parent=False)
+        name = self.copy_bone(org, make_derived_name(name_org, "ctrl"), parent=False)
 
         flip_bone(self.obj, name)
         self.get_bone(name).length /= 2
@@ -132,7 +141,7 @@ class Rig(SimpleChainRig):
 
         ControlLayersOption.TWEAK.assign(self.params, self.obj, self.bones.ctrl.fk)
 
-    def configure_control_bone(self, i: int, ctrl: str, org: Optional[str]):
+    def configure_control_bone(self, i: int, ctrl: str, org: str | None):
         if org:
             self.copy_bone_properties(org, ctrl)
         else:
@@ -161,7 +170,9 @@ class Rig(SimpleChainRig):
             self.build_ik_parent_switch(SwitchParentBuilder(self.generator))
 
     def make_ik_control_bone(self, orgs: list[str]):
-        name = self.copy_bone(orgs[-1], make_derived_name(orgs[0], 'ctrl', '_ik'), scale=0.7)
+        name = self.copy_bone(
+            orgs[-1], make_derived_name(orgs[0], "ctrl", "_ik"), scale=0.7
+        )
         put_bone(self.obj, name, self.get_bone(orgs[-1]).tail)
         return name
 
@@ -169,10 +180,16 @@ class Rig(SimpleChainRig):
         ctrl = self.bones.ctrl
 
         pbuilder.build_child(
-            self, ctrl.ik, prop_bone=ctrl.ik,
-            select_tags=['held_object', 'limb_ik', {'child', 'limb_end'}], only_selected=True,
-            prop_id='IK_parent', prop_name='IK Parent', controls=[ctrl.ik],
-            no_fix_rotation=True, no_fix_scale=True,
+            self,
+            ctrl.ik,
+            prop_bone=ctrl.ik,
+            select_tags=["held_object", "limb_ik", {"child", "limb_end"}],
+            only_selected=True,
+            prop_id="IK_parent",
+            prop_name="IK Parent",
+            controls=[ctrl.ik],
+            no_fix_rotation=True,
+            no_fix_scale=True,
         )
 
     @stage.parent_bones
@@ -197,29 +214,44 @@ class Rig(SimpleChainRig):
             ctrl = self.bones.ctrl
             rig_name = ctrl.fk[0]
 
-            panel = self.script.panel_with_selected_check(self, self.bones.ctrl.flatten())
+            panel = self.script.panel_with_selected_check(
+                self, self.bones.ctrl.flatten()
+            )
 
             self.make_property(
-                ctrl.ik, 'FK_IK', 0.0,
-                description="Enable simple IK correction on top of FK posing"
+                ctrl.ik,
+                "FK_IK",
+                0.0,
+                description="Enable simple IK correction on top of FK posing",
             )
-            panel.custom_prop(ctrl.ik, 'FK_IK', text="Finger IK ({})".format(rig_name), slider=True)
+            panel.custom_prop(
+                ctrl.ik, "FK_IK", text=f"Finger IK ({rig_name})", slider=True
+            )
 
             axis = self.params.primary_rotation_axis
 
             add_finger_snap_fk_to_ik(
-                panel, master=ctrl.master, fk_bones=ctrl.fk,
-                ik_bones=self.bones.org, ik_control=ctrl.ik,
+                panel,
+                master=ctrl.master,
+                fk_bones=ctrl.fk,
+                ik_bones=self.bones.org,
+                ik_control=ctrl.ik,
                 ik_constraint_bone=self.bones.org[-1],
-                axis=self.axis_options[axis]['id'],
-                rig_name=rig_name, compact=True,
+                axis=self.axis_options[axis]["id"],
+                rig_name=rig_name,
+                compact=True,
             )
 
             add_generic_snap(
-                panel, output_bones=[ctrl.ik], input_bones=ctrl.fk[-1:],
+                panel,
+                output_bones=[ctrl.ik],
+                input_bones=ctrl.fk[-1:],
                 input_ctrl_bones=[ctrl.master, *ctrl.fk],
-                label='IK->FK', rig_name=rig_name, tooltip='IK to FK',
-                compact=True, locks=(False, True, True),
+                label="IK->FK",
+                rig_name=rig_name,
+                tooltip="IK to FK",
+                compact=True,
+                locks=(False, True, True),
             )
 
     @stage.generate_widgets
@@ -235,7 +267,9 @@ class Rig(SimpleChainRig):
         self.bones.mch.bend = map_list(self.make_mch_bend_bone, self.bones.org)
 
     def make_mch_bend_bone(self, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'mch', '_drv'), inherit_scale=True, scale=0.3)
+        return self.copy_bone(
+            org, make_derived_name(org, "mch", "_drv"), inherit_scale=True, scale=0.3
+        )
 
     @stage.parent_bones
     def parent_mch_bend_chain(self):
@@ -245,20 +279,13 @@ class Rig(SimpleChainRig):
 
     # Match axis to expression
     axis_options = {
-        "automatic": {"axis": 0, "id": '+X',
-                      "expr": '(1-sy)*pi'},
-        "X": {"axis": 0, "id": '+X',
-              "expr": '(1-sy)*pi'},
-        "-X": {"axis": 0, "id": '-X',
-               "expr": '-((1-sy)*pi)'},
-        "Y": {"axis": 1, "id": '+Y',
-              "expr": '(1-sy)*pi'},
-        "-Y": {"axis": 1, "id": '-Y',
-               "expr": '-((1-sy)*pi)'},
-        "Z": {"axis": 2, "id": '+Z',
-              "expr": '(1-sy)*pi'},
-        "-Z": {"axis": 2, "id": '-Z',
-               "expr": '-((1-sy)*pi)'}
+        "automatic": {"axis": 0, "id": "+X", "expr": "(1-sy)*pi"},
+        "X": {"axis": 0, "id": "+X", "expr": "(1-sy)*pi"},
+        "-X": {"axis": 0, "id": "-X", "expr": "-((1-sy)*pi)"},
+        "Y": {"axis": 1, "id": "+Y", "expr": "(1-sy)*pi"},
+        "-Y": {"axis": 1, "id": "-Y", "expr": "-((1-sy)*pi)"},
+        "Z": {"axis": 2, "id": "+Z", "expr": "(1-sy)*pi"},
+        "-Z": {"axis": 2, "id": "-Z", "expr": "-((1-sy)*pi)"},
     }
 
     @stage.rig_bones
@@ -269,19 +296,21 @@ class Rig(SimpleChainRig):
     def rig_mch_bend_bone(self, i: int, mch: str):
         master = self.bones.ctrl.master
         if i == 0:
-            self.make_constraint(mch, 'COPY_LOCATION', master)
-            self.make_constraint(mch, 'COPY_ROTATION', master, space='LOCAL')
+            self.make_constraint(mch, "COPY_LOCATION", master)
+            self.make_constraint(mch, "COPY_ROTATION", master, space="LOCAL")
         else:
             axis = self.params.primary_rotation_axis
             options = self.axis_options[axis]
 
             bone = self.get_bone(mch)
-            bone.rotation_mode = 'YZX'
+            bone.rotation_mode = "YZX"
 
             self.make_driver(
-                bone, 'rotation_euler', index=options['axis'],
-                expression=options['expr'],
-                variables={'sy': (master, '.scale.y')}
+                bone,
+                "rotation_euler",
+                index=options["axis"],
+                expression=options["expr"],
+                variables={"sy": (master, ".scale.y")},
             )
 
     ##############################
@@ -292,7 +321,7 @@ class Rig(SimpleChainRig):
         self.bones.mch.stretch = map_list(self.make_mch_stretch_bone, self.bones.org)
 
     def make_mch_stretch_bone(self, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'mch'), parent=False)
+        return self.copy_bone(org, make_derived_name(org, "mch"), parent=False)
 
     @stage.parent_bones
     def parent_mch_stretch_chain(self):
@@ -308,10 +337,12 @@ class Rig(SimpleChainRig):
 
     def rig_mch_stretch_bone(self, i: int, mch: str, ctrl: str, ctrl_next: str):
         if i == 0:
-            self.make_constraint(mch, 'COPY_LOCATION', ctrl)
-            self.make_constraint(mch, 'COPY_SCALE', ctrl)
+            self.make_constraint(mch, "COPY_LOCATION", ctrl)
+            self.make_constraint(mch, "COPY_SCALE", ctrl)
 
-        self.make_constraint(mch, 'STRETCH_TO', ctrl_next, volume='NO_VOLUME', keep_axis='SWING_Y')
+        self.make_constraint(
+            mch, "STRETCH_TO", ctrl_next, volume="NO_VOLUME", keep_axis="SWING_Y"
+        )
 
     ##############################
     # ORG chain
@@ -331,7 +362,7 @@ class Rig(SimpleChainRig):
         # Lock IK axis on child bones, using stiffness to preserve
         # original rotation rather than zeroing it out.
         stiffness = [1.0, 1.0, 1.0]
-        stiffness[options['axis']] = 0.0
+        stiffness[options["axis"]] = 0.0
 
         for org in orgs[1:]:
             bone = self.get_bone(org)
@@ -339,11 +370,15 @@ class Rig(SimpleChainRig):
 
         # Add the constraint
         con = self.make_constraint(
-            orgs[-1], 'IK', ik_ctrl, name='FingerIK',
-            chain_count=len(orgs), use_stretch=False,
+            orgs[-1],
+            "IK",
+            ik_ctrl,
+            name="FingerIK",
+            chain_count=len(orgs),
+            use_stretch=False,
         )
 
-        self.make_driver(con, "influence", variables=[(ik_ctrl, 'FK_IK')])
+        self.make_driver(con, "influence", variables=[(ik_ctrl, "FK_IK")])
 
     ##############################
     # Deform chain
@@ -353,56 +388,74 @@ class Rig(SimpleChainRig):
         master = self.bones.ctrl.master
 
         if self.bbone_segments > 1:
-            self.make_property(master, 'finger_curve', 0.0, description="Rubber hose finger cartoon effect")
+            self.make_property(
+                master,
+                "finger_curve",
+                0.0,
+                description="Rubber hose finger cartoon effect",
+            )
 
             # Create UI
-            panel = self.script.panel_with_selected_check(self, self.bones.ctrl.flatten())
-            panel.custom_prop(master, 'finger_curve', text="Curvature", slider=True)
+            panel = self.script.panel_with_selected_check(
+                self, self.bones.ctrl.flatten()
+            )
+            panel.custom_prop(master, "finger_curve", text="Curvature", slider=True)
 
     def rig_deform_bone(self, i: int, deform: str, org: str):
         master = self.bones.ctrl.master
         bone = self.get_bone(deform)
 
-        self.make_constraint(deform, 'COPY_TRANSFORMS', org)
+        self.make_constraint(deform, "COPY_TRANSFORMS", org)
 
         if self.bbone_segments > 1:
-            self.make_driver(bone.bone, 'bbone_easein', variables=[(master, 'finger_curve')])
-            self.make_driver(bone.bone, 'bbone_easeout', variables=[(master, 'finger_curve')])
+            self.make_driver(
+                bone.bone, "bbone_easein", variables=[(master, "finger_curve")]
+            )
+            self.make_driver(
+                bone.bone, "bbone_easeout", variables=[(master, "finger_curve")]
+            )
 
     ###############
     # OPTIONS
 
     @classmethod
     def add_parameters(cls, params):
-        """ Add the parameters of this rig type to the
-            RigifyParameters PropertyGroup
+        """Add the parameters of this rig type to the
+        RigforgeParameters PropertyGroup
         """
-        items = [('automatic', 'Automatic', ''),
-                 ('X', 'X manual', ''), ('Y', 'Y manual', ''), ('Z', 'Z manual', ''),
-                 ('-X', '-X manual', ''), ('-Y', '-Y manual', ''), ('-Z', '-Z manual', '')]
+        items = [
+            ("automatic", "Automatic", ""),
+            ("X", "X manual", ""),
+            ("Y", "Y manual", ""),
+            ("Z", "Z manual", ""),
+            ("-X", "-X manual", ""),
+            ("-Y", "-Y manual", ""),
+            ("-Z", "-Z manual", ""),
+        ]
 
         params.primary_rotation_axis = bpy.props.EnumProperty(
-            items=items, name="Primary Rotation Axis", default='automatic')
+            items=items, name="Primary Rotation Axis", default="automatic"
+        )
 
         params.bbones = bpy.props.IntProperty(
-            name='B-Bone Segments',
+            name="B-Bone Segments",
             default=10,
             min=1,
-            description='Number of B-Bone segments'
+            description="Number of B-Bone segments",
         )
 
         params.make_extra_ik_control = bpy.props.BoolProperty(
             name="Extra IK Control",
             default=False,
-            description="Create an optional IK control"
+            description="Create an optional IK control",
         )
 
         params.ik_local_location = bpy.props.BoolProperty(
-            name='IK Local Location',
+            name="IK Local Location",
             default=True,
             description="Specifies the value of the Local Location option for IK controls, "
-                        "which decides if the location channels are aligned to the local control "
-                        "orientation or world",
+            "which decides if the location channels are aligned to the local control "
+            "orientation or world",
         )
 
         ControlLayersOption.TWEAK.add_parameters(params)
@@ -410,17 +463,16 @@ class Rig(SimpleChainRig):
 
     @classmethod
     def parameters_ui(cls, layout, params):
-        """ Create the ui for the rig parameters.
-        """
+        """Create the ui for the rig parameters."""
         r = layout.row()
         r.label(text="Bend rotation axis:")
         r.prop(params, "primary_rotation_axis", text="")
 
-        layout.prop(params, 'bbones')
-        layout.prop(params, 'make_extra_ik_control', text='IK Control')
+        layout.prop(params, "bbones")
+        layout.prop(params, "make_extra_ik_control", text="IK Control")
 
         if params.make_extra_ik_control:
-            layout.prop(params, 'ik_local_location')
+            layout.prop(params, "ik_local_location")
 
         ControlLayersOption.TWEAK.parameters_ui(layout, params)
 
@@ -432,14 +484,18 @@ class Rig(SimpleChainRig):
 # Finger FK to IK operator ##
 #############################
 
-SCRIPT_REGISTER_OP_SNAP_FK_IK = ['POSE_OT_rigforge_finger_fk2ik', 'POSE_OT_rigforge_finger_fk2ik_bake']
+SCRIPT_REGISTER_OP_SNAP_FK_IK = [
+    "POSE_OT_rigforge_finger_fk2ik",
+    "POSE_OT_rigforge_finger_fk2ik_bake",
+]
 
-SCRIPT_UTILITIES_OP_SNAP_FK_IK = ['''
+SCRIPT_UTILITIES_OP_SNAP_FK_IK = [
+    """
 ########################
 ## Limb Snap IK to FK ##
 ########################
 
-class RigifyFingerFk2IkBase:
+class RigforgeFingerFk2IkBase:
     ik_control:      StringProperty(name="IK Control")
     ik_chain:        StringProperty(name="IK output chain")
     constraint_bone: StringProperty(name="Bone With the IK Constraint")
@@ -572,12 +628,12 @@ class RigifyFingerFk2IkBase:
             context, obj, self.fk_chain_list[1:-1], matrices[1:], keyflags=self.keyflags,
         )
 
-class POSE_OT_rigforge_finger_fk2ik(RigifyFingerFk2IkBase, RigifySingleUpdateMixin, bpy.types.Operator):
+class POSE_OT_rigforge_finger_fk2ik(RigforgeFingerFk2IkBase, RigforgeSingleUpdateMixin, bpy.types.Operator):
     bl_idname = "pose.rigforge_finger_fk2ik_" + rig_id
     bl_label = "Snap FK->IK"
     bl_description = "Snap the FK chain to IK result"
 
-class POSE_OT_rigforge_finger_fk2ik_bake(RigifyFingerFk2IkBase, RigifyBakeKeyframesMixin, bpy.types.Operator):
+class POSE_OT_rigforge_finger_fk2ik_bake(RigforgeFingerFk2IkBase, RigforgeBakeKeyframesMixin, bpy.types.Operator):
     bl_idname = "pose.rigforge_finger_fk2ik_bake_" + rig_id
     bl_label = "Apply Snap FK->IK To Keyframes"
     bl_description = "Snap the FK chain keyframes to IK result"
@@ -586,105 +642,117 @@ class POSE_OT_rigforge_finger_fk2ik_bake(RigifyFingerFk2IkBase, RigifyBakeKeyfra
         fk_bones = [self.fk_master, *self.fk_chain_list]
         self.bake_add_bone_frames(fk_bones + [self.ik_control], TRANSFORM_PROPS_ALL)
         return self.bake_get_all_bone_curves(fk_bones, TRANSFORM_PROPS_ALL)
-''']
+"""
+]
 
 
 def add_finger_snap_fk_to_ik(
-        panel: 'PanelLayout', *, master: Optional[str] = None,
-        fk_bones: Sequence[str] = (), ik_bones: Sequence[str] = (),
-        ik_control: Optional[str] = None,
-        ik_constraint_bone: Optional[str] = None,
-        axis='+X', rig_name='', compact: Optional[bool] = None):
+    panel: "PanelLayout",
+    *,
+    master: str | None = None,
+    fk_bones: Sequence[str] = (),
+    ik_bones: Sequence[str] = (),
+    ik_control: str | None = None,
+    ik_constraint_bone: str | None = None,
+    axis="+X",
+    rig_name="",
+    compact: bool | None = None,
+):
     panel.use_bake_settings()
     panel.script.add_utilities(SCRIPT_UTILITIES_OP_SNAP_FK_IK)
     panel.script.register_classes(SCRIPT_REGISTER_OP_SNAP_FK_IK)
 
     op_props = {
-        'fk_master': master,
-        'fk_chain': json.dumps(fk_bones),
-        'ik_chain': json.dumps(ik_bones),
-        'ik_control': ik_control,
-        'constraint_bone': ik_constraint_bone,
-        'axis': axis,
+        "fk_master": master,
+        "fk_chain": json.dumps(fk_bones),
+        "ik_chain": json.dumps(ik_bones),
+        "ik_control": ik_control,
+        "constraint_bone": ik_constraint_bone,
+        "axis": axis,
     }
 
     add_fk_ik_snap_buttons(
-        panel, 'pose.rigforge_finger_fk2ik_{rig_id}', 'pose.rigforge_finger_fk2ik_bake_{rig_id}',
-        label='FK->IK', rig_name=rig_name, properties=op_props,
-        clear_bones=[master, *fk_bones], compact=compact,
+        panel,
+        "pose.rigforge_finger_fk2ik_{rig_id}",
+        "pose.rigforge_finger_fk2ik_bake_{rig_id}",
+        label="FK->IK",
+        rig_name=rig_name,
+        properties=op_props,
+        clear_bones=[master, *fk_bones],
+        compact=compact,
     )
 
 
 def create_sample(obj):
     # generated by rigforge.utils.write_metarig
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     arm = obj.data
 
     bones = {}
 
-    bone = arm.edit_bones.new('palm.04.L')
+    bone = arm.edit_bones.new("palm.04.L")
     bone.head[:] = 0.0043, -0.0030, -0.0026
     bone.tail[:] = 0.0642, 0.0037, -0.0469
     bone.roll = -2.5155
     bone.use_connect = False
-    bones['palm.04.L'] = bone.name
-    bone = arm.edit_bones.new('f_pinky.01.L')
+    bones["palm.04.L"] = bone.name
+    bone = arm.edit_bones.new("f_pinky.01.L")
     bone.head[:] = 0.0642, 0.0037, -0.0469
     bone.tail[:] = 0.0703, 0.0039, -0.0741
     bone.roll = -1.9749
     bone.use_connect = False
-    bone.parent = arm.edit_bones[bones['palm.04.L']]
-    bones['f_pinky.01.L'] = bone.name
-    bone = arm.edit_bones.new('f_pinky.02.L')
+    bone.parent = arm.edit_bones[bones["palm.04.L"]]
+    bones["f_pinky.01.L"] = bone.name
+    bone = arm.edit_bones.new("f_pinky.02.L")
     bone.head[:] = 0.0703, 0.0039, -0.0741
     bone.tail[:] = 0.0732, 0.0044, -0.0965
     bone.roll = -1.9059
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['f_pinky.01.L']]
-    bones['f_pinky.02.L'] = bone.name
-    bone = arm.edit_bones.new('f_pinky.03.L')
+    bone.parent = arm.edit_bones[bones["f_pinky.01.L"]]
+    bones["f_pinky.02.L"] = bone.name
+    bone = arm.edit_bones.new("f_pinky.03.L")
     bone.head[:] = 0.0732, 0.0044, -0.0965
     bone.tail[:] = 0.0725, 0.0046, -0.1115
     bone.roll = -1.7639
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['f_pinky.02.L']]
-    bones['f_pinky.03.L'] = bone.name
+    bone.parent = arm.edit_bones[bones["f_pinky.02.L"]]
+    bones["f_pinky.03.L"] = bone.name
 
-    bpy.ops.object.mode_set(mode='OBJECT')
-    pbone = obj.pose.bones[bones['palm.04.L']]
-    pbone.rigforge_type = ''
+    bpy.ops.object.mode_set(mode="OBJECT")
+    pbone = obj.pose.bones[bones["palm.04.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'YXZ'
-    pbone = obj.pose.bones[bones['f_pinky.01.L']]
-    pbone.rigforge_type = 'limbs.super_finger'
+    pbone.rotation_mode = "YXZ"
+    pbone = obj.pose.bones[bones["f_pinky.01.L"]]
+    pbone.rigforge_type = "limbs.super_finger"
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
     try:
         pbone.rigforge_parameters.ik_local_location = False
     except AttributeError:
         pass
-    pbone = obj.pose.bones[bones['f_pinky.02.L']]
-    pbone.rigforge_type = ''
+    pbone = obj.pose.bones[bones["f_pinky.02.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['f_pinky.03.L']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["f_pinky.03.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in arm.edit_bones:
         bone.select = False
         bone.select_head = False

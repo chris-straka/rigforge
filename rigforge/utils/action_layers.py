@@ -3,36 +3,36 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
-import bpy
-from typing import Optional, List, Dict, Tuple, TYPE_CHECKING
-from bpy.types import Action, Mesh, Armature, ActionChannelbag
-from bpy.types import ActionSlot as BlenderActionSlot
 
+from typing import TYPE_CHECKING
+
+import bpy
 from bl_math import clamp
+from bpy.types import Action, Armature, Mesh
+from bpy.types import ActionSlot as BlenderActionSlot
 from bpy_extras import anim_utils
 
-from .errors import MetarigError
-from .misc import MeshObject, IdPropSequence, verify_mesh_obj
-from .naming import Side, get_name_side, change_name_side, mirror_name
-from .bones import BoneUtilityMixin
-from .mechanism import MechanismUtilityMixin, driver_var_transform, quote_property
-
-from ..base_rig import RigComponent, stage
 from ..base_generate import GeneratorPlugin
+from ..base_rig import RigComponent, stage
+from .bones import BoneUtilityMixin
+from .errors import MetarigError
+from .mechanism import MechanismUtilityMixin, driver_var_transform, quote_property
+from .misc import IdPropSequence, MeshObject, verify_mesh_obj
+from .naming import Side, change_name_side, get_name_side, mirror_name
 
 if TYPE_CHECKING:
     from ..operators.action_layers import ActionSlot
 
 
-def get_rigforge_action_slots(metarig_data: Armature) -> IdPropSequence['ActionSlot']:
-    return metarig_data.rigforge_action_slots  # noqa
+def get_rigforge_action_slots(metarig_data: Armature) -> IdPropSequence[ActionSlot]:
+    return metarig_data.rigforge_action_slots
 
 
 class ActionSlotBase:
     """Abstract non-RNA base for the action list slots."""
 
-    action: Optional[Action]
-    action_slot: Optional[BlenderActionSlot]
+    action: Action | None
+    action_slot: BlenderActionSlot | None
     enabled: bool
     symmetrical: bool
     subtarget: str
@@ -43,18 +43,20 @@ class ActionSlotBase:
     trans_min: float
     trans_max: float
     is_corrective: bool
-    trigger_a: Optional[ActionSlotBase]
-    trigger_b: Optional[ActionSlotBase]
+    trigger_a: ActionSlotBase | None
+    trigger_b: ActionSlotBase | None
 
     ############################################
     # Action Constraint Setup
 
     @property
-    def keyed_bone_names(self) -> List[str]:
+    def keyed_bone_names(self) -> list[str]:
         """Return a list of bone names that have keyframes in the Action of this Slot."""
         keyed_bones = []
 
-        channelbag = anim_utils.action_get_channelbag_for_slot(self.action, self.action_slot)
+        channelbag = anim_utils.action_get_channelbag_for_slot(
+            self.action, self.action_slot
+        )
         if not channelbag:
             return []
 
@@ -76,10 +78,10 @@ class ActionSlotBase:
     def default_side(self):
         return get_name_side(self.subtarget)
 
-    def get_min_max(self, side=Side.MIDDLE) -> Tuple[float, float]:
+    def get_min_max(self, side=Side.MIDDLE) -> tuple[float, float]:
         if side == -self.default_side and side != Side.MIDDLE:
             # Flip min/max in some cases - based on code of Paste Pose Flipped
-            if self.transform_channel in ['LOCATION_X', 'ROTATION_Z', 'ROTATION_Y']:
+            if self.transform_channel in ["LOCATION_X", "ROTATION_Z", "ROTATION_Y"]:
                 return -self.trans_min, -self.trans_max
         return self.trans_min, self.trans_max
 
@@ -88,26 +90,26 @@ class ActionSlotBase:
 
         trans_min, trans_max = self.get_min_max(side)
 
-        if 'ROTATION' in self.transform_channel:
-            var = f'({var}*180/pi)'
+        if "ROTATION" in self.transform_channel:
+            var = f"({var}*180/pi)"
 
-        return f'clamp(({var} - {trans_min:.4}) / {trans_max - trans_min:.4})'
+        return f"clamp(({var} - {trans_min:.4}) / {trans_max - trans_min:.4})"
 
     def get_trigger_expression(self, var_a, var_b):
         assert self.is_corrective
 
-        return f'clamp({var_a} * {var_b})'
+        return f"clamp({var_a} * {var_b})"
 
     ##################################
     # Default Frame
 
     def get_default_channel_value(self) -> float:
         # The default transformation value for rotation and location is 0, but for scale it's 1.
-        return 1.0 if 'SCALE' in self.transform_channel else 0.0
+        return 1.0 if "SCALE" in self.transform_channel else 0.0
 
     def get_default_factor(self, side=Side.MIDDLE, *, triggers=None) -> float:
-        """ Based on the transform channel, and transform range,
-            calculate the evaluation factor in the default pose.
+        """Based on the transform channel, and transform range,
+        calculate the evaluation factor in the default pose.
         """
         if self.is_corrective:
             if not triggers or None in triggers:
@@ -130,11 +132,11 @@ class ActionSlotBase:
             return clamp(factor)
 
     def get_default_frame(self, side=Side.MIDDLE, *, triggers=None) -> float:
-        """ Based on the transform channel, frame range and transform range,
-            we can calculate which frame within the action should have the keyframe
-            which has the default pose.
-            This is the frame which will be read when the transformation is at its default
-            (so 1.0 for scale and 0.0 for loc/rot)
+        """Based on the transform channel, frame range and transform range,
+        we can calculate which frame within the action should have the keyframe
+        which has the default pose.
+        This is the frame which will be read when the transformation is at its default
+        (so 1.0 for scale and 0.0 for loc/rot)
         """
         factor = self.get_default_factor(side, triggers=triggers)
 
@@ -149,10 +151,23 @@ class ActionSlotBase:
 class GeneratedActionSlot(ActionSlotBase):
     """Non-RNA version of the action list slot."""
 
-    def __init__(self, action, *, enabled=True, symmetrical=True, subtarget='',
-                 transform_channel='LOCATION_X', target_space='LOCAL', frame_start=0,
-                 frame_end=2, trans_min=-0.05, trans_max=0.05, is_corrective=False,
-                 trigger_a=None, trigger_b=None):
+    def __init__(
+        self,
+        action,
+        *,
+        enabled=True,
+        symmetrical=True,
+        subtarget="",
+        transform_channel="LOCATION_X",
+        target_space="LOCAL",
+        frame_start=0,
+        frame_end=2,
+        trans_min=-0.05,
+        trans_max=0.05,
+        is_corrective=False,
+        trigger_a=None,
+        trigger_b=None,
+    ):
         self.action = action
         self.enabled = enabled
         self.symmetrical = symmetrical
@@ -173,7 +188,7 @@ class ActionLayer(RigComponent):
 
     rigforge_sub_object_run_late = True
 
-    owner: 'ActionLayerBuilder'
+    owner: ActionLayerBuilder
     slot: ActionSlotBase
     side: Side
 
@@ -223,7 +238,11 @@ class ActionLayer(RigComponent):
         bones = [bone for bone in self.slot.keyed_bone_names if bone not in controls]
 
         if self.side != Side.MIDDLE:
-            bones = [name for name in bones if get_name_side(name) in (self.side, Side.MIDDLE)]
+            bones = [
+                name
+                for name in bones
+                if get_name_side(name) in (self.side, Side.MIDDLE)
+            ]
 
         return bones
 
@@ -254,7 +273,8 @@ class ActionLayer(RigComponent):
     def rig_bone(self, bone_name):
         if bone_name not in self.obj.pose.bones:
             raise MetarigError(
-                f"Bone '{bone_name}' from action '{self.slot.action.name}' not found")
+                f"Bone '{bone_name}' from action '{self.slot.action.name}' not found"
+            )
 
         if self.side != Side.MIDDLE and get_name_side(bone_name) == Side.MIDDLE:
             influence = 0.5
@@ -262,23 +282,26 @@ class ActionLayer(RigComponent):
             influence = 1.0
 
         con = self.make_constraint(
-            bone_name, 'ACTION',
-            name=f'Action {self.name}',
+            bone_name,
+            "ACTION",
+            name=f"Action {self.name}",
             insert_index=0,
             use_eval_time=True,
             action=self.slot.action,
             action_slot=self.slot.action_slot,
             frame_start=self.slot.frame_start,
             frame_end=self.slot.frame_end,
-            mix_mode='BEFORE_SPLIT',
+            mix_mode="BEFORE_SPLIT",
             influence=influence,
         )
 
-        self.rig_output_driver(con, 'eval_time')
+        self.rig_output_driver(con, "eval_time")
 
     def rig_output_driver(self, obj, prop):
         if self.use_property:
-            self.make_driver(obj, prop, variables=[(self.owner.property_bone, self.name)])
+            self.make_driver(
+                obj, prop, variables=[(self.owner.property_bone, self.name)]
+            )
         else:
             self.rig_input_driver(obj, prop)
 
@@ -290,12 +313,13 @@ class ActionLayer(RigComponent):
 
     def rig_corrective_driver(self, obj, prop):
         self.make_driver(
-            obj, prop,
-            expression=self.slot.get_trigger_expression('a', 'b'),
+            obj,
+            prop,
+            expression=self.slot.get_trigger_expression("a", "b"),
             variables={
-                'a': (self.owner.property_bone, self.trigger_a.name),
-                'b': (self.owner.property_bone, self.trigger_b.name),
-            }
+                "a": (self.owner.property_bone, self.trigger_a.name),
+                "b": (self.owner.property_bone, self.trigger_b.name),
+            },
         )
 
     def rig_factor_driver(self, obj, prop):
@@ -306,22 +330,26 @@ class ActionLayer(RigComponent):
 
         if control_name not in self.obj.pose.bones:
             raise MetarigError(
-                f"Control bone '{control_name}' for action '{self.slot.name}' not found")
+                f"Control bone '{control_name}' for action '{self.slot.name}' not found"
+            )
 
-        channel = self.slot.transform_channel\
-            .replace("LOCATION", "LOC").replace("ROTATION", "ROT")
+        channel = self.slot.transform_channel.replace("LOCATION", "LOC").replace(
+            "ROTATION", "ROT"
+        )
 
         self.make_driver(
-            obj, prop,
-            expression=self.slot.get_factor_expression('var', side=self.side),
+            obj,
+            prop,
+            expression=self.slot.get_factor_expression("var", side=self.side),
             variables=[
                 driver_var_transform(
-                    self.obj, control_name,
+                    self.obj,
+                    control_name,
                     type=channel,
                     space=self.slot.target_space,
-                    rotation_mode='SWING_TWIST_Y',
+                    rotation_mode="SWING_TWIST_Y",
                 )
-            ]
+            ],
         )
 
     @stage.rig_bones
@@ -335,7 +363,7 @@ class ActionLayer(RigComponent):
                         self.rig_shape_key(key_block)
 
     def rig_shape_key(self, key_block):
-        self.rig_output_driver(key_block, 'value')
+        self.rig_output_driver(key_block, "value")
 
 
 class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixin):
@@ -343,11 +371,11 @@ class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixi
     Implements centralized generation of action layer constraints.
     """
 
-    slot_list: List[ActionSlotBase]
-    layers: List[ActionLayer]
-    action_map: Dict[str, Dict[Side, ActionLayer]]
-    property_bone: Optional[str]
-    child_meshes: List[MeshObject]
+    slot_list: list[ActionSlotBase]
+    layers: list[ActionLayer]
+    action_map: dict[str, dict[Side, ActionLayer]]
+    property_bone: str | None
+    child_meshes: list[MeshObject]
 
     def __init__(self, generator):
         super().__init__(generator)
@@ -362,7 +390,9 @@ class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixi
             self.rigforge_sub_objects = []
 
             # Generate layers for active valid slots
-            action_slots = [slot for slot in self.slot_list if slot.enabled and slot.action]
+            action_slots = [
+                slot for slot in self.slot_list if slot.enabled and slot.action
+            ]
 
             # Constraints will be added in reverse order because each one is added to the top
             # of the stack when created. However, Before Original reverses the effective
@@ -372,7 +402,9 @@ class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixi
 
     @staticmethod
     def sort_action_setups(action_setups: list[ActionSlotBase]):
-        indices = {action_setup.unique_id: i for i, action_setup in enumerate(action_setups)}
+        indices = {
+            action_setup.unique_id: i for i, action_setup in enumerate(action_setups)
+        }
 
         def action_key(action_setup: ActionSlotBase) -> int:
             return indices.get(action_setup.unique_id, -1)
@@ -401,7 +433,9 @@ class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixi
             trigger_b = self.action_map.get(act_slot.trigger_b.name)
 
             if not trigger_a or not trigger_b:
-                raise MetarigError(f"Action slot references missing trigger slot(s): {name}")
+                raise MetarigError(
+                    f"Action slot references missing trigger slot(s): {name}"
+                )
 
             symmetry = Side.LEFT in trigger_a or Side.LEFT in trigger_b
 
@@ -425,7 +459,9 @@ class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixi
     def rig_bones(self):
         if self.layers:
             self.child_meshes = [
-                verify_mesh_obj(child) for child in self.generator.obj.children_recursive if child.type == 'MESH'
+                verify_mesh_obj(child)
+                for child in self.generator.obj.children_recursive
+                if child.type == "MESH"
             ]
 
 
@@ -433,22 +469,31 @@ class ActionLayerBuilder(GeneratorPlugin, BoneUtilityMixin, MechanismUtilityMixi
 def versioning_5_0(_):
     """This is a load_post handler, registered in the top-most level __init__.py."""
     for obj in bpy.data.objects:
-        if obj.type != 'ARMATURE' or obj.library:
+        if obj.type != "ARMATURE" or obj.library:
             # We only care about armatures, which are local to this file.
             continue
         for action_setup in obj.data.rigforge_action_slots:
             if not action_setup.action:
                 continue
             action_setup.action_slot = next(
-                (s for s in action_setup.action.slots if s.target_id_type in ('UNSPECIFIED', 'OBJECT')), None
+                (
+                    s
+                    for s in action_setup.action.slots
+                    if s.target_id_type in ("UNSPECIFIED", "OBJECT")
+                ),
+                None,
             )
             sys_props = action_setup.bl_system_properties_get()
-            for prop_name in ('trigger_action_a', 'trigger_action_b'):
+            for prop_name in ("trigger_action_a", "trigger_action_b"):
                 trigger_action = sys_props.get(prop_name, None)
                 if not trigger_action:
                     continue
                 trigger_action_setup = next(
-                    (setup for setup in obj.data.rigforge_action_slots if setup.action == trigger_action)
+                    setup
+                    for setup in obj.data.rigforge_action_slots
+                    if setup.action == trigger_action
                 )
-                setattr(action_setup, prop_name.replace("_action", ""), trigger_action_setup)
+                setattr(
+                    action_setup, prop_name.replace("_action", ""), trigger_action_setup
+                )
                 del sys_props[prop_name]

@@ -2,22 +2,25 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
-
-from typing import Optional
 from itertools import count
 
+import bpy
 from bpy.types import PoseBone
 
-from ..utils.rig import connected_children_names
-from ..utils.naming import strip_org, make_derived_name
-from ..utils.bones import (put_bone, flip_bone, flip_bone_chain, is_same_position,
-                           is_connected_position)
-from ..utils.bones import copy_bone_position, connect_bbone_chain_handles
-from ..utils.widgets_basic import create_bone_widget, create_sphere_widget
-from ..utils.misc import map_list
-
 from ..base_rig import BaseRig, stage
+from ..utils.bones import (
+    connect_bbone_chain_handles,
+    copy_bone_position,
+    flip_bone,
+    flip_bone_chain,
+    is_connected_position,
+    is_same_position,
+    put_bone,
+)
+from ..utils.misc import map_list
+from ..utils.naming import make_derived_name, strip_org
+from ..utils.rig import connected_children_names
+from ..utils.widgets_basic import create_bone_widget, create_sphere_widget
 
 
 class SimpleChainRig(BaseRig):
@@ -34,7 +37,9 @@ class SimpleChainRig(BaseRig):
     def initialize(self):
         if len(self.bones.org) < self.min_chain_length:
             self.raise_error(
-                "Input to rig type must be a chain of {} or more bones.", self.min_chain_length)
+                "Input to rig type must be a chain of {} or more bones.",
+                self.min_chain_length,
+            )
 
     def parent_bones(self):
         self.rig_parent_bone = self.get_bone_parent(self.bones.org[0])
@@ -43,16 +48,13 @@ class SimpleChainRig(BaseRig):
     # BONES
 
     class CtrlBones(BaseRig.CtrlBones):
-        fk: list[str]                  # FK control chain
+        fk: list[str]  # FK control chain
 
     class MchBones(BaseRig.MchBones):
         pass
 
     bones: BaseRig.ToplevelBones[
-        list[str],
-        'SimpleChainRig.CtrlBones',
-        'SimpleChainRig.MchBones',
-        list[str]
+        list[str], "SimpleChainRig.CtrlBones", "SimpleChainRig.MchBones", list[str]
     ]
 
     ##############################
@@ -63,7 +65,7 @@ class SimpleChainRig(BaseRig):
         self.bones.ctrl.fk = map_list(self.make_control_bone, count(0), self.bones.org)
 
     def make_control_bone(self, i: int, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'ctrl'), parent=True)
+        return self.copy_bone(org, make_derived_name(org, "ctrl"), parent=True)
 
     @stage.parent_bones
     def parent_control_chain(self):
@@ -98,7 +100,7 @@ class SimpleChainRig(BaseRig):
             self.rig_org_bone(*args)
 
     def rig_org_bone(self, i: int, org: str, ctrl: str):
-        self.make_constraint(org, 'COPY_TRANSFORMS', ctrl)
+        self.make_constraint(org, "COPY_TRANSFORMS", ctrl)
 
     ##############################
     # Deform chain
@@ -108,7 +110,9 @@ class SimpleChainRig(BaseRig):
         self.bones.deform = map_list(self.make_deform_bone, count(0), self.bones.org)
 
     def make_deform_bone(self, i: int, org: str):
-        name = self.copy_bone(org, make_derived_name(org, 'def'), parent=True, bbone=True)
+        name = self.copy_bone(
+            org, make_derived_name(org, "def"), parent=True, bbone=True
+        )
         if self.bbone_segments:
             self.get_bone(name).bbone_segments = self.bbone_segments
         return name
@@ -123,7 +127,7 @@ class SimpleChainRig(BaseRig):
             self.rig_deform_bone(*args)
 
     def rig_deform_bone(self, i: int, deform: str, org: str):
-        self.make_constraint(deform, 'COPY_TRANSFORMS', org)
+        self.make_constraint(deform, "COPY_TRANSFORMS", org)
 
 
 class TweakChainRig(SimpleChainRig):
@@ -133,16 +137,13 @@ class TweakChainRig(SimpleChainRig):
     # BONES
 
     class CtrlBones(SimpleChainRig.CtrlBones):
-        tweak: list[str]               # Tweak control chain
+        tweak: list[str]  # Tweak control chain
 
     class MchBones(SimpleChainRig.MchBones):
         pass
 
     bones: BaseRig.ToplevelBones[
-        list[str],
-        'TweakChainRig.CtrlBones',
-        'TweakChainRig.MchBones',
-        list[str]
+        list[str], "TweakChainRig.CtrlBones", "TweakChainRig.MchBones", list[str]
     ]
 
     ##############################
@@ -151,10 +152,12 @@ class TweakChainRig(SimpleChainRig):
     @stage.generate_bones
     def make_tweak_chain(self):
         orgs = self.bones.org
-        self.bones.ctrl.tweak = map_list(self.make_tweak_bone, count(0), orgs + orgs[-1:])
+        self.bones.ctrl.tweak = map_list(
+            self.make_tweak_bone, count(0), orgs + orgs[-1:]
+        )
 
     def make_tweak_bone(self, i: int, org: str):
-        name = self.copy_bone(org, 'tweak_' + strip_org(org), parent=False, scale=0.5)
+        name = self.copy_bone(org, "tweak_" + strip_org(org), parent=False, scale=0.5)
 
         if i == len(self.bones.org):
             put_bone(self.obj, name, self.get_bone(org).tail)
@@ -174,7 +177,7 @@ class TweakChainRig(SimpleChainRig):
 
     def configure_tweak_bone(self, i: int, tweak: str):
         tweak_pb = self.get_bone(tweak)
-        tweak_pb.rotation_mode = 'ZXY'
+        tweak_pb.rotation_mode = "ZXY"
 
         if i == len(self.bones.org):
             tweak_pb.lock_rotation_w = True
@@ -203,10 +206,10 @@ class TweakChainRig(SimpleChainRig):
             self.rig_org_bone(*args)
 
     # noinspection PyMethodOverriding
-    def rig_org_bone(self, i: int, org: str, tweak: str, next_tweak: Optional[str]):
-        self.make_constraint(org, 'COPY_TRANSFORMS', tweak)
+    def rig_org_bone(self, i: int, org: str, tweak: str, next_tweak: str | None):
+        self.make_constraint(org, "COPY_TRANSFORMS", tweak)
         if next_tweak:
-            self.make_constraint(org, 'STRETCH_TO', next_tweak, keep_axis='SWING_Y')
+            self.make_constraint(org, "STRETCH_TO", next_tweak, keep_axis="SWING_Y")
 
 
 class ConnectingChainRig(TweakChainRig):
@@ -216,7 +219,7 @@ class ConnectingChainRig(TweakChainRig):
     use_connect_reverse = None
 
     use_connect_chain: bool
-    connected_tweak: Optional[str]
+    connected_tweak: str | None
 
     def initialize(self):
         super().initialize()
@@ -275,7 +278,7 @@ class ConnectingChainRig(TweakChainRig):
     # Tweak chain
 
     def check_connect_tweak(self, org: str):
-        """ Check if it is possible to share the last parent tweak control. """
+        """Check if it is possible to share the last parent tweak control."""
 
         assert self.connected_tweak is None
 
@@ -291,7 +294,7 @@ class ConnectingChainRig(TweakChainRig):
             if not self.use_connect_reverse:
                 copy_bone_position(self.obj, org, name, scale=0.5)
 
-                name = self.rename_bone(name, 'tweak_' + strip_org(org))
+                name = self.rename_bone(name, "tweak_" + strip_org(org))
 
             self.connected_tweak = parent_tweaks[index] = name
 
@@ -315,7 +318,11 @@ class ConnectingChainRig(TweakChainRig):
     def configure_tweak_bone(self, i: int, tweak: str):
         super().configure_tweak_bone(i, tweak)
 
-        if self.use_connect_chain and self.use_connect_reverse and i == len(self.bones.org):
+        if (
+            self.use_connect_chain
+            and self.use_connect_reverse
+            and i == len(self.bones.org)
+        ):
             tweak_pb = self.get_bone(tweak)
             tweak_pb.lock_rotation_w = False
             tweak_pb.lock_rotation = (True, False, True)
@@ -335,9 +342,9 @@ class ConnectingChainRig(TweakChainRig):
         else:
             self.set_bone_parent(self.bones.org[0], self.rig_parent_bone)
 
-    def rig_org_bone(self, i: int, org: str, tweak: str, next_tweak: Optional[str]):
+    def rig_org_bone(self, i: int, org: str, tweak: str, next_tweak: str | None):
         if self.use_connect_chain and self.use_connect_reverse:
-            self.make_constraint(org, 'STRETCH_TO', tweak, keep_axis='SWING_Y')
+            self.make_constraint(org, "STRETCH_TO", tweak, keep_axis="SWING_Y")
         else:
             super().rig_org_bone(i, org, tweak, next_tweak)
 
@@ -377,9 +384,9 @@ class ConnectingChainRig(TweakChainRig):
     @classmethod
     def add_parameters(cls, params):
         params.connect_chain = bpy.props.BoolProperty(
-            name='Connect chain',
+            name="Connect chain",
             default=False,
-            description='Connect the B-Bone chain to the parent rig'
+            description="Connect the B-Bone chain to the parent rig",
         )
 
     @classmethod

@@ -4,8 +4,7 @@
 
 
 class MetarigError(Exception):
-    """ Exception raised for errors.
-    """
+    """Exception raised for errors."""
 
     def __init__(self, message):
         self.message = message
@@ -14,7 +13,7 @@ class MetarigError(Exception):
         return repr(self.message)
 
 
-class RaiseErrorMixin(object):
+class RaiseErrorMixin:
     base_bone: str
 
     def raise_error(self, message: str, *args, **kwargs):
@@ -22,7 +21,7 @@ class RaiseErrorMixin(object):
 
         message = message.format(*args, **kwargs)
 
-        if hasattr(self, 'base_bone'):
+        if hasattr(self, "base_bone"):
             message = "Bone '%s': %s" % (strip_org(self.base_bone), message)
 
-        raise MetarigError("RIGIFY ERROR: " + message)
+        raise MetarigError("RIGFORGE ERROR: " + message)

@@ -9,6 +9,7 @@ Run (from the repo root, after syncing the overlay):
 
 Pass criteria: exits 0 and prints RIGFORGE_EXPORT_TEST_OK.
 """
+
 import json
 import os
 import struct
@@ -34,7 +35,7 @@ assert "rf_scripts" in rigforge.__file__, "loaded wrong copy: " + rigforge.__fil
 print("enable OK:", rigforge.__file__)
 
 # 2. Human metarig -> generate.
-bpy.ops.object.armature_human_metarig_add()
+bpy.ops.object.rigforge_human_metarig_add()
 bpy.ops.object.mode_set(mode="OBJECT")
 if bpy.ops.wm.rigforge_game_export.poll():
     fail("export poll should be False on a metarig")
@@ -42,8 +43,7 @@ bpy.ops.pose.rigforge_generate()
 print("generate OK")
 
 rig = next(
-    (o for o in bpy.data.objects
-     if o.type == 'ARMATURE' and 'rig_id' in o.data),
+    (o for o in bpy.data.objects if o.type == "ARMATURE" and "rig_id" in o.data),
     None,
 )
 if rig is None:
@@ -57,15 +57,15 @@ if not def_bones:
 # 3. Test mesh bound to the rig via one DEF bone's vertex group.
 bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0.0, 0.0, 1.0))
 mesh_obj = bpy.context.view_layer.objects.active
-mod = mesh_obj.modifiers.new("Armature", 'ARMATURE')
+mod = mesh_obj.modifiers.new("Armature", "ARMATURE")
 mod.object = rig
 vg = mesh_obj.vertex_groups.new(name=def_bones[0])
-vg.add(range(len(mesh_obj.data.vertices)), 1.0, 'REPLACE')
+vg.add(range(len(mesh_obj.data.vertices)), 1.0, "REPLACE")
 print(f"mesh: {mesh_obj.name} bound to {def_bones[0]}")
 
 # 4. Run the one-click export operator.
 bpy.ops.object.mode_set(mode="OBJECT")
-bpy.ops.object.select_all(action='DESELECT')
+bpy.ops.object.select_all(action="DESELECT")
 rig.select_set(True)
 bpy.context.view_layer.objects.active = rig
 if not bpy.ops.wm.rigforge_game_export.poll():
@@ -92,34 +92,33 @@ skel_path = "/tmp/rigforge_export_skel.glb"
 if os.path.exists(skel_path):
     os.remove(skel_path)
 bpy.ops.wm.rigforge_game_export(filepath=skel_path)
-with open(skel_path, 'rb') as f:
+with open(skel_path, "rb") as f:
     skel_raw = f.read()
-skel_json_len = struct.unpack('<I', skel_raw[12:16])[0]
-skel = json.loads(skel_raw[20:20 + skel_json_len])
-skel_joints = sum(len(s['joints']) for s in skel.get('skins', []))
+skel_json_len = struct.unpack("<I", skel_raw[12:16])[0]
+skel = json.loads(skel_raw[20 : 20 + skel_json_len])
+skel_joints = sum(len(s["joints"]) for s in skel.get("skins", []))
 print(f"skeleton-only: meshes={skel.get('meshes', [])} joints={skel_joints}")
-if skel.get('meshes'):
+if skel.get("meshes"):
     fail(f"skeleton-only export should have no meshes: {skel['meshes']}")
 if skel_joints != len(def_bones):
-    fail(f"skeleton-only export has {skel_joints} joints, "
-         f"expected {len(def_bones)}")
+    fail(f"skeleton-only export has {skel_joints} joints, expected {len(def_bones)}")
 
 # 5. Independent check: parse the GLB JSON chunk directly (no importer).
-with open(GLB_PATH, 'rb') as f:
+with open(GLB_PATH, "rb") as f:
     raw = f.read()
-json_len = struct.unpack('<I', raw[12:16])[0]
-gltf = json.loads(raw[20:20 + json_len])
+json_len = struct.unpack("<I", raw[12:16])[0]
+gltf = json.loads(raw[20 : 20 + json_len])
 
-mesh_names = [m.get('name') for m in gltf.get('meshes', [])]
+mesh_names = [m.get("name") for m in gltf.get("meshes", [])]
 joint_names = []
-for skin in gltf.get('skins', []):
-    joint_names += [gltf['nodes'][j].get('name') for j in skin['joints']]
+for skin in gltf.get("skins", []):
+    joint_names += [gltf["nodes"][j].get("name") for j in skin["joints"]]
 print(f"glb json: meshes={mesh_names} joints={len(joint_names)}")
 if mesh_names != [mesh_name]:
     fail(f"expected exactly the skinned mesh in the GLB, got {mesh_names}")
 if not joint_names:
     fail("GLB skin has no joints")
-non_def_joints = [n for n in joint_names if not (n or '').startswith("DEF-")]
+non_def_joints = [n for n in joint_names if not (n or "").startswith("DEF-")]
 if non_def_joints:
     fail(f"non-DEF joints in GLB: {non_def_joints[:10]}")
 if len(joint_names) != len(def_bones):
@@ -130,39 +129,39 @@ if len(joint_names) != len(def_bones):
 scene = bpy.context.scene
 scene.frame_start = 1
 scene.frame_end = 10
-for ctl in ('root', 'torso'):
+for ctl in ("root", "torso"):
     if ctl not in rig.pose.bones:
         fail(f"control bone {ctl!r} missing from generated rig")
 action = bpy.data.actions.new("TestAnim")
 rig.animation_data_create()
 rig.animation_data.action = action
 scene.frame_set(1)
-rig.pose.bones['torso'].location = (0.0, 0.0, 0.0)
-rig.pose.bones['torso'].keyframe_insert('location')
-rig.pose.bones['root'].location = (0.0, 0.0, 0.0)
-rig.pose.bones['root'].keyframe_insert('location')
+rig.pose.bones["torso"].location = (0.0, 0.0, 0.0)
+rig.pose.bones["torso"].keyframe_insert("location")
+rig.pose.bones["root"].location = (0.0, 0.0, 0.0)
+rig.pose.bones["root"].keyframe_insert("location")
 scene.frame_set(10)
-rig.pose.bones['torso'].location = (0.0, 0.0, 0.1)
-rig.pose.bones['torso'].keyframe_insert('location')
-rig.pose.bones['root'].location = (0.0, 0.5, 0.0)
-rig.pose.bones['root'].keyframe_insert('location')
+rig.pose.bones["torso"].location = (0.0, 0.0, 0.1)
+rig.pose.bones["torso"].keyframe_insert("location")
+rig.pose.bones["root"].location = (0.0, 0.5, 0.0)
+rig.pose.bones["root"].keyframe_insert("location")
 anim_path = "/tmp/rigforge_export_anim.glb"
 if os.path.exists(anim_path):
     os.remove(anim_path)
 bpy.ops.wm.rigforge_game_export(filepath=anim_path)
-with open(anim_path, 'rb') as f:
+with open(anim_path, "rb") as f:
     anim_raw = f.read()
-anim_len = struct.unpack('<I', anim_raw[12:16])[0]
-anim = json.loads(anim_raw[20:20 + anim_len])
-anims = anim.get('animations', [])
+anim_len = struct.unpack("<I", anim_raw[12:16])[0]
+anim = json.loads(anim_raw[20 : 20 + anim_len])
+anims = anim.get("animations", [])
 print(f"anim: {len(anims)} clips")
 if not anims:
     fail("animated export contains no animation clips")
 n_channels = 0
 for clip in anims:
-    for ch in clip['channels']:
+    for ch in clip["channels"]:
         n_channels += 1
-        target = anim['nodes'][ch['target']['node']].get('name') or ''
+        target = anim["nodes"][ch["target"]["node"]].get("name") or ""
         if not target.startswith("DEF-"):
             fail(f"animation targets non-DEF node: {target!r}")
 print(f"anim: {n_channels} channels, all on DEF joints")
@@ -170,7 +169,7 @@ if n_channels < 10:
     fail(f"only {n_channels} animation channels baked")
 
 # 6. Round-trip: re-import and verify the armature + skinned mesh.
-bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
 for coll in (bpy.data.meshes, bpy.data.armatures, bpy.data.actions):
     for x in list(coll):
@@ -179,14 +178,11 @@ bpy.ops.import_scene.gltf(filepath=GLB_PATH)
 
 
 def is_imported(obj):
-    return all(c.name != IMPORTER_HELPER_COLLECTION
-               for c in obj.users_collection)
+    return all(c.name != IMPORTER_HELPER_COLLECTION for c in obj.users_collection)
 
 
-imported_arms = [o for o in bpy.data.objects
-                 if o.type == 'ARMATURE' and is_imported(o)]
-imported_meshes = [o for o in bpy.data.objects
-                   if o.type == 'MESH' and is_imported(o)]
+imported_arms = [o for o in bpy.data.objects if o.type == "ARMATURE" and is_imported(o)]
+imported_meshes = [o for o in bpy.data.objects if o.type == "MESH" and is_imported(o)]
 if len(imported_arms) != 1:
     fail(f"expected 1 armature on re-import, got {len(imported_arms)}")
 if len(imported_meshes) != 1:
@@ -194,12 +190,15 @@ if len(imported_meshes) != 1:
 
 imported_bones = [b.name for b in imported_arms[0].data.bones]
 non_def = [n for n in imported_bones if not n.startswith("DEF-")]
-print(f"re-import: {len(imported_bones)} bones, "
-      f"mesh={imported_meshes[0].name}, non-DEF={len(non_def)}")
+print(
+    f"re-import: {len(imported_bones)} bones, "
+    f"mesh={imported_meshes[0].name}, non-DEF={len(non_def)}"
+)
 if non_def:
     fail(f"non-DEF bones leaked into export: {non_def[:10]}")
 if len(imported_bones) != len(def_bones):
-    fail(f"re-import has {len(imported_bones)} bones, "
-         f"rig has {len(def_bones)} DEF bones")
+    fail(
+        f"re-import has {len(imported_bones)} bones, rig has {len(def_bones)} DEF bones"
+    )
 
 print("RIGFORGE_EXPORT_TEST_OK")

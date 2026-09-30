@@ -10,7 +10,7 @@ from bpy_extras.io_utils import ExportHelper
 def get_generated_rig(context):
     """Return the active object if it is a generated rigforge rig, else None."""
     obj = context.active_object
-    if obj and obj.type == 'ARMATURE' and 'rig_id' in obj.data:
+    if obj and obj.type == "ARMATURE" and "rig_id" in obj.data:
         return obj
     return None
 
@@ -19,10 +19,10 @@ def find_skinned_meshes(rig):
     """Mesh objects deformed by the rig via an Armature modifier."""
     meshes = []
     for obj in bpy.data.objects:
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             continue
         for mod in obj.modifiers:
-            if mod.type == 'ARMATURE' and mod.object == rig:
+            if mod.type == "ARMATURE" and mod.object == rig:
                 meshes.append(obj)
                 break
     return meshes
@@ -38,7 +38,7 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
     )
 
     filename_ext = ".glb"
-    filter_glob: StringProperty(default="*.glb", options={'HIDDEN'})
+    filter_glob: StringProperty(default="*.glb", options={"HIDDEN"})
 
     export_animations: BoolProperty(
         name="Animations",
@@ -53,24 +53,28 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         rig = get_generated_rig(context)
         if rig is None:
-            self.report({'ERROR'}, "Active object is not a generated rigforge rig")
-            return {'CANCELLED'}
+            self.report({"ERROR"}, "Active object is not a generated rigforge rig")
+            return {"CANCELLED"}
 
         if not hasattr(bpy.ops.export_scene, "gltf"):
-            self.report({'ERROR'}, "The glTF exporter addon (io_scene_gltf2) is not enabled")
-            return {'CANCELLED'}
+            self.report(
+                {"ERROR"}, "The glTF exporter addon (io_scene_gltf2) is not enabled"
+            )
+            return {"CANCELLED"}
 
         meshes = find_skinned_meshes(rig)
         if not meshes:
-            self.report({'WARNING'}, "No meshes bound to %s; exporting skeleton only" % rig.name)
+            self.report(
+                {"WARNING"}, "No meshes bound to %s; exporting skeleton only" % rig.name
+            )
 
-        if context.mode != 'OBJECT':
-            bpy.ops.object.mode_set(mode='OBJECT')
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
 
         prev_selected = list(context.selected_objects)
         prev_active = context.view_layer.objects.active
         try:
-            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.select_all(action="DESELECT")
             rig.select_set(True)
             for mesh in meshes:
                 mesh.select_set(True)
@@ -78,7 +82,7 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
 
             bpy.ops.export_scene.gltf(
                 filepath=self.filepath,
-                export_format='GLB',
+                export_format="GLB",
                 use_selection=True,
                 export_yup=True,
                 export_apply=False,
@@ -87,7 +91,7 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
                 export_animations=self.export_animations,
             )
         finally:
-            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.select_all(action="DESELECT")
             for obj in prev_selected:
                 try:
                     obj.select_set(True)
@@ -98,8 +102,8 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
             except ReferenceError:
                 pass
 
-        self.report({'INFO'}, "Exported %s" % self.filepath)
-        return {'FINISHED'}
+        self.report({"INFO"}, "Exported %s" % self.filepath)
+        return {"FINISHED"}
 
 
 def register():

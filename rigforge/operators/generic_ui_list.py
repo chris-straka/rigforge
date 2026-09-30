@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from bpy.types import Operator, UILayout, Context
 from bpy.props import EnumProperty, StringProperty
+from bpy.types import Context, Operator, UILayout
 
 
 def get_context_attr(context: Context, data_path):
@@ -11,12 +11,12 @@ def get_context_attr(context: Context, data_path):
 
 
 def set_context_attr(context: Context, data_path, value):
-    items = data_path.split('.')
-    setattr(context.path_resolve('.'.join(items[:-1])), items[-1], value)
+    items = data_path.split(".")
+    setattr(context.path_resolve(".".join(items[:-1])), items[-1], value)
 
 
 class GenericUIListOperator(Operator):
-    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
 
     list_context_path: StringProperty()
     active_index_context_path: StringProperty()
@@ -48,7 +48,7 @@ class UILIST_OT_entry_remove(GenericUIListOperator):
 
         self.set_active_index(context, to_index)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 # noinspection PyPep8Naming
@@ -68,7 +68,7 @@ class UILIST_OT_entry_add(GenericUIListOperator):
         my_list.move(len(my_list) - 1, to_index)
         self.set_active_index(context, to_index)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 # noinspection PyPep8Naming
@@ -80,16 +80,15 @@ class UILIST_OT_entry_move(GenericUIListOperator):
 
     direction: EnumProperty(
         name="Direction",
-        items=[('UP', 'UP', 'UP'),
-               ('DOWN', 'DOWN', 'DOWN')],
-        default='UP'
+        items=[("UP", "UP", "UP"), ("DOWN", "DOWN", "DOWN")],
+        default="UP",
     )
 
     def execute(self, context):
         my_list = self.get_list(context)
         active_index = self.get_active_index(context)
 
-        to_index = active_index + (1 if self.direction == 'DOWN' else -1)
+        to_index = active_index + (1 if self.direction == "DOWN" else -1)
 
         if to_index > len(my_list) - 1:
             to_index = 0
@@ -99,17 +98,21 @@ class UILIST_OT_entry_move(GenericUIListOperator):
         my_list.move(active_index, to_index)
         self.set_active_index(context, to_index)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def draw_ui_list(
-        layout, context, class_name="UI_UL_list", *,
-        list_context_path: str,  # Eg. "object.vertex_groups".
-        active_index_context_path: str,  # Eg., "object.vertex_groups.active_index".
-        insertion_operators=True,
-        move_operators=True,
-        menu_class_name="",
-        **kwargs) -> UILayout:
+    layout,
+    context,
+    class_name="UI_UL_list",
+    *,
+    list_context_path: str,  # Eg. "object.vertex_groups".
+    active_index_context_path: str,  # Eg., "object.vertex_groups.active_index".
+    insertion_operators=True,
+    move_operators=True,
+    menu_class_name="",
+    **kwargs,
+) -> UILayout:
     """
     This is intended as a replacement for row.template_list().
     By changing the requirements of the parameters, we can provide the Add, Remove and Move Up/Down
@@ -119,49 +122,59 @@ def draw_ui_list(
 
     list_owner = get_context_attr(context, ".".join(list_context_path.split(".")[:-1]))
     list_prop_name = list_context_path.split(".")[-1]
-    idx_owner = get_context_attr(context, ".".join(active_index_context_path.split(".")[:-1]))
+    idx_owner = get_context_attr(
+        context, ".".join(active_index_context_path.split(".")[:-1])
+    )
     idx_prop_name = active_index_context_path.split(".")[-1]
 
     my_list = get_context_attr(context, list_context_path)
 
     row.template_list(
         class_name,
-        list_context_path if class_name == 'UI_UL_list' else "",
-        list_owner, list_prop_name,
-        idx_owner, idx_prop_name,
+        list_context_path if class_name == "UI_UL_list" else "",
+        list_owner,
+        list_prop_name,
+        idx_owner,
+        idx_prop_name,
         rows=4 if len(my_list) > 0 else 1,
-        **kwargs
+        **kwargs,
     )
 
     col = row.column()
 
     if insertion_operators:
-        add_op = col.operator(UILIST_OT_entry_add.bl_idname, text="", icon='ADD')
+        add_op = col.operator(UILIST_OT_entry_add.bl_idname, text="", icon="ADD")
         add_op.list_context_path = list_context_path
         add_op.active_index_context_path = active_index_context_path
 
         row = col.row()
         row.enabled = len(my_list) > 0
-        remove_op = row.operator(UILIST_OT_entry_remove.bl_idname, text="", icon='REMOVE')
+        remove_op = row.operator(
+            UILIST_OT_entry_remove.bl_idname, text="", icon="REMOVE"
+        )
         remove_op.list_context_path = list_context_path
         remove_op.active_index_context_path = active_index_context_path
 
         col.separator()
 
-    if menu_class_name != '':
-        col.menu(menu_class_name, icon='DOWNARROW_HLT', text="")
+    if menu_class_name != "":
+        col.menu(menu_class_name, icon="DOWNARROW_HLT", text="")
         col.separator()
 
     if move_operators and len(my_list) > 0:
         col = col.column()
         col.enabled = len(my_list) > 1
-        move_up_op = col.operator(UILIST_OT_entry_move.bl_idname, text="", icon='TRIA_UP')
-        move_up_op.direction = 'UP'
+        move_up_op = col.operator(
+            UILIST_OT_entry_move.bl_idname, text="", icon="TRIA_UP"
+        )
+        move_up_op.direction = "UP"
         move_up_op.list_context_path = list_context_path
         move_up_op.active_index_context_path = active_index_context_path
 
-        move_down_op = col.operator(UILIST_OT_entry_move.bl_idname, text="", icon='TRIA_DOWN')
-        move_down_op.direction = 'DOWN'
+        move_down_op = col.operator(
+            UILIST_OT_entry_move.bl_idname, text="", icon="TRIA_DOWN"
+        )
+        move_down_op.direction = "DOWN"
         move_down_op.list_context_path = list_context_path
         move_down_op.active_index_context_path = active_index_context_path
 
@@ -181,11 +194,13 @@ classes = (
 
 def register():
     from bpy.utils import register_class
+
     for cls in classes:
         register_class(cls)
 
 
 def unregister():
     from bpy.utils import unregister_class
+
     for cls in classes:
         unregister_class(cls)

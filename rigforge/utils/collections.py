@@ -2,18 +2,19 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+from collections.abc import Sequence
+
 import bpy
-
-from typing import Optional, Sequence
-from bpy.types import LayerCollection, Collection, Object, Context
-
+from bpy.types import Collection, Context, LayerCollection, Object
 
 ##############################################
 # Collection management
 ##############################################
 
-def find_layer_collection_by_collection(layer_collection: LayerCollection,
-                                        collection: Collection) -> Optional[LayerCollection]:
+
+def find_layer_collection_by_collection(
+    layer_collection: LayerCollection, collection: Collection
+) -> LayerCollection | None:
     if collection == layer_collection.collection:
         return layer_collection
 
@@ -24,8 +25,9 @@ def find_layer_collection_by_collection(layer_collection: LayerCollection,
             return layer_collection
 
 
-def list_layer_collections(layer_collection: LayerCollection,
-                           visible=False, selectable=False) -> list[LayerCollection]:
+def list_layer_collections(
+    layer_collection: LayerCollection, visible=False, selectable=False
+) -> list[LayerCollection]:
     """Returns a list of the collection and its children, with optional filtering by settings."""
 
     if layer_collection.exclude:
@@ -46,13 +48,16 @@ def list_layer_collections(layer_collection: LayerCollection,
     return found
 
 
-def filter_layer_collections_by_object(layer_collections: Sequence[LayerCollection],
-                                       obj: Object) -> list[LayerCollection]:
+def filter_layer_collections_by_object(
+    layer_collections: Sequence[LayerCollection], obj: Object
+) -> list[LayerCollection]:
     """Returns a subset of collections that contain the given object."""
     return [lc for lc in layer_collections if obj in lc.collection.objects.values()]
 
 
-def ensure_collection(context: Context, collection_name: str, hidden=False) -> Collection:
+def ensure_collection(
+    context: Context, collection_name: str, hidden=False
+) -> Collection:
     """Check if a collection with a certain name exists.
     If yes, return it, if not, create it in the scene root collection.
     """
@@ -69,12 +74,16 @@ def ensure_collection(context: Context, collection_name: str, hidden=False) -> C
 
         layer_collection = None
     else:
-        layer_collection = find_layer_collection_by_collection(view_layer.layer_collection, collection)
+        layer_collection = find_layer_collection_by_collection(
+            view_layer.layer_collection, collection
+        )
 
     if not layer_collection:
         # Let the new collection be a child of the active one.
         active_collection.children.link(collection)
-        layer_collection = [c for c in active_layer_coll.children if c.collection == collection][0]
+        layer_collection = [
+            c for c in active_layer_coll.children if c.collection == collection
+        ][0]
 
         layer_collection.exclude = True
 

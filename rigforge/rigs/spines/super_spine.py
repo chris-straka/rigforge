@@ -4,12 +4,10 @@
 
 import bpy
 
-from ...utils.rig import connected_children_names
-from ...utils.layers import ControlLayersOption
-from ...utils.bones import BoneUtilityMixin, flip_bone_chain
-
 from ...base_generate import SubstitutionRig
-
+from ...utils.bones import BoneUtilityMixin, flip_bone_chain
+from ...utils.layers import ControlLayersOption
+from ...utils.rig import connected_children_names
 from . import basic_spine, basic_tail, super_head
 
 
@@ -34,8 +32,8 @@ class Rig(SubstitutionRig, BoneUtilityMixin):
             if neck_pos >= len(orgs):
                 self.raise_error("Neck is too short.")
 
-            spine_orgs = orgs[0: neck_pos - 1]
-            head_orgs = orgs[neck_pos - 1:]
+            spine_orgs = orgs[0 : neck_pos - 1]
+            head_orgs = orgs[neck_pos - 1 :]
 
         if self.params.use_tail:
             tail_pos = self.params.tail_pos
@@ -44,13 +42,13 @@ class Rig(SubstitutionRig, BoneUtilityMixin):
             if tail_pos >= pivot_pos:
                 self.raise_error("Tail cannot be above or the same as pivot.")
 
-            tail_orgs = list(reversed(spine_orgs[0: tail_pos]))
+            tail_orgs = list(reversed(spine_orgs[0:tail_pos]))
             spine_orgs = spine_orgs[tail_pos:]
             pivot_pos -= tail_pos
 
         # Split the bone chain and flip the tail
         if head_orgs or tail_orgs:
-            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.object.mode_set(mode="EDIT")
 
             if spine_orgs[0] != orgs[0]:
                 self.set_bone_parent(spine_orgs[0], self.get_bone_parent(orgs[0]))
@@ -62,10 +60,12 @@ class Rig(SubstitutionRig, BoneUtilityMixin):
                 flip_bone_chain(self.obj, reversed(tail_orgs))
                 self.set_bone_parent(tail_orgs[0], spine_orgs[0])
 
-            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode="OBJECT")
 
         # Create the parts
-        self.assign_params(spine_orgs[0], params_copy, pivot_pos=pivot_pos, make_fk_controls=False)
+        self.assign_params(
+            spine_orgs[0], params_copy, pivot_pos=pivot_pos, make_fk_controls=False
+        )
 
         result = [self.instantiate_rig(basic_spine.Rig, spine_orgs[0])]
 
@@ -88,36 +88,26 @@ def add_parameters(params):
     super_head.Rig.add_parameters(params)
 
     params.neck_pos = bpy.props.IntProperty(
-        name="Neck Position",
-        default=6,
-        min=0,
-        description='Neck start position'
+        name="Neck Position", default=6, min=0, description="Neck start position"
     )
 
     params.tail_pos = bpy.props.IntProperty(
-        name="Tail Position",
-        default=2,
-        min=2,
-        description='Where the tail starts'
+        name="Tail Position", default=2, min=2, description="Where the tail starts"
     )
 
     params.use_tail = bpy.props.BoolProperty(
-        name="Use Tail",
-        default=False,
-        description='Create tail bones'
+        name="Use Tail", default=False, description="Create tail bones"
     )
 
     params.use_head = bpy.props.BoolProperty(
-        name="Use Head",
-        default=True,
-        description='Create head and neck bones'
+        name="Use Head", default=True, description="Create head and neck bones"
     )
 
 
 def parameters_ui(layout, params):
-    """ Create the ui for the rig parameters."""
+    """Create the ui for the rig parameters."""
 
-    layout.label(text="Note: this combined rig is deprecated.", icon='INFO')
+    layout.label(text="Note: this combined rig is deprecated.", icon="INFO")
 
     r = layout.row(align=True)
     r.prop(params, "use_head", toggle=True, text="Head")
@@ -137,7 +127,7 @@ def parameters_ui(layout, params):
     r = layout.row()
     col = r.column(align=True)
     row = col.row(align=True)
-    for i, axis in enumerate(['x', 'y', 'z']):
+    for i, axis in enumerate(["x", "y", "z"]):
         row.prop(params, "copy_rotation_axes", index=i, toggle=True, text=axis)
     r.enabled = params.use_tail
 
@@ -146,5 +136,5 @@ def parameters_ui(layout, params):
 
 def create_sample(obj):
     bones = basic_spine.create_sample(obj)
-    basic_tail.create_sample(obj, parent=bones['spine'])
-    super_head.create_sample(obj, parent=bones['spine.003'])
+    basic_tail.create_sample(obj, parent=bones["spine"])
+    super_head.create_sample(obj, parent=bones["spine.003"])

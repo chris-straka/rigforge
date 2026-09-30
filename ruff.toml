@@ -1,0 +1,18 @@
+# Ruff config for rigforge (Blender 5.2 bundles Python 3.13).
+# Run: ruff check --fix . && ruff format .   (from repo root)
+target-version = "py313"
+line-length = 88
+
+[lint]
+select = [
+  "E4", "E7", "E9", # pycodestyle errors
+  "F",              # pyflakes
+  "UP",             # pyupgrade (modern syntax)
+  "I",              # isort
+  "B",              # flake8-bugbear
+  "W",              # pycodestyle warnings
+  "RUF",            # ruff-specific
+]
+# RUF012 (mutable class defaults) is Blender-API noise: bl_options etc. are
+# REQUIRED to be class-level sets on every Operator/Panel/Menu.
+ignore = ["RUF012"]

@@ -2,19 +2,30 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import re
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any
 
-from typing import TYPE_CHECKING, Optional, Any, Sequence, Iterable
-
-from bpy.types import (bpy_prop_collection, Material, Object, PoseBone, Driver, FCurve,
-                       DriverTarget, ID, bpy_struct, FModifierGenerator, Constraint, AnimData,
-                       ArmatureConstraint)
-
-from rna_prop_ui import rna_idprop_ui_create
+import bpy
+from bpy.types import (
+    ID,
+    AnimData,
+    ArmatureConstraint,
+    Constraint,
+    Driver,
+    DriverTarget,
+    FCurve,
+    FModifierGenerator,
+    Material,
+    Object,
+    PoseBone,
+    bpy_prop_collection,
+    bpy_struct,
+)
 from rna_prop_ui import rna_idprop_quote_path as quote_property
+from rna_prop_ui import rna_idprop_ui_create
 
-from .misc import force_lazy, ArmatureObject, Lazy, OptionalLazy
+from .misc import ArmatureObject, Lazy, OptionalLazy, force_lazy
 
 if TYPE_CHECKING:
     from ..base_rig import BaseRig
@@ -25,9 +36,12 @@ if TYPE_CHECKING:
 ##############################################
 
 _TRACK_AXIS_MAP = {
-    'X': 'TRACK_X', '-X': 'TRACK_NEGATIVE_X',
-    'Y': 'TRACK_Y', '-Y': 'TRACK_NEGATIVE_Y',
-    'Z': 'TRACK_Z', '-Z': 'TRACK_NEGATIVE_Z',
+    "X": "TRACK_X",
+    "-X": "TRACK_NEGATIVE_X",
+    "Y": "TRACK_Y",
+    "-Y": "TRACK_NEGATIVE_Y",
+    "Z": "TRACK_Z",
+    "-Z": "TRACK_NEGATIVE_Z",
 }
 
 
@@ -51,17 +65,20 @@ def limit_rotation_ensure_legacy_behavior(constraint: bpy.types.Constraint):
 
 
 def make_constraint(
-        owner: Object | PoseBone, con_type: str,
-        target: Optional[Object] = None,
-        subtarget: OptionalLazy[str] = None, *,
-        insert_index: Optional[int] = None,
-        space: Optional[str] = None,
-        track_axis: Optional[str] = None,
-        use_xyz: Optional[Sequence[bool]] = None,
-        use_limit_xyz: Optional[Sequence[bool]] = None,
-        invert_xyz: Optional[Sequence[bool]] = None,
-        targets: Optional[list[Lazy[str | tuple | dict]]] = None,
-        **options):
+    owner: Object | PoseBone,
+    con_type: str,
+    target: Object | None = None,
+    subtarget: OptionalLazy[str] = None,
+    *,
+    insert_index: int | None = None,
+    space: str | None = None,
+    track_axis: str | None = None,
+    use_xyz: Sequence[bool] | None = None,
+    use_limit_xyz: Sequence[bool] | None = None,
+    invert_xyz: Sequence[bool] | None = None,
+    targets: list[Lazy[str | tuple | dict]] | None = None,
+    **options,
+):
     """
     Creates and initializes constraint of the specified type for the owner bone.
 
@@ -96,9 +113,13 @@ def make_constraint(
                 con_target.subtarget = target_info
             elif isinstance(target_info, tuple):
                 if len(target_info) == 2:
-                    con_target.subtarget, con_target.weight = map(force_lazy, target_info)
+                    con_target.subtarget, con_target.weight = map(
+                        force_lazy, target_info
+                    )
                 else:
-                    con_target.target, con_target.subtarget, con_target.weight = map(force_lazy, target_info)
+                    con_target.target, con_target.subtarget, con_target.weight = map(
+                        force_lazy, target_info
+                    )
             else:
                 assert isinstance(target_info, dict)
                 for key, val in target_info.items():
@@ -107,15 +128,15 @@ def make_constraint(
     if insert_index is not None:
         owner.constraints.move(len(owner.constraints) - 1, insert_index)
 
-    if target is not None and hasattr(con, 'target'):
+    if target is not None and hasattr(con, "target"):
         con.target = target
 
     if subtarget is not None:
         con.subtarget = force_lazy(subtarget)
 
     if space is not None:
-        _set_default_attr(con, options, 'owner_space', space)
-        _set_default_attr(con, options, 'target_space', space)
+        _set_default_attr(con, options, "owner_space", space)
+        _set_default_attr(con, options, "target_space", space)
 
     if track_axis is not None:
         con.track_axis = _TRACK_AXIS_MAP.get(track_axis, track_axis)
@@ -129,15 +150,15 @@ def make_constraint(
     if invert_xyz is not None:
         con.invert_x, con.invert_y, con.invert_z = invert_xyz[0:3]
 
-    for key in ['min_x', 'max_x', 'min_y', 'max_y', 'min_z', 'max_z']:
+    for key in ["min_x", "max_x", "min_y", "max_y", "min_z", "max_z"]:
         if key in options:
-            _set_default_attr(con, options, 'use_' + key, True)
-            _set_default_attr(con, options, 'use_limit_' + key[-1], True)
+            _set_default_attr(con, options, "use_" + key, True)
+            _set_default_attr(con, options, "use_limit_" + key[-1], True)
 
     for p, v in options.items():
         setattr(con, p, force_lazy(v))
 
-    if con.type == 'LIMIT_ROTATION' and con.owner_space == 'LOCAL':
+    if con.type == "LIMIT_ROTATION" and con.owner_space == "LOCAL":
         # We only do this for local-space Limit Rotation constraints
         # because that's the only situation where the legacy behavior is
         # meaningful--it's broken for anything else.
@@ -150,12 +171,22 @@ def make_constraint(
 # Custom property creation utilities
 ##############################################
 
+
 # noinspection PyShadowingBuiltins
 def make_property(
-        owner: bpy_struct, name: str, default, *,
-        min: float = 0, max: float = 1, soft_min=None, soft_max=None,
-        description: Optional[str] = None, overridable=True, subtype: Optional[str] = None,
-        **options):
+    owner: bpy_struct,
+    name: str,
+    default,
+    *,
+    min: float = 0,
+    max: float = 1,
+    soft_min=None,
+    soft_max=None,
+    description: str | None = None,
+    overridable=True,
+    subtype: str | None = None,
+    **options,
+):
     """
     Creates and initializes a custom property of owner.
 
@@ -165,12 +196,17 @@ def make_property(
 
     # Some keyword argument defaults differ
     rna_idprop_ui_create(
-        owner, name, default=default,
-        min=min, max=max, soft_min=soft_min, soft_max=soft_max,
+        owner,
+        name,
+        default=default,
+        min=min,
+        max=max,
+        soft_min=soft_min,
+        soft_max=soft_max,
         description=description or name,
         overridable=overridable,
         subtype=subtype,
-        **options  # noqa
+        **options,
     )
 
 
@@ -178,7 +214,8 @@ def make_property(
 # Driver creation utilities
 ##############################################
 
-def _init_driver_target(drv_target: DriverTarget, var_info, target_id: Optional[ID]):
+
+def _init_driver_target(drv_target: DriverTarget, var_info, target_id: ID | None):
     """Initialize a driver variable target from a specification."""
 
     # Parse the simple list format for the common case.
@@ -203,18 +240,18 @@ def _init_driver_target(drv_target: DriverTarget, var_info, target_id: Optional[
                 subtarget = target_id.pose.bones[subtarget]
 
             if subtarget == target_id:
-                path = ''
+                path = ""
             else:
                 path = subtarget.path_from_id()
 
             # Use ".foo" type path items verbatim, otherwise quote
             for item in refs:
                 if isinstance(item, str):
-                    path += item if item[0] == '.' else quote_property(item)
+                    path += item if item[0] == "." else quote_property(item)
                 else:
-                    path += f'[{repr(item)}]'
+                    path += f"[{item!r}]"
 
-            if path[0] == '.':
+            if path[0] == ".":
                 path = path[1:]
 
         drv_target.id = target_id
@@ -222,7 +259,7 @@ def _init_driver_target(drv_target: DriverTarget, var_info, target_id: Optional[
 
     else:
         # { 'id': ..., ... }
-        target_id = var_info.get('id', target_id)
+        target_id = var_info.get("id", target_id)
 
         if target_id is not None:
             drv_target.id = target_id
@@ -231,7 +268,7 @@ def _init_driver_target(drv_target: DriverTarget, var_info, target_id: Optional[
             setattr(drv_target, tp, force_lazy(tv))
 
 
-def _add_driver_variable(drv: Driver, var_name: str, var_info, target_id: Optional[ID]):
+def _add_driver_variable(drv: Driver, var_name: str, var_info, target_id: ID | None):
     """Add and initialize a driver variable."""
 
     var = drv.variables.new()
@@ -247,22 +284,28 @@ def _add_driver_variable(drv: Driver, var_name: str, var_info, target_id: Option
     else:
         # Variable info as generic dictionary - assign properties.
         # { 'type': 'SINGLE_PROP', 'targets':[...] }
-        var.type = var_info['type']
+        var.type = var_info["type"]
 
         for p, v in var_info.items():
-            if p == 'targets':
+            if p == "targets":
                 for i, tdata in enumerate(v):
                     _init_driver_target(var.targets[i], tdata, target_id)
-            elif p != 'type':
+            elif p != "type":
                 setattr(var, p, force_lazy(v))
 
 
 # noinspection PyShadowingBuiltins
-def make_driver(owner: bpy_struct, prop: str, *, index=-1, type='SUM',
-                expression: Optional[str] = None,
-                variables: Iterable | dict = (),
-                polynomial: Optional[list[float]] = None,
-                target_id: Optional[ID] = None) -> FCurve:
+def make_driver(
+    owner: bpy_struct,
+    prop: str,
+    *,
+    index=-1,
+    type="SUM",
+    expression: str | None = None,
+    variables: Iterable | dict = (),
+    polynomial: list[float] | None = None,
+    target_id: ID | None = None,
+) -> FCurve:
     """
     Creates and initializes a driver for the 'prop' property of owner.
 
@@ -319,7 +362,7 @@ def make_driver(owner: bpy_struct, prop: str, *, index=-1, type='SUM',
     drv = fcu.driver
 
     if expression is not None:
-        drv.type = 'SCRIPTED'
+        drv.type = "SCRIPTED"
         drv.expression = expression
     else:
         drv.type = type
@@ -335,7 +378,7 @@ def make_driver(owner: bpy_struct, prop: str, *, index=-1, type='SUM',
     if not isinstance(variables, dict):
         # variables = [ info, ... ]
         for i, var_info in enumerate(variables):
-            var_name = 'var' if i == 0 else 'var' + str(i)
+            var_name = "var" if i == 0 else "var" + str(i)
             _add_driver_variable(drv, var_name, var_info, target_id)
     else:
         # variables = { 'varname': info, ... }
@@ -343,9 +386,9 @@ def make_driver(owner: bpy_struct, prop: str, *, index=-1, type='SUM',
             _add_driver_variable(drv, var_name, var_info, target_id)
 
     if polynomial is not None:
-        drv_modifier = fcu.modifiers.new('GENERATOR')
+        drv_modifier = fcu.modifiers.new("GENERATOR")
         assert isinstance(drv_modifier, FModifierGenerator)
-        drv_modifier.mode = 'POLYNOMIAL'
+        drv_modifier.mode = "POLYNOMIAL"
         drv_modifier.poly_order = len(polynomial) - 1
         for i, v in enumerate(polynomial):
             drv_modifier.coefficients[i] = v
@@ -357,9 +400,16 @@ def make_driver(owner: bpy_struct, prop: str, *, index=-1, type='SUM',
 # Driver variable utilities
 ##############################################
 
+
 # noinspection PyShadowingBuiltins
-def driver_var_transform(target: ID, bone: Optional[str] = None, *,
-                         type='LOC_X', space='WORLD', rotation_mode='AUTO'):
+def driver_var_transform(
+    target: ID,
+    bone: str | None = None,
+    *,
+    type="LOC_X",
+    space="WORLD",
+    rotation_mode="AUTO",
+):
     """
     Create a Transform Channel driver variable specification.
 
@@ -369,26 +419,30 @@ def driver_var_transform(target: ID, bone: Optional[str] = None, *,
     Target bone name can be provided via a 'lazy' callable closure without arguments.
     """
 
-    assert space in {'WORLD', 'TRANSFORM', 'LOCAL'}
+    assert space in {"WORLD", "TRANSFORM", "LOCAL"}
 
     target_map = {
-        'id': target,
-        'transform_type': type,
-        'transform_space': space + '_SPACE',
-        'rotation_mode': rotation_mode,
+        "id": target,
+        "transform_type": type,
+        "transform_space": space + "_SPACE",
+        "rotation_mode": rotation_mode,
     }
 
     if bone is not None:
-        target_map['bone_target'] = bone
+        target_map["bone_target"] = bone
 
-    return {'type': 'TRANSFORMS', 'targets': [target_map]}
+    return {"type": "TRANSFORMS", "targets": [target_map]}
 
 
-def driver_var_distance(target: ID, *,
-                        bone1: Optional[str] = None,
-                        target2: Optional[ID] = None,
-                        bone2: Optional[str] = None,
-                        space1='WORLD', space2='WORLD'):
+def driver_var_distance(
+    target: ID,
+    *,
+    bone1: str | None = None,
+    target2: ID | None = None,
+    bone2: str | None = None,
+    space1="WORLD",
+    space2="WORLD",
+):
     """
     Create a Distance driver variable specification.
 
@@ -398,33 +452,36 @@ def driver_var_distance(target: ID, *,
     Target bone name can be provided via a 'lazy' callable closure without arguments.
     """
 
-    assert space1 in {'WORLD', 'TRANSFORM', 'LOCAL'}
-    assert space2 in {'WORLD', 'TRANSFORM', 'LOCAL'}
+    assert space1 in {"WORLD", "TRANSFORM", "LOCAL"}
+    assert space2 in {"WORLD", "TRANSFORM", "LOCAL"}
 
     target1_map = {
-        'id': target,
-        'transform_space': space1 + '_SPACE',
+        "id": target,
+        "transform_space": space1 + "_SPACE",
     }
 
     if bone1 is not None:
-        target1_map['bone_target'] = bone1
+        target1_map["bone_target"] = bone1
 
     target2_map = {
-        'id': target2 or target,
-        'transform_space': space2 + '_SPACE',
+        "id": target2 or target,
+        "transform_space": space2 + "_SPACE",
     }
 
     if bone2 is not None:
-        target2_map['bone_target'] = bone2
+        target2_map["bone_target"] = bone2
 
-    return {'type': 'LOC_DIFF', 'targets': [target1_map, target2_map]}
+    return {"type": "LOC_DIFF", "targets": [target1_map, target2_map]}
 
 
 ##############################################
 # Constraint management
 ##############################################
 
-def move_constraint(source: Object | PoseBone, target: Object | PoseBone | str, con: Constraint):
+
+def move_constraint(
+    source: Object | PoseBone, target: Object | PoseBone | str, con: Constraint
+):
     """
     Move a constraint from one owner to another, together with drivers.
     """
@@ -443,15 +500,18 @@ def move_constraint(source: Object | PoseBone, target: Object | PoseBone | str, 
             new_prefix = con_tgt.path_from_id()
             for fcu in adt.drivers:
                 if fcu.data_path.startswith(prefix):
-                    fcu.data_path = new_prefix + fcu.data_path[len(prefix):]
+                    fcu.data_path = new_prefix + fcu.data_path[len(prefix) :]
 
     source.constraints.remove(con)
 
 
-def move_all_constraints(obj: Object,
-                         source: Object | PoseBone | str,
-                         target: Object | PoseBone | str, *,
-                         prefix=''):
+def move_all_constraints(
+    obj: Object,
+    source: Object | PoseBone | str,
+    target: Object | PoseBone | str,
+    *,
+    prefix="",
+):
     """
     Move all constraints with the specified name prefix from one bone to another.
     """
@@ -469,6 +529,7 @@ def move_all_constraints(obj: Object,
 ##############################################
 # Custom property management
 ##############################################
+
 
 def deactivate_custom_properties(obj: bpy_struct, *, reset=True):
     """Disable drivers on custom properties and reset values to default."""
@@ -508,8 +569,9 @@ def reactivate_custom_properties(obj: bpy_struct):
                 fcu.mute = False
 
 
-def copy_custom_properties(src, dest, *, prefix='', dest_prefix='',
-                           link_driver=False, overridable=True) -> list[tuple[str, str, Any]]:
+def copy_custom_properties(
+    src, dest, *, prefix="", dest_prefix="", link_driver=False, overridable=True
+) -> list[tuple[str, str, Any]]:
     """Copy custom properties with filtering by prefix. Optionally link using drivers."""
     res = []
 
@@ -518,7 +580,7 @@ def copy_custom_properties(src, dest, *, prefix='', dest_prefix='',
 
     for key, value in src.items():
         if key.startswith(prefix) and key not in exclude:
-            new_key = dest_prefix + key[len(prefix):]
+            new_key = dest_prefix + key[len(prefix) :]
 
             try:
                 ui_data_src = src.id_properties_ui(key)
@@ -533,7 +595,11 @@ def copy_custom_properties(src, dest, *, prefix='', dest_prefix='',
                 dest.id_properties_ui(new_key).update_from(ui_data_src)
 
                 if link_driver:
-                    make_driver(src, quote_property(key), variables=[(dest.id_data, dest, new_key)])
+                    make_driver(
+                        src,
+                        quote_property(key),
+                        variables=[(dest.id_data, dest, new_key)],
+                    )
 
             if overridable:
                 dest.property_overridable_library_set(quote_property(new_key), True)
@@ -543,7 +609,9 @@ def copy_custom_properties(src, dest, *, prefix='', dest_prefix='',
     return res
 
 
-def copy_custom_properties_with_ui(rig: 'BaseRig', src, dest_bone, *, ui_controls=None, **options):
+def copy_custom_properties_with_ui(
+    rig: "BaseRig", src, dest_bone, *, ui_controls=None, **options
+):
     """Copy custom properties, and create rig UI for them."""
     if isinstance(src, str):
         src = rig.get_bone(src)
@@ -552,23 +620,30 @@ def copy_custom_properties_with_ui(rig: 'BaseRig', src, dest_bone, *, ui_control
     mapping = copy_custom_properties(src, bone, **options)
 
     if mapping:
-        panel = rig.script.panel_with_selected_check(rig, ui_controls or rig.bones.flatten('ctrl'))
+        panel = rig.script.panel_with_selected_check(
+            rig, ui_controls or rig.bones.flatten("ctrl")
+        )
 
         for key, new_key, value in sorted(mapping, key=lambda item: item[1]):
             name = new_key
 
             # Replace delimiters with spaces
-            if ' ' not in name:
-                name = re.sub(r'[_.-]', ' ', name)
+            if " " not in name:
+                name = re.sub(r"[_.-]", " ", name)
             # Split CamelCase
-            if ' ' not in name:
-                name = re.sub(r'([a-z])([A-Z])', r'\1 \2', name)
+            if " " not in name:
+                name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
             # Capitalize
             if name.lower() == name:
                 name = name.title()
 
             info = bone.id_properties_ui(new_key).as_dict()
-            slider = type(value) is float and info and info.get("min", None) == 0 and info.get("max", None) == 1
+            slider = (
+                type(value) is float
+                and info
+                and info.get("min", None) == 0
+                and info.get("max", None) == 1
+            )
 
             panel.custom_prop(dest_bone, new_key, text=name, slider=slider)
 
@@ -579,11 +654,12 @@ def copy_custom_properties_with_ui(rig: 'BaseRig', src, dest_bone, *, ui_control
 # Driver management
 ##############################################
 
+
 def refresh_drivers(obj):
     """Cause all drivers belonging to the object to be re-evaluated, clearing any errors."""
 
     # Refresh object's own drivers if any
-    anim_data: Optional[AnimData] = getattr(obj, 'animation_data', None)
+    anim_data: AnimData | None = getattr(obj, "animation_data", None)
 
     if anim_data:
         for fcu in anim_data.drivers:
@@ -611,7 +687,8 @@ def refresh_all_drivers():
 # Utility mixin
 ##############################################
 
-class MechanismUtilityMixin(object):
+
+class MechanismUtilityMixin:
     obj: ArmatureObject
 
     """
@@ -621,49 +698,89 @@ class MechanismUtilityMixin(object):
     Requires self.obj to be the armature object being worked on.
     """
 
-    def make_constraint(self, bone: str, con_type: str,
-                        subtarget: OptionalLazy[str] = None, *,
-                        insert_index: Optional[int] = None,
-                        space: Optional[str] = None,
-                        track_axis: Optional[str] = None,
-                        use_xyz: Optional[Sequence[bool]] = None,
-                        use_limit_xyz: Optional[Sequence[bool]] = None,
-                        invert_xyz: Optional[Sequence[bool]] = None,
-                        targets: Optional[list[Lazy[str | tuple | dict]]] = None,
-                        **args):
-        assert self.obj.mode == 'OBJECT'
+    def make_constraint(
+        self,
+        bone: str,
+        con_type: str,
+        subtarget: OptionalLazy[str] = None,
+        *,
+        insert_index: int | None = None,
+        space: str | None = None,
+        track_axis: str | None = None,
+        use_xyz: Sequence[bool] | None = None,
+        use_limit_xyz: Sequence[bool] | None = None,
+        invert_xyz: Sequence[bool] | None = None,
+        targets: list[Lazy[str | tuple | dict]] | None = None,
+        **args,
+    ):
+        assert self.obj.mode == "OBJECT"
         return make_constraint(
-            self.obj.pose.bones[bone], con_type, self.obj, subtarget,
-            insert_index=insert_index, space=space, track_axis=track_axis,
-            use_xyz=use_xyz, use_limit_xyz=use_limit_xyz, invert_xyz=invert_xyz,
+            self.obj.pose.bones[bone],
+            con_type,
+            self.obj,
+            subtarget,
+            insert_index=insert_index,
+            space=space,
+            track_axis=track_axis,
+            use_xyz=use_xyz,
+            use_limit_xyz=use_limit_xyz,
+            invert_xyz=invert_xyz,
             targets=targets,
-            **args)
-
-    # noinspection PyShadowingBuiltins
-    def make_property(self, bone: str, name: str, default, *,
-                      min: float = 0, max: float = 1, soft_min=None, soft_max=None,
-                      description: Optional[str] = None, overridable=True,
-                      subtype: Optional[str] = None,
-                      **args):
-        assert self.obj.mode == 'OBJECT'
-        return make_property(
-            self.obj.pose.bones[bone], name, default,
-            min=min, max=max, soft_min=soft_min, soft_max=soft_max,
-            description=description, overridable=overridable, subtype=subtype,
-            **args
+            **args,
         )
 
     # noinspection PyShadowingBuiltins
-    def make_driver(self, owner: str | bpy_struct, prop: str,
-                    index=-1, type='SUM',
-                    expression: Optional[str] = None,
-                    variables: Iterable | dict = (),
-                    polynomial: Optional[list[float]] = None):
-        assert self.obj.mode == 'OBJECT'
+    def make_property(
+        self,
+        bone: str,
+        name: str,
+        default,
+        *,
+        min: float = 0,
+        max: float = 1,
+        soft_min=None,
+        soft_max=None,
+        description: str | None = None,
+        overridable=True,
+        subtype: str | None = None,
+        **args,
+    ):
+        assert self.obj.mode == "OBJECT"
+        return make_property(
+            self.obj.pose.bones[bone],
+            name,
+            default,
+            min=min,
+            max=max,
+            soft_min=soft_min,
+            soft_max=soft_max,
+            description=description,
+            overridable=overridable,
+            subtype=subtype,
+            **args,
+        )
+
+    # noinspection PyShadowingBuiltins
+    def make_driver(
+        self,
+        owner: str | bpy_struct,
+        prop: str,
+        index=-1,
+        type="SUM",
+        expression: str | None = None,
+        variables: Iterable | dict = (),
+        polynomial: list[float] | None = None,
+    ):
+        assert self.obj.mode == "OBJECT"
         if isinstance(owner, str):
             owner = self.obj.pose.bones[owner]
         return make_driver(
-            owner, prop, target_id=self.obj,
-            index=index, type=type, expression=expression,
-            variables=variables, polynomial=polynomial,
+            owner,
+            prop,
+            target_id=self.obj,
+            index=index,
+            type=type,
+            expression=expression,
+            variables=variables,
+            polynomial=polynomial,
         )

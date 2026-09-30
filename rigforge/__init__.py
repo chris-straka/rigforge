@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 bl_info = {
-    "name": "Rigify",
+    "name": "Rigforge",
     "version": (0, 6, 10),
     # This is now displayed as the maintainer, so show the foundation.
     # "author": "Nathan Vegdahl, Lucio Rossi, Ivan Cappiello, Alexander Gavrilov", # Original Authors
@@ -18,11 +18,13 @@ bl_info = {
 
 import importlib
 import sys
-import bpy
 import typing
 
+import bpy
 from bpy.app.translations import (
     pgettext_iface as iface_,
+)
+from bpy.app.translations import (
     pgettext_rpt as rpt_,
 )
 
@@ -31,40 +33,40 @@ from bpy.app.translations import (
 # With the sole exception of 'utils', modules must be listed in the
 # correct dependency order.
 initial_load_order = [
-    'utils.errors',
-    'utils.misc',
-    'utils.rig',
-    'utils.naming',
-    'utils.bones',
-    'utils.collections',
-    'utils.layers',
-    'utils.widgets',
-    'utils.widgets_basic',
-    'utils.widgets_special',
-    'utils',
-    'utils.mechanism',
-    'utils.animation',
-    'utils.metaclass',
-    'utils.objects',
-    'feature_sets',
-    'rigs',
-    'rigs.utils',
-    'base_rig',
-    'base_generate',
-    'feature_set_list',
-    'rig_lists',
-    'metarig_menu',
-    'rig_ui_template',
-    'utils.action_layers',
-    'generate',
-    'rot_mode',
-    'operators',
-    'ui',
+    "utils.errors",
+    "utils.misc",
+    "utils.rig",
+    "utils.naming",
+    "utils.bones",
+    "utils.collections",
+    "utils.layers",
+    "utils.widgets",
+    "utils.widgets_basic",
+    "utils.widgets_special",
+    "utils",
+    "utils.mechanism",
+    "utils.animation",
+    "utils.metaclass",
+    "utils.objects",
+    "feature_sets",
+    "rigs",
+    "rigs.utils",
+    "base_rig",
+    "base_generate",
+    "feature_set_list",
+    "rig_lists",
+    "metarig_menu",
+    "rig_ui_template",
+    "utils.action_layers",
+    "generate",
+    "rot_mode",
+    "operators",
+    "ui",
 ]
 
 
 def get_loaded_modules():
-    prefix = __name__ + '.'
+    prefix = __name__ + "."
     return [name for name in sys.modules if name.startswith(prefix)]
 
 
@@ -83,7 +85,7 @@ def compare_module_list(a: list[str], b: list[str]):
     # HACK: ignore the "utils" module when comparing module load orders,
     # because it is inconsistent for reasons unknown.
     # See rBAa918332cc3f821f5a70b1de53b65dd9ca596b093.
-    utils_module_name = __name__ + '.utils'
+    utils_module_name = __name__ + ".utils"
     a_copy = list(a)
     a_copy.remove(utils_module_name)
     b_copy = list(b)
@@ -92,17 +94,21 @@ def compare_module_list(a: list[str], b: list[str]):
 
 
 def load_initial_modules() -> list[str]:
-    names = [__name__ + '.' + name for name in initial_load_order]
+    names = [__name__ + "." + name for name in initial_load_order]
 
     for i, name in enumerate(names):
         importlib.import_module(name)
 
         module_list = get_loaded_modules()
-        expected_list = names[0: max(11, i + 1)]
+        expected_list = names[0 : max(11, i + 1)]
 
         if not compare_module_list(module_list, expected_list):
-            print(f'!!! RIGIFY: initial load order mismatch after {name} - expected: \n',
-                  expected_list, '\nGot:\n', module_list)
+            print(
+                f"!!! RIGFORGE: initial load order mismatch after {name} - expected: \n",
+                expected_list,
+                "\nGot:\n",
+                module_list,
+            )
 
     return names
 
@@ -117,28 +123,42 @@ if "reload_list" in locals():
 else:
     load_list = load_initial_modules()
 
-    from . import (utils, base_rig, base_generate, rig_ui_template, feature_set_list, rig_lists,
-                   generate, ui, metarig_menu, operators)
+    from . import (
+        base_generate,
+        base_rig,
+        feature_set_list,
+        generate,
+        metarig_menu,
+        operators,
+        rig_lists,
+        rig_ui_template,
+        ui,
+        utils,
+    )
 
     reload_list = reload_list_init = get_loaded_modules()
 
     if not compare_module_list(reload_list, load_list):
-        print('!!! RIGIFY: initial load order mismatch - expected: \n',
-              load_list, '\nGot:\n', reload_list)
+        print(
+            "!!! RIGFORGE: initial load order mismatch - expected: \n",
+            load_list,
+            "\nGot:\n",
+            reload_list,
+        )
 
 load_rigs()
 
 
-from bpy.types import AddonPreferences  # noqa: E402
-from bpy.props import (                 # noqa: E402
+from bpy.props import (  # noqa: E402
     BoolProperty,
-    IntProperty,
-    EnumProperty,
-    StringProperty,
-    FloatVectorProperty,
-    PointerProperty,
     CollectionProperty,
+    EnumProperty,
+    FloatVectorProperty,
+    IntProperty,
+    PointerProperty,
+    StringProperty,
 )
+from bpy.types import AddonPreferences  # noqa: E402
 
 
 def get_generator():
@@ -146,7 +166,7 @@ def get_generator():
     return base_generate.BaseGenerator.instance
 
 
-class RigifyFeatureSets(bpy.types.PropertyGroup):
+class RigforgeFeatureSets(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty()
     module_name: bpy.props.StringProperty()
     link: bpy.props.StringProperty()
@@ -155,23 +175,34 @@ class RigifyFeatureSets(bpy.types.PropertyGroup):
 
     def toggle_feature_set(self, context):
         feature_set_list.call_register_function(self.module_name, self.enabled)
-        RigifyPreferences.get_instance(context).update_external_rigs()
+        RigforgePreferences.get_instance(context).update_external_rigs()
 
     enabled: bpy.props.BoolProperty(
         name="Enabled",
         description="Whether this feature-set is registered or not",
         update=toggle_feature_set,
-        default=True
+        default=True,
     )
 
 
 # noinspection PyPep8Naming
-class RIGIFY_UL_FeatureSets(bpy.types.UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, _index=0, _flag=0):
-        # rigforge_prefs: RigifyPreferences = data
+class RIGFORGE_UL_FeatureSets(bpy.types.UIList):
+    def draw_item(
+        self,
+        context,
+        layout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_propname,
+        _index=0,
+        _flag=0,
+    ):
+        # rigforge_prefs: RigforgePreferences = data
         # feature_sets = rigforge_prefs.rigforge_feature_sets
-        # active_set: RigifyFeatureSets = feature_sets[rigforge_prefs.active_feature_set_index]
-        feature_set_entry: RigifyFeatureSets = item
+        # active_set: RigforgeFeatureSets = feature_sets[rigforge_prefs.active_feature_set_index]
+        feature_set_entry: RigforgeFeatureSets = item
         row = layout.row()
 
         name = feature_set_entry.name
@@ -187,22 +218,22 @@ class RIGIFY_UL_FeatureSets(bpy.types.UIList):
         row.label(text=name, icon=icon, translate=False)
 
         if feature_set_entry.module_name:
-            icon = 'CHECKBOX_HLT' if feature_set_entry.enabled else 'CHECKBOX_DEHLT'
+            icon = "CHECKBOX_HLT" if feature_set_entry.enabled else "CHECKBOX_DEHLT"
             row.enabled = feature_set_entry.enabled
-            layout.prop(feature_set_entry, 'enabled', text="", icon=icon, emboss=False)
+            layout.prop(feature_set_entry, "enabled", text="", icon=icon, emboss=False)
         else:
             row.enabled = False
 
 
-class RigifyPreferences(AddonPreferences):
+class RigforgePreferences(AddonPreferences):
     # this must match the addon name, use '__package__'
     # when defining this in a submodule of a python package.
     bl_idname = __name__
 
     @staticmethod
-    def get_instance(context: bpy.types.Context = None) -> 'RigifyPreferences':
+    def get_instance(context: bpy.types.Context = None) -> "RigforgePreferences":
         prefs = (context or bpy.context).preferences.addons[__package__].preferences
-        assert isinstance(prefs, RigifyPreferences)
+        assert isinstance(prefs, RigforgePreferences)
         return prefs
 
     def register_feature_sets(self, do_register: bool):
@@ -220,8 +251,11 @@ class RigifyPreferences(AddonPreferences):
         # If there is a feature set preferences entry with no corresponding
         # installed module, user must've manually removed it from the filesystem,
         # so let's remove such entries.
-        to_delete = [i for i, fs in enumerate(feature_set_prefs)
-                     if fs.module_name not in module_names]
+        to_delete = [
+            i
+            for i, fs in enumerate(feature_set_prefs)
+            if fs.module_name not in module_names
+        ]
         for i in reversed(to_delete):
             feature_set_prefs.remove(i)
 
@@ -237,7 +271,9 @@ class RigifyPreferences(AddonPreferences):
                 fs.module_name = module_name
 
         # Update the feature set info
-        fs_info = [feature_set_list.get_info_dict(fs.module_name) for fs in feature_set_prefs]
+        fs_info = [
+            feature_set_list.get_info_dict(fs.module_name) for fs in feature_set_prefs
+        ]
 
         for fs, info in zip(feature_set_prefs, fs_info):
             if "name" in info:
@@ -266,17 +302,17 @@ class RigifyPreferences(AddonPreferences):
         set_list = feature_set_list.get_enabled_modules_names()
 
         # Reload rigs
-        print('Reloading external rigs...')
+        print("Reloading external rigs...")
         rig_lists.get_external_rigs(set_list)
 
         # Reload metarigs
-        print('Reloading external metarigs...')
+        print("Reloading external metarigs...")
         metarig_menu.get_external_metarigs(set_list)
 
         # Re-register rig parameters
         register_rig_parameters()
 
-    rigforge_feature_sets: bpy.props.CollectionProperty(type=RigifyFeatureSets)
+    rigforge_feature_sets: bpy.props.CollectionProperty(type=RigforgeFeatureSets)
     active_feature_set_index: IntProperty()
 
     def draw(self, context: bpy.types.Context):
@@ -284,18 +320,26 @@ class RigifyPreferences(AddonPreferences):
 
         layout.label(text="Feature Sets:")
 
-        layout.operator("wm.rigforge_add_feature_set", text="Install Feature Set from File...", icon='FILEBROWSER')
+        layout.operator(
+            "wm.rigforge_add_feature_set",
+            text="Install Feature Set from File...",
+            icon="FILEBROWSER",
+        )
 
         row = layout.row()
         row.template_list(
-            'RIGIFY_UL_FeatureSets',
-            '',
-            self, "rigforge_feature_sets",
-            self, 'active_feature_set_index'
+            "RIGFORGE_UL_FeatureSets",
+            "",
+            self,
+            "rigforge_feature_sets",
+            self,
+            "active_feature_set_index",
         )
 
         # Clamp active index to ensure it is in bounds.
-        self.active_feature_set_index = max(0, min(self.active_feature_set_index, len(self.rigforge_feature_sets) - 1))
+        self.active_feature_set_index = max(
+            0, min(self.active_feature_set_index, len(self.rigforge_feature_sets) - 1)
+        )
 
         if len(self.rigforge_feature_sets) > 0:
             active_fs = self.rigforge_feature_sets[self.active_feature_set_index]
@@ -304,22 +348,23 @@ class RigifyPreferences(AddonPreferences):
                 draw_feature_set_prefs(layout, context, active_fs)
 
 
-def check_feature_set_error(_feature_set: RigifyFeatureSets, info: dict, layout: bpy.types.UILayout | None):
+def check_feature_set_error(
+    _feature_set: RigforgeFeatureSets, info: dict, layout: bpy.types.UILayout | None
+):
     split_factor = 0.15
     error = False
 
-    if 'blender' in info and info['blender'] > bpy.app.version:
+    if "blender" in info and info["blender"] > bpy.app.version:
         error = True
         if layout:
             split = layout.row().split(factor=split_factor)
             split.label(text="Error:")
             sub = split.row()
             sub.alert = True
-            text = (
-                rpt_("This feature set requires Blender {:s} or newer to work properly.")
-                .format(".".join(str(x) for x in info['blender']))
-            )
-            sub.label(icon='ERROR', text=text, translate=False)
+            text = rpt_(
+                "This feature set requires Blender {:s} or newer to work properly."
+            ).format(".".join(str(x) for x in info["blender"]))
+            sub.label(icon="ERROR", text=text, translate=False)
 
     for dep_link in info.get("dependencies", []):
         if not feature_set_list.get_module_by_link_safe(dep_link):
@@ -332,19 +377,23 @@ def check_feature_set_error(_feature_set: RigifyFeatureSets, info: dict, layout:
                 sub.alert = True
                 sub.label(
                     text="This feature set depends on the following feature set to work properly:",
-                    icon='ERROR'
+                    icon="ERROR",
                 )
                 sub_split = col.split(factor=0.8)
                 sub = sub_split.row()
                 sub.alert = True
-                sub.label(text=dep_link, translate=False, icon='BLANK1')
-                op = sub_split.operator('wm.url_open', text="Repository", icon='URL')
+                sub.label(text=dep_link, translate=False, icon="BLANK1")
+                op = sub_split.operator("wm.url_open", text="Repository", icon="URL")
                 op.url = dep_link
 
     return error
 
 
-def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Context, feature_set: RigifyFeatureSets):
+def draw_feature_set_prefs(
+    layout: bpy.types.UILayout,
+    _context: bpy.types.Context,
+    feature_set: RigforgeFeatureSets,
+):
     if feature_set.module_name:
         info = feature_set_list.get_info_dict(feature_set.module_name)
     else:
@@ -355,8 +404,8 @@ def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Conte
                 break
 
     description = feature_set.name
-    if 'description' in info:
-        description = info['description']
+    if "description" in info:
+        description = info["description"]
 
     col = layout.column()
     split_factor = 0.15
@@ -368,7 +417,7 @@ def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Conte
         split.label(text="Error:")
         sub = split.row()
         sub.alert = True
-        sub.label(text="This feature set failed to load correctly.", icon='ERROR')
+        sub.label(text="This feature set failed to load correctly.", icon="ERROR")
 
     split = col.row().split(factor=split_factor)
     split.label(text="Description:")
@@ -376,33 +425,33 @@ def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Conte
     for description_line in description.split("\n"):
         col_desc.label(text=description_line)
 
-    if 'author' in info:
+    if "author" in info:
         split = col.row().split(factor=split_factor)
         split.label(text="Author:")
         split.label(text=info["author"], translate=False)
 
-    if 'version' in info:
+    if "version" in info:
         split = col.row().split(factor=split_factor)
         split.label(text="Version:")
-        split.label(text=".".join(str(x) for x in info['version']), translate=False)
+        split.label(text=".".join(str(x) for x in info["version"]), translate=False)
 
-    if 'warning' in info:
+    if "warning" in info:
         split = col.row().split(factor=split_factor)
         split.label(text="Warning:")
-        split.label(text="  " + info['warning'], icon='ERROR')
+        split.label(text="  " + info["warning"], icon="ERROR")
 
     split = col.row().split(factor=split_factor)
     split.label(text="Internet:")
     row = split.row()
-    if 'link' in info:
-        op = row.operator('wm.url_open', text="Repository", icon='URL')
-        op.url = info['link']
-    if 'doc_url' in info:
-        op = row.operator('wm.url_open', text="Documentation", icon='HELP')
-        op.url = info['doc_url']
-    if 'tracker_url' in info:
-        op = row.operator('wm.url_open', text="Report a Bug", icon='URL')
-        op.url = info['tracker_url']
+    if "link" in info:
+        op = row.operator("wm.url_open", text="Repository", icon="URL")
+        op.url = info["link"]
+    if "doc_url" in info:
+        op = row.operator("wm.url_open", text="Documentation", icon="HELP")
+        op.url = info["doc_url"]
+    if "tracker_url" in info:
+        op = row.operator("wm.url_open", text="Report a Bug", icon="URL")
+        op.url = info["tracker_url"]
 
     if feature_set.module_name:
         mod = feature_set_list.get_module_safe(feature_set.module_name)
@@ -413,79 +462,88 @@ def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Conte
 
         split = col.row().split(factor=split_factor)
         split.label(text="")
-        split.operator("wm.rigforge_remove_feature_set", text="Remove", icon='CANCEL')
+        split.operator("wm.rigforge_remove_feature_set", text="Remove", icon="CANCEL")
 
 
-class RigifyName(bpy.types.PropertyGroup):
+class RigforgeName(bpy.types.PropertyGroup):
     name: StringProperty()
 
 
-class RigifyColorSet(bpy.types.PropertyGroup):
+class RigforgeColorSet(bpy.types.PropertyGroup):
     name: StringProperty(name="Color Set", default=" ")
     active: FloatVectorProperty(
         name="object_color",
-        subtype='COLOR',
+        subtype="COLOR",
         default=(1.0, 1.0, 1.0),
-        min=0.0, max=1.0,
-        description="Color picker"
+        min=0.0,
+        max=1.0,
+        description="Color picker",
     )
     normal: FloatVectorProperty(
         name="object_color",
-        subtype='COLOR',
+        subtype="COLOR",
         default=(1.0, 1.0, 1.0),
-        min=0.0, max=1.0,
-        description="Color picker"
+        min=0.0,
+        max=1.0,
+        description="Color picker",
     )
     select: FloatVectorProperty(
         name="object_color",
-        subtype='COLOR',
+        subtype="COLOR",
         default=(1.0, 1.0, 1.0),
-        min=0.0, max=1.0,
-        description="Color picker"
+        min=0.0,
+        max=1.0,
+        description="Color picker",
     )
     standard_colors_lock: BoolProperty(default=True)
 
     def apply(self, color: bpy.types.BoneColor):
-        color.palette = 'CUSTOM'
+        color.palette = "CUSTOM"
         color.custom.normal = utils.misc.gamma_correct(self.normal)
         color.custom.select = utils.misc.gamma_correct(self.select)
         color.custom.active = utils.misc.gamma_correct(self.active)
 
 
-class RigifySelectionColors(bpy.types.PropertyGroup):
+class RigforgeSelectionColors(bpy.types.PropertyGroup):
     select: FloatVectorProperty(
         name="object_color",
-        subtype='COLOR',
+        subtype="COLOR",
         default=(0.314, 0.784, 1.0),
-        min=0.0, max=1.0,
-        description="color picker"
+        min=0.0,
+        max=1.0,
+        description="color picker",
     )
 
     active: FloatVectorProperty(
         name="object_color",
-        subtype='COLOR',
+        subtype="COLOR",
         default=(0.549, 1.0, 1.0),
-        min=0.0, max=1.0,
-        description="color picker"
+        min=0.0,
+        max=1.0,
+        description="color picker",
     )
 
 
-class RigifyParameters(bpy.types.PropertyGroup):
+class RigforgeParameters(bpy.types.PropertyGroup):
     name: StringProperty()
 
     # NOTE: parameters are dynamically added to this PropertyGroup.
     # Check `ControlLayersOption` in `layers.py`.
 
 
-class RigifyBoneCollectionReference(bpy.types.PropertyGroup):
-    """Reference from a RigifyParameters field to a bone collection."""
+class RigforgeBoneCollectionReference(bpy.types.PropertyGroup):
+    """Reference from a RigforgeParameters field to a bone collection."""
 
     uid: IntProperty(name="Unique ID", default=-1)
 
-    def find_collection(self, *, update=False, raise_error=False) -> bpy.types.BoneCollection | None:
+    def find_collection(
+        self, *, update=False, raise_error=False
+    ) -> bpy.types.BoneCollection | None:
         if self.uid < 0:
             return None
-        return utils.layers.resolve_collection_reference(self.id_data, self, update=update, raise_error=raise_error)
+        return utils.layers.resolve_collection_reference(
+            self.id_data, self, update=update, raise_error=raise_error
+        )
 
     def set_collection(self, coll: bpy.types.BoneCollection | None):
         if coll is None:
@@ -500,7 +558,7 @@ class RigifyBoneCollectionReference(bpy.types.PropertyGroup):
             return coll.name
 
         if self.uid >= 0:
-            return self.get('name') or '?'
+            return self.get("name") or "?"
 
         return ""
 
@@ -521,8 +579,11 @@ class RigifyBoneCollectionReference(bpy.types.PropertyGroup):
         return [coll.name for coll in utils.misc.flatten_children(arm.collections)]
 
     name: StringProperty(
-        name="Collection Name", description="Name of the referenced bone collection",
-        get=_name_get, set=_name_set, search=_name_search
+        name="Collection Name",
+        description="Name of the referenced bone collection",
+        get=_name_get,
+        set=_name_set,
+        search=_name_search,
     )
 
 
@@ -545,7 +606,9 @@ def update_callback(prop_name):
                 if bone and bone.rigforge_parameters == params:
                     rig_info = rig_lists.rigs.get(get_rigforge_type(bone), None)
                     if rig_info:
-                        rig_cb = getattr(rig_info["module"].Rig, 'on_parameter_update', None)
+                        rig_cb = getattr(
+                            rig_info["module"].Rig, "on_parameter_update", None
+                        )
                         if rig_cb:
                             rig_cb(context, bone, params, prop_name)
             finally:
@@ -555,28 +618,27 @@ def update_callback(prop_name):
 
 
 # Remember the initial property set
-RIGIFY_PARAMETERS_BASE_DIR = set(dir(RigifyParameters))
-RIGIFY_PARAMETER_TABLE = {'name': ('DEFAULT', StringProperty())}
+RIGFORGE_PARAMETERS_BASE_DIR = set(dir(RigforgeParameters))
+RIGFORGE_PARAMETER_TABLE = {"name": ("DEFAULT", StringProperty())}
 
 
 def clear_rigforge_parameters():
-    for name in list(dir(RigifyParameters)):
-        if name not in RIGIFY_PARAMETERS_BASE_DIR:
-            delattr(RigifyParameters, name)
-            if name in RIGIFY_PARAMETER_TABLE:
-                del RIGIFY_PARAMETER_TABLE[name]
+    for name in list(dir(RigforgeParameters)):
+        if name not in RIGFORGE_PARAMETERS_BASE_DIR:
+            delattr(RigforgeParameters, name)
+            RIGFORGE_PARAMETER_TABLE.pop(name, None)
 
 
 def format_property_spec(spec):
     """Turns the return value of bpy.props.SomeProperty(...) into a readable string."""
     callback, params = spec
     param_str = ["%s=%r" % (k, v) for k, v in params.items()]
-    return "%s(%s)" % (callback.__name__, ', '.join(param_str))
+    return "%s(%s)" % (callback.__name__, ", ".join(param_str))
 
 
-class RigifyParameterValidator(object):
+class RigforgeParameterValidator:
     """
-    A wrapper around RigifyParameters that verifies properties
+    A wrapper around RigforgeParameters that verifies properties
     defined from rigs for incompatible redefinitions using a table.
 
     Relies on the implementation details of bpy.props.* return values:
@@ -584,8 +646,9 @@ class RigifyParameterValidator(object):
     function, and a dictionary with parameters. This allows comparing
     parameters before the property is actually defined.
     """
+
     __params = None
-    __rig_name = ''
+    __rig_name = ""
     __prop_table = {}
 
     def __init__(self, params, rig_name, prop_table):
@@ -598,32 +661,36 @@ class RigifyParameterValidator(object):
 
     def __setattr__(self, name, val_original):
         # allow __init__ to work correctly
-        if hasattr(RigifyParameterValidator, name):
+        if hasattr(RigforgeParameterValidator, name):
             return object.__setattr__(self, name, val_original)
 
-        if not isinstance(val_original, bpy.props._PropertyDeferred):  # noqa
-            print(f"!!! RIGIFY RIG {self.__rig_name}: "
-                  f"INVALID DEFINITION FOR RIG PARAMETER {name}: {repr(val_original)}\n")
+        if not isinstance(val_original, bpy.props._PropertyDeferred):
+            print(
+                f"!!! RIGFORGE RIG {self.__rig_name}: "
+                f"INVALID DEFINITION FOR RIG PARAMETER {name}: {val_original!r}\n"
+            )
             return
 
         # actually defining the property modifies the dictionary with new parameters, so copy it now
         val = (val_original.function, val_original.keywords)
         new_def = (val[0], val[1].copy())
 
-        if 'poll' in new_def[1]:
-            del new_def[1]['poll']
+        if "poll" in new_def[1]:
+            del new_def[1]["poll"]
 
         if name in self.__prop_table:
             cur_rig, cur_info = self.__prop_table[name]
             if new_def != cur_info:
-                print(f"!!! RIGIFY RIG {self.__rig_name}: REDEFINING PARAMETER {name} AS:\n\n"
-                      f"    {format_property_spec(val)}\n"
-                      f"!!! PREVIOUS DEFINITION BY {cur_rig}:\n\n"
-                      f"    {format_property_spec(cur_info)}\n")
+                print(
+                    f"!!! RIGFORGE RIG {self.__rig_name}: REDEFINING PARAMETER {name} AS:\n\n"
+                    f"    {format_property_spec(val)}\n"
+                    f"!!! PREVIOUS DEFINITION BY {cur_rig}:\n\n"
+                    f"    {format_property_spec(cur_info)}\n"
+                )
 
         # inject a generic update callback that calls the appropriate rig class method
         if val[0] != bpy.props.CollectionProperty:
-            val[1]['update'] = update_callback(name)
+            val[1]["update"] = update_callback(name)
 
         setattr(self.__params, name, val_original)
         self.__prop_table[name] = (self.__rig_name, new_def)
@@ -633,14 +700,14 @@ class RigifyParameterValidator(object):
 # REGISTER
 
 classes = (
-    RigifyName,
-    RigifyParameters,
-    RigifyBoneCollectionReference,
-    RigifyColorSet,
-    RigifySelectionColors,
-    RIGIFY_UL_FeatureSets,
-    RigifyFeatureSets,
-    RigifyPreferences,
+    RigforgeName,
+    RigforgeParameters,
+    RigforgeBoneCollectionReference,
+    RigforgeColorSet,
+    RigforgeSelectionColors,
+    RIGFORGE_UL_FeatureSets,
+    RigforgeFeatureSets,
+    RigforgePreferences,
 )
 
 
@@ -660,7 +727,7 @@ def register():
     register_usetime_properties()
     register_rna_properties()
 
-    prefs = RigifyPreferences.get_instance()
+    prefs = RigforgePreferences.get_instance()
     prefs.register_feature_sets(True)
     prefs.update_external_rigs()
 
@@ -671,29 +738,34 @@ def register():
 def register_rig_parameters():
     seen_error = False
     for rig in rig_lists.rigs:
-        rig_module = rig_lists.rigs[rig]['module']
+        rig_module = rig_lists.rigs[rig]["module"]
         rig_class = rig_module.Rig
-        rig_def = rig_class if hasattr(rig_class, 'add_parameters') else rig_module
+        rig_def = rig_class if hasattr(rig_class, "add_parameters") else rig_module
         # noinspection PyBroadException
         try:
-            if hasattr(rig_def, 'add_parameters'):
-                validator = RigifyParameterValidator(RigifyParameters, rig, RIGIFY_PARAMETER_TABLE)
+            if hasattr(rig_def, "add_parameters"):
+                validator = RigforgeParameterValidator(
+                    RigforgeParameters, rig, RIGFORGE_PARAMETER_TABLE
+                )
                 rig_def.add_parameters(validator)
         except Exception:
             import traceback
+
             traceback.print_exc()
             seen_error = True
 
     if seen_error:
         # Make sure errors are seen by the caller. This helps to catch issues with
         # Rigify in automated systems like the buildbot.
-        raise RuntimeError("There was an issue registering at least one Rigify rig type, check the terminal for errors")
+        raise RuntimeError(
+            "There was an issue registering at least one Rigforge rig type, check the terminal for errors"
+        )
 
 
 def unregister():
     from bpy.utils import unregister_class
 
-    prefs = RigifyPreferences.get_instance()
+    prefs = RigforgePreferences.get_instance()
     prefs.register_feature_sets(False)
 
     unregister_rna_properties()
@@ -720,10 +792,15 @@ def register_usetime_properties() -> None:
     """
     coll_store = bpy.types.BoneCollection
     coll_store.rigforge_ui_row = bpy.props.IntProperty(
-        name="UI Row", default=0, min=0,
-        description="If not zero, row of the UI panel where the button for this collection is shown")
+        name="UI Row",
+        default=0,
+        min=0,
+        description="If not zero, row of the UI panel where the button for this collection is shown",
+    )
     coll_store.rigforge_ui_title = bpy.props.StringProperty(
-        name="UI Title", description="Text to use on the UI panel button instead of the collection name")
+        name="UI Title",
+        description="Text to use on the UI panel button instead of the collection name",
+    )
 
 
 def unregister_usetime_properties() -> None:
@@ -733,112 +810,136 @@ def unregister_usetime_properties() -> None:
 
 
 def register_rna_properties() -> None:
-    bpy.types.Armature.active_feature_set = EnumProperty(
+    bpy.types.Armature.rigforge_active_feature_set = EnumProperty(
         items=feature_set_list.feature_set_items,
         name="Feature Set",
-        description="Restrict the rig list to a specific custom feature set"
+        description="Restrict the rig list to a specific custom feature set",
     )
 
-    bpy.types.PoseBone.rigforge_type = StringProperty(name="Rigify Type", description="Rig type for this bone")
-    bpy.types.PoseBone.rigforge_parameters = PointerProperty(type=RigifyParameters)
+    bpy.types.PoseBone.rigforge_type = StringProperty(
+        name="Rigforge Type", description="Rig type for this bone"
+    )
+    bpy.types.PoseBone.rigforge_parameters = PointerProperty(type=RigforgeParameters)
 
-    bpy.types.Armature.rigforge_colors = CollectionProperty(type=RigifyColorSet)
+    bpy.types.Armature.rigforge_colors = CollectionProperty(type=RigforgeColorSet)
 
-    bpy.types.Armature.rigforge_selection_colors = PointerProperty(type=RigifySelectionColors)
+    bpy.types.Armature.rigforge_selection_colors = PointerProperty(
+        type=RigforgeSelectionColors
+    )
 
     bpy.types.Armature.rigforge_colors_index = IntProperty(default=-1)
     bpy.types.Armature.rigforge_colors_lock = BoolProperty(default=True)
-    bpy.types.Armature.rigforge_theme_to_add = EnumProperty(items=(
-        ('THEME01', 'THEME01', ''),
-        ('THEME02', 'THEME02', ''),
-        ('THEME03', 'THEME03', ''),
-        ('THEME04', 'THEME04', ''),
-        ('THEME05', 'THEME05', ''),
-        ('THEME06', 'THEME06', ''),
-        ('THEME07', 'THEME07', ''),
-        ('THEME08', 'THEME08', ''),
-        ('THEME09', 'THEME09', ''),
-        ('THEME10', 'THEME10', ''),
-        ('THEME11', 'THEME11', ''),
-        ('THEME12', 'THEME12', ''),
-        ('THEME13', 'THEME13', ''),
-        ('THEME14', 'THEME14', ''),
-        ('THEME15', 'THEME15', ''),
-        ('THEME16', 'THEME16', ''),
-        ('THEME17', 'THEME17', ''),
-        ('THEME18', 'THEME18', ''),
-        ('THEME19', 'THEME19', ''),
-        ('THEME20', 'THEME20', '')
-    ), name='Theme')
+    bpy.types.Armature.rigforge_theme_to_add = EnumProperty(
+        items=(
+            ("THEME01", "THEME01", ""),
+            ("THEME02", "THEME02", ""),
+            ("THEME03", "THEME03", ""),
+            ("THEME04", "THEME04", ""),
+            ("THEME05", "THEME05", ""),
+            ("THEME06", "THEME06", ""),
+            ("THEME07", "THEME07", ""),
+            ("THEME08", "THEME08", ""),
+            ("THEME09", "THEME09", ""),
+            ("THEME10", "THEME10", ""),
+            ("THEME11", "THEME11", ""),
+            ("THEME12", "THEME12", ""),
+            ("THEME13", "THEME13", ""),
+            ("THEME14", "THEME14", ""),
+            ("THEME15", "THEME15", ""),
+            ("THEME16", "THEME16", ""),
+            ("THEME17", "THEME17", ""),
+            ("THEME18", "THEME18", ""),
+            ("THEME19", "THEME19", ""),
+            ("THEME20", "THEME20", ""),
+        ),
+        name="Theme",
+    )
 
     id_store = bpy.types.WindowManager
     id_store.rigforge_collection = EnumProperty(
-        items=(("All", "All", "All"),), default="All",
-        name="Rigify Active Collection",
-        description="The selected rig collection")
+        items=(("All", "All", "All"),),
+        default="All",
+        name="Rigforge Active Collection",
+        description="The selected rig collection",
+    )
 
-    id_store.rigforge_widgets = CollectionProperty(type=RigifyName)
-    id_store.rigforge_types = CollectionProperty(type=RigifyName)
-    id_store.rigforge_active_type = IntProperty(name="Rigify Active Type",
-                                              description="The selected rig type")
+    id_store.rigforge_widgets = CollectionProperty(type=RigforgeName)
+    id_store.rigforge_types = CollectionProperty(type=RigforgeName)
+    id_store.rigforge_active_type = IntProperty(
+        name="Rigforge Active Type", description="The selected rig type"
+    )
 
     bpy.types.Armature.rigforge_force_widget_update = BoolProperty(
         name="Overwrite Widget Meshes",
-        description="Forces Rigify to delete and rebuild all of the rig widget objects. By "
-                    "default, already existing widgets are reused as-is to facilitate manual "
-                    "editing",
-        default=False)
+        description="Forces Rigforge to delete and rebuild all of the rig widget objects. By "
+        "default, already existing widgets are reused as-is to facilitate manual "
+        "editing",
+        default=False,
+    )
 
     bpy.types.Armature.rigforge_mirror_widgets = BoolProperty(
         name="Mirror Widgets",
         description="Make widgets for left and right side bones linked duplicates with negative "
-                    "X scale for the right side, based on bone name symmetry",
-        default=True)
+        "X scale for the right side, based on bone name symmetry",
+        default=True,
+    )
 
     bpy.types.Armature.rigforge_widgets_collection = PointerProperty(
         type=bpy.types.Collection,
         name="Widgets Collection",
         description="Defines which collection to place widget objects in. If unset, a new one "
-                    "will be created based on the name of the rig")
+        "will be created based on the name of the rig",
+    )
 
     bpy.types.Armature.rigforge_rig_basename = StringProperty(
-        name="Rigify Rig Name",
+        name="Rigforge Rig Name",
         description="Optional. If specified, this name will be used for the newly generated rig, "
-                    "widget collection and script. Otherwise, a name is generated based on the "
-                    "name of the metarig object by replacing 'metarig' with 'rig', 'META' with "
-                    "'RIG', or prefixing with 'RIG-'. When updating an already generated rig its "
-                    "name is never changed",
-        default="")
+        "widget collection and script. Otherwise, a name is generated based on the "
+        "name of the metarig object by replacing 'metarig' with 'rig', 'META' with "
+        "'RIG', or prefixing with 'RIG-'. When updating an already generated rig its "
+        "name is never changed",
+        default="",
+    )
 
     bpy.types.Armature.rigforge_target_rig = PointerProperty(
         type=bpy.types.Object,
-        name="Rigify Target Rig",
+        name="Rigforge Target Rig",
         description="Defines which rig to overwrite. If unset, a new one will be created with "
-                    "name based on the Rig Name option or the name of the metarig",
-        poll=lambda self, obj: obj.type == 'ARMATURE' and obj.data is not self)
+        "name based on the Rig Name option or the name of the metarig",
+        poll=lambda self, obj: obj.type == "ARMATURE" and obj.data is not self,
+    )
 
     bpy.types.Armature.rigforge_rig_ui = PointerProperty(
         type=bpy.types.Text,
-        name="Rigify Target Rig UI",
+        name="Rigforge Target Rig UI",
         description="Defines the UI to overwrite. If unset, a new one will be created and named "
-                    "based on the name of the rig")
+        "based on the name of the rig",
+    )
 
     bpy.types.Armature.rigforge_finalize_script = PointerProperty(
         type=bpy.types.Text,
         name="Finalize Script",
-        description="Run this script after generation to apply user-specific changes")
+        description="Run this script after generation to apply user-specific changes",
+    )
 
     id_store.rigforge_transfer_only_selected = BoolProperty(
         name="Transfer Only Selected",
-        description="Transfer selected bones only", default=True)
+        description="Transfer selected bones only",
+        default=True,
+    )
 
     # BoneCollection properties
     coll_store = bpy.types.BoneCollection
 
     coll_store.rigforge_uid = IntProperty(name="Unique ID", default=-1)
     coll_store.rigforge_sel_set = BoolProperty(
-        name="Add Selection Set", default=False, description='Add Selection Set for this collection')
-    coll_store.rigforge_color_set_id = IntProperty(name="Color Set ID", default=0, min=0)
+        name="Add Selection Set",
+        default=False,
+        description="Add Selection Set for this collection",
+    )
+    coll_store.rigforge_color_set_id = IntProperty(
+        name="Color Set ID", default=0, min=0
+    )
 
     def ui_title_get(coll):
         return coll.rigforge_ui_title or coll.name
@@ -847,8 +948,10 @@ def register_rna_properties() -> None:
         coll.rigforge_ui_title = "" if new_val == coll.name else new_val
 
     coll_store.rigforge_ui_title_name = StringProperty(
-        name="UI Title", description="Text to use on the UI panel button (does not edit the collection name)",
-        get=ui_title_get, set=ui_title_set
+        name="UI Title",
+        description="Text to use on the UI panel button (does not edit the collection name)",
+        get=ui_title_get,
+        set=ui_title_set,
     )
 
     def color_set_get(coll):
@@ -873,8 +976,11 @@ def register_rna_properties() -> None:
         return [cset.name for cset in utils.rig.get_rigforge_colors(coll.id_data)]
 
     coll_store.rigforge_color_set_name = StringProperty(
-        name="Color Set", description="Color set specifying bone colors for this group",
-        get=color_set_get, set=color_set_set, search=color_set_search
+        name="Color Set",
+        description="Color set specifying bone colors for this group",
+        get=color_set_get,
+        set=color_set_set,
+        search=color_set_search,
     )
 
     # Object properties
@@ -882,11 +988,13 @@ def register_rna_properties() -> None:
 
     obj_store.rigforge_owner_rig = PointerProperty(
         type=bpy.types.Object,
-        name="Rigify Owner Rig",
-        description="Rig that owns this object and may delete or overwrite it upon re-generation")
+        name="Rigforge Owner Rig",
+        description="Rig that owns this object and may delete or overwrite it upon re-generation",
+    )
 
     # 5.0: Version metarigs to new Action Slot selector properties on file load.
     from .utils.action_layers import versioning_5_0
+
     bpy.app.handlers.load_post.append(versioning_5_0)
 
 
@@ -899,7 +1007,7 @@ def unregister_rna_properties() -> None:
 
     arm_store: typing.Any = bpy.types.Armature
 
-    del arm_store.active_feature_set
+    del arm_store.rigforge_active_feature_set
     del arm_store.rigforge_colors
     del arm_store.rigforge_selection_colors
     del arm_store.rigforge_colors_index

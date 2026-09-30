@@ -3,19 +3,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
-
 from bpy.types import PoseBone
 
-from ...utils.naming import make_derived_name
-from ...utils.widgets import layout_widget_dropdown, create_registered_widget
-from ...utils.mechanism import move_all_constraints
-
 from ...base_rig import stage
-
-from .skin_nodes import ControlBoneNode, ControlNodeIcon, ControlNodeEnd
-from .skin_rigs import BaseSkinChainRigWithRotationOption
-
+from ...utils.mechanism import move_all_constraints
+from ...utils.naming import make_derived_name
+from ...utils.widgets import create_registered_widget, layout_widget_dropdown
 from ..basic.raw_copy import RelinkConstraintsMixin
+from .skin_nodes import ControlBoneNode, ControlNodeEnd, ControlNodeIcon
+from .skin_rigs import BaseSkinChainRigWithRotationOption
 
 
 class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
@@ -37,10 +33,7 @@ class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
     # BONES
 
     bones: BaseSkinChainRigWithRotationOption.ToplevelBones[
-        str,
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        str
+        str, "Rig.CtrlBones", "Rig.MchBones", str
     ]
 
     ####################################################
@@ -51,16 +44,18 @@ class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
     @stage.initialize
     def init_control_nodes(self):
         org = self.bones.org
-        name = make_derived_name(org, 'ctrl')
+        name = make_derived_name(org, "ctrl")
 
         self.control_node = node = ControlBoneNode(
-            self, org, name, icon=ControlNodeIcon.CUSTOM, chain_end=ControlNodeEnd.START)
+            self, org, name, icon=ControlNodeIcon.CUSTOM, chain_end=ControlNodeEnd.START
+        )
 
         node.hide_control = self.params.skin_anchor_hide
 
     def make_control_node_widget(self, node):
-        create_registered_widget(self.obj, node.control_bone,
-                                 self.params.pivot_master_widget_type or 'cube')
+        create_registered_widget(
+            self.obj, node.control_bone, self.params.pivot_master_widget_type or "cube"
+        )
 
     def extend_control_node_rig(self, node):
         if node.rig == self:
@@ -86,7 +81,8 @@ class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
     def make_deform_bone(self):
         if self.make_deform:
             self.bones.deform = self.copy_bone(
-                self.bones.org, make_derived_name(self.bones.org, 'def'))
+                self.bones.org, make_derived_name(self.bones.org, "def")
+            )
 
     @stage.parent_bones
     def parent_deform_chain(self):
@@ -101,19 +97,19 @@ class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
         params.make_extra_deform = bpy.props.BoolProperty(
             name="Extra Deform",
             default=False,
-            description="Create an optional deform bone"
+            description="Create an optional deform bone",
         )
 
         params.skin_anchor_hide = bpy.props.BoolProperty(
-            name='Suppress Control',
+            name="Suppress Control",
             default=False,
-            description='Make the control bone a mechanism bone invisible to the user and only affected by constraints'
+            description="Make the control bone a mechanism bone invisible to the user and only affected by constraints",
         )
 
         params.pivot_master_widget_type = bpy.props.StringProperty(
             name="Widget Type",
-            default='cube',
-            description="Choose the type of the widget to create"
+            default="cube",
+            description="Choose the type of the widget to create",
         )
 
         cls.add_relink_constraints_params(params)
@@ -123,7 +119,7 @@ class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
     @classmethod
     def parameters_ui(cls, layout, params):
         col = layout.column()
-        col.prop(params, "make_extra_deform", text='Generate Deform Bone')
+        col.prop(params, "make_extra_deform", text="Generate Deform Bone")
         col.prop(params, "skin_anchor_hide")
 
         row = layout.row()
@@ -132,11 +128,12 @@ class Rig(BaseSkinChainRigWithRotationOption, RelinkConstraintsMixin):
 
         layout.prop(params, "relink_constraints")
 
-        layout.label(text="All constraints are moved to the control bone.", icon='INFO')
+        layout.label(text="All constraints are moved to the control bone.", icon="INFO")
 
         super().parameters_ui(layout, params)
 
 
 def create_sample(obj):
     from rigforge.rigs.basic.super_copy import create_sample as inner
-    obj.pose.bones[inner(obj)["Bone"]].rigforge_type = 'skin.anchor'
+
+    obj.pose.bones[inner(obj)["Bone"]].rigforge_type = "skin.anchor"

@@ -15,8 +15,13 @@ beat upstream on auto-placement, skinning, presets, and export.
   script at `/tmp/rigforge_smoke.py`, recreate if missing).
 - Blender binary: `/Applications/Blender.app/Contents/MacOS/Blender`.
   Headless only unless the user approves a GUI launch.
-- Remote: `github.com/chris-straka/rigforge` (private). Commit
-  locally when asked; push only when asked.
+- Remote: `github.com/chris-straka/rigforge`, verified PRIVATE
+  (2026-09-30) — keep it private. Commit locally when asked; push
+  only when asked.
+- Lint gate: `ruff check .` and `ruff format --check .` must be clean
+  on files you touch (config: `ruff.toml`). The tree carries
+  pre-existing lint debt (see TODO); don't bulk-fix outside your
+  change, do leave your files clean.
 
 ## Siblings (separate repos, separate sessions)
 

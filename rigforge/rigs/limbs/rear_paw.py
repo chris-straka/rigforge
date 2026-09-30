@@ -2,16 +2,15 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from ...utils.bones import align_bone_roll
-from ...utils.naming import make_derived_name
-from ...utils.misc import map_list
-
 from itertools import count
 
 from ...base_rig import stage
-
+from ...utils.bones import align_bone_roll
+from ...utils.misc import map_list
+from ...utils.naming import make_derived_name
 from .limb_rigs import BaseLimbRig
-from .paw import Rig as pawRig, create_sample as create_paw_sample
+from .paw import Rig as pawRig
+from .paw import create_sample as create_paw_sample
 
 
 class Rig(pawRig):
@@ -24,15 +23,12 @@ class Rig(pawRig):
         pass
 
     class MchBones(pawRig.MchBones):
-        ik2_target: str                # Three bone IK stretch limit
-        ik2_chain: list[str]           # Second IK system (pre-driving thigh and ik3)
-        ik3_chain: list[str]           # Third IK system (pre-driving heel)
+        ik2_target: str  # Three bone IK stretch limit
+        ik2_chain: list[str]  # Second IK system (pre-driving thigh and ik3)
+        ik3_chain: list[str]  # Third IK system (pre-driving heel)
 
     bones: pawRig.ToplevelBones[
-        pawRig.OrgBones,
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        list[str]
+        pawRig.OrgBones, "Rig.CtrlBones", "Rig.MchBones", list[str]
     ]
 
     ####################################################
@@ -77,7 +73,9 @@ class Rig(pawRig):
         self.bones.mch.ik2_target = self.make_ik2_mch_target_bone(orgs)
 
     def make_ik2_mch_target_bone(self, orgs: list[str]):
-        return self.copy_bone(orgs[3], make_derived_name(orgs[0], 'mch', '_ik2_target'), scale=1 / 2)
+        return self.copy_bone(
+            orgs[3], make_derived_name(orgs[0], "mch", "_ik2_target"), scale=1 / 2
+        )
 
     @stage.generate_bones
     def make_ik2_mch_chain(self):
@@ -89,19 +87,23 @@ class Rig(pawRig):
         chain_bones = map_list(self.get_bone, chain)
 
         # Extend the base IK control (used in the ik2 chain) with the projected length of org2
-        chain_bones[0].length += org_bones[2].vector.dot(chain_bones[0].vector.normalized())
+        chain_bones[0].length += org_bones[2].vector.dot(
+            chain_bones[0].vector.normalized()
+        )
         chain_bones[1].head = chain_bones[0].tail
         chain_bones[1].tail = org_bones[2].tail
         align_bone_roll(self.obj, chain[1], orgs[1])
 
     def make_ik2_mch_bone(self, _i: int, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'mch', '_ik2'))
+        return self.copy_bone(org, make_derived_name(org, "mch", "_ik2"))
 
     @stage.parent_bones
     def parent_ik2_mch_chain(self):
         mch = self.bones.mch
         self.set_bone_parent(mch.ik2_target, self.get_ik2_input_bone())
-        self.set_bone_parent(mch.ik2_chain[0], self.bones.ctrl.ik_base, inherit_scale='AVERAGE')
+        self.set_bone_parent(
+            mch.ik2_chain[0], self.bones.ctrl.ik_base, inherit_scale="AVERAGE"
+        )
         self.parent_bone_chain(mch.ik2_chain, use_connect=True)
 
     @stage.configure_bones
@@ -114,7 +116,7 @@ class Rig(pawRig):
         bone.ik_stretch = 0.1
         if i == 1:
             bone.lock_ik_x = bone.lock_ik_y = bone.lock_ik_z = True
-            setattr(bone, 'lock_ik_' + self.main_axis, False)
+            setattr(bone, "lock_ik_" + self.main_axis, False)
 
     @stage.rig_bones
     def rig_ik2_mch_chain(self):
@@ -122,18 +124,24 @@ class Rig(pawRig):
         input_bone = self.get_ik2_input_bone()
         head_tail = 1 if self.use_heel2 else 0
 
-        self.rig_ik_mch_stretch_limit(mch.ik2_target, mch.follow, input_bone, head_tail, 3)
-        self.rig_ik_mch_end_bone(mch.ik2_chain[-1], mch.ik2_target, self.bones.ctrl.ik_pole)
+        self.rig_ik_mch_stretch_limit(
+            mch.ik2_target, mch.follow, input_bone, head_tail, 3
+        )
+        self.rig_ik_mch_end_bone(
+            mch.ik2_chain[-1], mch.ik2_target, self.bones.ctrl.ik_pole
+        )
 
     ####################################################
     # Third IK system (pre-driving heel control)
 
     @stage.generate_bones
     def make_ik3_mch_chain(self):
-        self.bones.mch.ik3_chain = map_list(self.make_ik3_mch_bone, count(0), self.bones.org.main[1:3])
+        self.bones.mch.ik3_chain = map_list(
+            self.make_ik3_mch_bone, count(0), self.bones.org.main[1:3]
+        )
 
     def make_ik3_mch_bone(self, _i: int, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'mch', '_ik3'))
+        return self.copy_bone(org, make_derived_name(org, "mch", "_ik3"))
 
     @stage.parent_bones
     def parent_ik3_mch_chain(self):
@@ -152,21 +160,24 @@ class Rig(pawRig):
         bone.ik_stretch = 0.1
         if i == 0:
             bone.lock_ik_x = bone.lock_ik_y = bone.lock_ik_z = True
-            setattr(bone, 'lock_ik_' + self.main_axis, False)
+            setattr(bone, "lock_ik_" + self.main_axis, False)
 
     @stage.rig_bones
     def rig_ik3_mch_chain(self):
         mch = self.bones.mch
         # Mostly cancel ik2 scaling.
         self.make_constraint(
-            mch.ik3_chain[0], 'COPY_SCALE', self.bones.ctrl.ik_base,
-            use_make_uniform=True, influence=0.75,
+            mch.ik3_chain[0],
+            "COPY_SCALE",
+            self.bones.ctrl.ik_base,
+            use_make_uniform=True,
+            influence=0.75,
         )
-        self.make_constraint(mch.ik3_chain[-1], 'IK', mch.ik2_target, chain_count=2)
+        self.make_constraint(mch.ik3_chain[-1], "IK", mch.ik2_target, chain_count=2)
 
 
 def create_sample(obj):
     bones = create_paw_sample(obj)
-    pbone = obj.pose.bones[bones['thigh.L']]
-    pbone.rigforge_type = 'limbs.rear_paw'
+    pbone = obj.pose.bones[bones["thigh.L"]]
+    pbone.rigforge_type = "limbs.rear_paw"
     return bones

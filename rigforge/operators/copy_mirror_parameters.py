@@ -2,40 +2,48 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
-from bpy.app.translations import pgettext_rpt as rpt_
 import importlib
 
-from ..utils.layers import REFS_TOGGLE_SUFFIX, REFS_LIST_SUFFIX, is_collection_ref_list_prop, copy_ref_list
-from ..utils.naming import Side, get_name_base_and_sides, mirror_name
-from ..utils.misc import propgroup_to_dict, assign_rna_properties
+import bpy
+from bpy.app.translations import pgettext_rpt as rpt_
 
-from ..utils.rig import get_rigforge_type, get_rigforge_params
 from ..rig_lists import get_rig_class
-
+from ..utils.layers import (
+    REFS_LIST_SUFFIX,
+    REFS_TOGGLE_SUFFIX,
+    copy_ref_list,
+    is_collection_ref_list_prop,
+)
+from ..utils.misc import assign_rna_properties, propgroup_to_dict
+from ..utils.naming import Side, get_name_base_and_sides, mirror_name
+from ..utils.rig import get_rigforge_params, get_rigforge_type
 
 # =============================================
 # Single parameter copy button
+
 
 # noinspection PyPep8Naming
 class POSE_OT_rigforge_copy_single_parameter(bpy.types.Operator):
     bl_idname = "pose.rigforge_copy_single_parameter"
     bl_label = "Copy Option To Selected Rigs"
-    bl_description = "Copy this property value to all selected rigs of the appropriate type"
-    bl_options = {'UNDO', 'INTERNAL'}
+    bl_description = (
+        "Copy this property value to all selected rigs of the appropriate type"
+    )
+    bl_options = {"UNDO", "INTERNAL"}
 
-    property_name: bpy.props.StringProperty(name='Property Name')
-    mirror_bone: bpy.props.BoolProperty(name='Mirror As Bone Name')
+    property_name: bpy.props.StringProperty(name="Property Name")
+    mirror_bone: bpy.props.BoolProperty(name="Mirror As Bone Name")
 
-    module_name: bpy.props.StringProperty(name='Module Name')
-    class_name: bpy.props.StringProperty(name='Class Name')
+    module_name: bpy.props.StringProperty(name="Module Name")
+    class_name: bpy.props.StringProperty(name="Class Name")
 
     @classmethod
     def poll(cls, context):
         return (
-            context.active_object and context.active_object.type == 'ARMATURE'
+            context.active_object
+            and context.active_object.type == "ARMATURE"
             and context.active_pose_bone
-            and context.active_object.data.get('rig_id') is None
+            and context.active_object.data.get("rig_id") is None
             and get_rigforge_type(context.active_pose_bone)
             and len(context.selected_pose_bones) > 1
         )
@@ -48,10 +56,11 @@ class POSE_OT_rigforge_copy_single_parameter(bpy.types.Operator):
             module = importlib.import_module(self.module_name)
             filter_rig_class = getattr(module, self.class_name)
         except (KeyError, AttributeError, ImportError):
-            message = rpt_("Cannot find class {:s} in {:s}").format(self.class_name, self.module_name)
-            self.report(
-                {'ERROR'}, message)
-            return {'CANCELLED'}
+            message = rpt_("Cannot find class {:s} in {:s}").format(
+                self.class_name, self.module_name
+            )
+            self.report({"ERROR"}, message)
+            return {"CANCELLED"}
 
         active_pbone = context.active_pose_bone
         active_split = get_name_base_and_sides(active_pbone.name)
@@ -64,7 +73,9 @@ class POSE_OT_rigforge_copy_single_parameter(bpy.types.Operator):
         is_coll_refs = self.property_name.endswith(REFS_LIST_SUFFIX)
         if is_coll_refs:
             assert is_collection_ref_list_prop(value)
-            coll_refs_toggle_prop = self.property_name[:-len(REFS_LIST_SUFFIX)] + REFS_TOGGLE_SUFFIX
+            coll_refs_toggle_prop = (
+                self.property_name[: -len(REFS_LIST_SUFFIX)] + REFS_TOGGLE_SUFFIX
+            )
             coll_refs_toggle_val = getattr(params, coll_refs_toggle_prop)
 
         # Copy to different bones of appropriate rig types
@@ -88,29 +99,34 @@ class POSE_OT_rigforge_copy_single_parameter(bpy.types.Operator):
                     sel_params = get_rigforge_params(sel_pbone)
 
                     if is_coll_refs:
-                        copy_ref_list(getattr(sel_params, self.property_name), value, mirror=do_mirror)
+                        copy_ref_list(
+                            getattr(sel_params, self.property_name),
+                            value,
+                            mirror=do_mirror,
+                        )
                     else:
                         new_value = mirror_name(value) if do_mirror else value
                         setattr(sel_params, self.property_name, new_value)
 
                     if is_coll_refs:
-                        setattr(sel_params, coll_refs_toggle_prop, coll_refs_toggle_val)  # noqa
+                        setattr(sel_params, coll_refs_toggle_prop, coll_refs_toggle_val)
 
                     num_copied += 1
 
         if num_copied:
             message = rpt_("Copied the value to {:d} bones").format(num_copied)
-            self.report({'INFO'}, message)
-            return {'FINISHED'}
+            self.report({"INFO"}, message)
+            return {"FINISHED"}
         else:
-            self.report({'WARNING'}, "No suitable selected bones to copy to")
-            return {'CANCELLED'}
+            self.report({"WARNING"}, "No suitable selected bones to copy to")
+            return {"CANCELLED"}
 
 
 def make_copy_parameter_button(layout, property_name, *, base_class, mirror_bone=False):
     """Displays a button that copies the property to selected rig of the specified base type."""
     props = layout.operator(
-        POSE_OT_rigforge_copy_single_parameter.bl_idname, icon='DUPLICATE', text='')
+        POSE_OT_rigforge_copy_single_parameter.bl_idname, icon="DUPLICATE", text=""
+    )
     props.property_name = property_name
     props.mirror_bone = mirror_bone
     props.module_name = base_class.__module__
@@ -133,8 +149,13 @@ def recursive_mirror(value):
         return value
 
 
-def copy_rigforge_params(from_bone: bpy.types.PoseBone, to_bone: bpy.types.PoseBone, *,
-                       match_type=False, x_mirror=False) -> bool:
+def copy_rigforge_params(
+    from_bone: bpy.types.PoseBone,
+    to_bone: bpy.types.PoseBone,
+    *,
+    match_type=False,
+    x_mirror=False,
+) -> bool:
     rig_type = get_rigforge_type(to_bone)
     from_type = get_rigforge_type(from_bone)
 
@@ -145,14 +166,16 @@ def copy_rigforge_params(from_bone: bpy.types.PoseBone, to_bone: bpy.types.PoseB
     if not rig_type:
         return False
 
-    from_params: bpy.types.RigifyParameters = from_bone.rigforge_parameters
+    from_params: bpy.types.RigforgeParameters = from_bone.rigforge_parameters
     if not from_params:
         # TODO: check whether this can even happen, given that every bone has this RNA property.
         return False
 
     # Simple case first: without mirroring, just copy the parameters.
     if not x_mirror:
-        assign_rna_properties(to_bone.rigforge_parameters, from_bone.rigforge_parameters)
+        assign_rna_properties(
+            to_bone.rigforge_parameters, from_bone.rigforge_parameters
+        )
         return True
 
     # For compatibility with the already-existing recursive_mirror(dict)
@@ -169,23 +192,25 @@ def copy_rigforge_params(from_bone: bpy.types.PoseBone, to_bone: bpy.types.PoseB
         if prop_name.endswith(REFS_LIST_SUFFIX):
             ref_list = getattr(from_params_typed, prop_name)
             if is_collection_ref_list_prop(ref_list):
-                copy_ref_list(getattr(to_params_typed, prop_name), ref_list, mirror=True)
+                copy_ref_list(
+                    getattr(to_params_typed, prop_name), ref_list, mirror=True
+                )
 
     return True
 
 
 # noinspection PyPep8Naming
 class POSE_OT_rigforge_mirror_parameters(bpy.types.Operator):
-    """Mirror Rigify type and parameters of selected bones to the opposite side. Names should end in L/R"""
+    """Mirror Rigforge type and parameters of selected bones to the opposite side. Names should end in L/R"""
 
     bl_idname = "pose.rigforge_mirror_parameters"
-    bl_label = "Mirror Rigify Parameters"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_label = "Mirror Rigforge Parameters"
+    bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(cls, context):
         obj = context.object
-        if not obj or obj.type != 'ARMATURE' or obj.mode != 'POSE':
+        if not obj or obj.type != "ARMATURE" or obj.mode != "POSE":
             return False
         sel_bones = context.selected_pose_bones
         if not sel_bones:
@@ -208,10 +233,12 @@ class POSE_OT_rigforge_mirror_parameters(bpy.types.Operator):
                 # Bones without an opposite will just be ignored.
                 continue
             if flip_bone != pb and flip_bone.select:
-                message = rpt_("Bone {:s} selected on both sides, mirroring would be ambiguous, "
-                               "aborting. Only select the left or right side, not both").format(pb.name)
-                self.report({'ERROR'}, message)
-                return {'CANCELLED'}
+                message = rpt_(
+                    "Bone {:s} selected on both sides, mirroring would be ambiguous, "
+                    "aborting. Only select the left or right side, not both"
+                ).format(pb.name)
+                self.report({"ERROR"}, message)
+                return {"CANCELLED"}
 
         # Then mirror the parameters.
         for pb in context.selected_pose_bones:
@@ -220,33 +247,35 @@ class POSE_OT_rigforge_mirror_parameters(bpy.types.Operator):
                 # Bones without an opposite will just be ignored.
                 continue
 
-            num_mirrored += copy_rigforge_params(pb, flip_bone, match_type=False, x_mirror=True)
+            num_mirrored += copy_rigforge_params(
+                pb, flip_bone, match_type=False, x_mirror=True
+            )
 
         message = rpt_("Mirrored parameters of {:d} bones").format(num_mirrored)
-        self.report({'INFO'}, message)
+        self.report({"INFO"}, message)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 # noinspection PyPep8Naming
 class POSE_OT_rigforge_copy_parameters(bpy.types.Operator):
-    """Copy Rigify type and parameters from active to selected bones"""
+    """Copy Rigforge type and parameters from active to selected bones"""
 
     bl_idname = "pose.rigforge_copy_parameters"
-    bl_label = "Copy Rigify Parameters to Selected"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_label = "Copy Rigforge Parameters to Selected"
+    bl_options = {"REGISTER", "UNDO"}
 
     match_type: bpy.props.BoolProperty(
         name="Match Type",
         description="Only mirror rigforge parameters to selected bones which have the same rigforge "
-                    "type as the active bone",
-        default=False
+        "type as the active bone",
+        default=False,
     )
 
     @classmethod
     def poll(cls, context):
         obj = context.object
-        if not obj or obj.type != 'ARMATURE' or obj.mode != 'POSE':
+        if not obj or obj.type != "ARMATURE" or obj.mode != "POSE":
             return False
 
         active = context.active_pose_bone
@@ -266,26 +295,39 @@ class POSE_OT_rigforge_copy_parameters(bpy.types.Operator):
         for pb in context.selected_pose_bones:
             if pb == active_bone:
                 continue
-            num_copied += copy_rigforge_params(active_bone, pb, match_type=self.match_type)
+            num_copied += copy_rigforge_params(
+                active_bone, pb, match_type=self.match_type
+            )
 
-        message = rpt_("Copied {:s} parameters to {:d} bones").format(get_rigforge_type(active_bone), num_copied)
-        self.report({'INFO'}, message)
+        message = rpt_("Copied {:s} parameters to {:d} bones").format(
+            get_rigforge_type(active_bone), num_copied
+        )
+        self.report({"INFO"}, message)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def draw_copy_mirror_ops(self, context):
     layout = self.layout
-    if context.mode == 'POSE':
+    if context.mode == "POSE":
         layout.separator()
-        op = layout.operator(POSE_OT_rigforge_copy_parameters.bl_idname,
-                             icon='DUPLICATE', text="Copy Only Parameters")
+        op = layout.operator(
+            POSE_OT_rigforge_copy_parameters.bl_idname,
+            icon="DUPLICATE",
+            text="Copy Only Parameters",
+        )
         op.match_type = True
-        op = layout.operator(POSE_OT_rigforge_copy_parameters.bl_idname,
-                             icon='DUPLICATE', text="Copy Type & Parameters")
+        op = layout.operator(
+            POSE_OT_rigforge_copy_parameters.bl_idname,
+            icon="DUPLICATE",
+            text="Copy Type & Parameters",
+        )
         op.match_type = False
-        layout.operator(POSE_OT_rigforge_mirror_parameters.bl_idname,
-                        icon='MOD_MIRROR', text="Mirror Type & Parameters")
+        layout.operator(
+            POSE_OT_rigforge_mirror_parameters.bl_idname,
+            icon="MOD_MIRROR",
+            text="Mirror Type & Parameters",
+        )
 
 
 # =============================================
@@ -294,23 +336,27 @@ def draw_copy_mirror_ops(self, context):
 classes = (
     POSE_OT_rigforge_copy_single_parameter,
     POSE_OT_rigforge_mirror_parameters,
-    POSE_OT_rigforge_copy_parameters
+    POSE_OT_rigforge_copy_parameters,
 )
 
 
 def register():
     from bpy.utils import register_class
+
     for cls in classes:
         register_class(cls)
 
     from ..ui import VIEW3D_MT_rigforge
+
     VIEW3D_MT_rigforge.append(draw_copy_mirror_ops)
 
 
 def unregister():
     from bpy.utils import unregister_class
+
     for cls in classes:
         unregister_class(cls)
 
     from ..ui import VIEW3D_MT_rigforge
+
     VIEW3D_MT_rigforge.remove(draw_copy_mirror_ops)

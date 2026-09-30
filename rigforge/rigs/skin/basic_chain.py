@@ -2,27 +2,24 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import math
-
-from typing import Sequence, Optional
+from collections.abc import Sequence
 from itertools import count, repeat
+from math import acos
+from typing import Optional
 
+import bpy
+from bl_math import smoothstep
 from bpy.types import PoseBone
 from mathutils import Quaternion
 
-from math import acos
-from bl_math import smoothstep
-
-from ...utils.rig import connected_children_names, rig_is_child
-from ...utils.naming import make_derived_name
+from ...base_rig import stage
 from ...utils.bones import align_bone_roll
 from ...utils.mechanism import driver_var_distance
-from ...utils.widgets_basic import create_sphere_widget
 from ...utils.misc import map_list, matrix_from_axis_roll
-
-from ...base_rig import stage
-
+from ...utils.naming import make_derived_name
+from ...utils.rig import connected_children_names, rig_is_child
+from ...utils.widgets_basic import create_sphere_widget
 from .skin_nodes import ControlBoneNode, ControlNodeEnd
 from .skin_rigs import BaseSkinChainRigWithRotationOption, get_bone_quaternion
 
@@ -71,7 +68,7 @@ class Rig(BaseSkinChainRigWithRotationOption):
         orgs = self.bones.org
 
         # Average the adjoining org bone orientations
-        bones = orgs[max(0, node.index - 1):node.index + 1]
+        bones = orgs[max(0, node.index - 1) : node.index + 1]
         quaternions = [get_bone_quaternion(self.obj, name) for name in bones]
         result = sum(quaternions, Quaternion((0, 0, 0, 0))).normalized()
 
@@ -83,8 +80,10 @@ class Rig(BaseSkinChainRigWithRotationOption):
 
             if node_prev and node_next:
                 # Apply only swing to preserve roll; tgt roll thus doesn't matter
-                tgt = matrix_from_axis_roll(node_next.point - node_prev.point, 0).to_quaternion()
-                swing, _ = (result.inverted() @ tgt).to_swing_twist('Y')
+                tgt = matrix_from_axis_roll(
+                    node_next.point - node_prev.point, 0
+                ).to_quaternion()
+                swing, _ = (result.inverted() @ tgt).to_swing_twist("Y")
                 result = result @ swing
 
         return result
@@ -96,14 +95,11 @@ class Rig(BaseSkinChainRigWithRotationOption):
     # BONES
 
     class MchBones(BaseSkinChainRigWithRotationOption.MchBones):
-        handles: list[str]             # Final B-Bone handles.
-        handles_pre: list[str]         # Mechanism bones that emulate Auto handle behavior.
+        handles: list[str]  # Final B-Bone handles.
+        handles_pre: list[str]  # Mechanism bones that emulate Auto handle behavior.
 
     bones: BaseSkinChainRigWithRotationOption.ToplevelBones[
-        list[str],
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        list[str]
+        list[str], "Rig.CtrlBones", "Rig.MchBones", list[str]
     ]
 
     ####################################################
@@ -112,16 +108,16 @@ class Rig(BaseSkinChainRigWithRotationOption):
     control_nodes: list[ControlBoneNode]
 
     # List of control nodes extended with the two adjacent chained nodes below
-    control_node_chain: Optional[list[ControlBoneNode | None]]
+    control_node_chain: list[ControlBoneNode | None] | None
 
     # Connected chain continuation nodes, and corner setting values
-    prev_node: Optional[ControlBoneNode]
+    prev_node: ControlBoneNode | None
     prev_corner: float
-    next_node: Optional[ControlBoneNode]
+    next_node: ControlBoneNode | None
     next_corner: float
 
     # Next chained rig if the end connects to the start of another chain
-    next_chain_rig: Optional['Rig']
+    next_chain_rig: Optional["Rig"]
 
     @stage.initialize
     def init_control_nodes(self):
@@ -141,7 +137,7 @@ class Rig(BaseSkinChainRigWithRotationOption):
 
     def make_control_node(self, i: int, org: str, is_end: bool) -> ControlBoneNode:
         bone = self.get_bone(org)
-        name = make_derived_name(org, 'ctrl', '_end' if is_end else '')
+        name = make_derived_name(org, "ctrl", "_end" if is_end else "")
         pos = bone.tail if is_end else bone.head
 
         if i == 0:
@@ -152,8 +148,14 @@ class Rig(BaseSkinChainRigWithRotationOption):
             chain_end = ControlNodeEnd.MIDDLE
 
         return ControlBoneNode(
-            self, org, name, point=pos, size=self.length / 3, index=i,
-            allow_scale=self.use_scale, needs_reparent=self.use_reparent_handles,
+            self,
+            org,
+            name,
+            point=pos,
+            size=self.length / 3,
+            index=i,
+            allow_scale=self.use_scale,
+            needs_reparent=self.use_reparent_handles,
             chain_end=chain_end,
         )
 
@@ -169,8 +171,9 @@ class Rig(BaseSkinChainRigWithRotationOption):
     # inject more automatic handle positioning mechanisms.
     use_pre_handles = False
 
-    def get_connected_node(self, node: ControlBoneNode
-                           ) -> tuple[Optional[ControlBoneNode], Optional[ControlBoneNode], float]:
+    def get_connected_node(
+        self, node: ControlBoneNode
+    ) -> tuple[ControlBoneNode | None, ControlBoneNode | None, float]:
         """
         Find which other chain to connect this chain to at this node.
 
@@ -189,9 +192,15 @@ class Rig(BaseSkinChainRigWithRotationOption):
                 s_is_end = 1 if mirror.index != 0 else 0
 
                 if is_end == s_is_end and mirror.rig.use_connect_mirror[is_end]:
-                    mirror_corner = mirror.rig.params.skin_chain_connect_sharp_angle[is_end]
+                    mirror_corner = mirror.rig.params.skin_chain_connect_sharp_angle[
+                        is_end
+                    ]
 
-                    return mirror, mirror.chain_end_neighbor, (corner + mirror_corner) / 2
+                    return (
+                        mirror,
+                        mirror.chain_end_neighbor,
+                        (corner + mirror_corner) / 2,
+                    )
 
         # Then try connecting ends
         if self.use_connect_ends[is_end]:
@@ -246,7 +255,9 @@ class Rig(BaseSkinChainRigWithRotationOption):
     def get_all_mch_handles_pre(self):
         """Returns the list of all pre-handle bones, referencing the next chained rig if needed."""
         if self.next_chain_rig:
-            return self.bones.mch.handles_pre + [self.next_chain_rig.bones.mch.handles_pre[0]]
+            return self.bones.mch.handles_pre + [
+                self.next_chain_rig.bones.mch.handles_pre[0]
+            ]
         else:
             return self.bones.mch.handles_pre
 
@@ -260,20 +271,25 @@ class Rig(BaseSkinChainRigWithRotationOption):
             if self.next_chain_rig:
                 chain = chain[0:-1]
 
-            mch.handles = map_list(self.make_mch_handle_bone, count(0),
-                                   chain, chain[1:], chain[2:])
+            mch.handles = map_list(
+                self.make_mch_handle_bone, count(0), chain, chain[1:], chain[2:]
+            )
 
             if self.use_pre_handles:
-                mch.handles_pre = map_list(self.make_mch_pre_handle_bone, count(0), mch.handles)
+                mch.handles_pre = map_list(
+                    self.make_mch_pre_handle_bone, count(0), mch.handles
+                )
             else:
                 mch.handles_pre = mch.handles
 
-    def make_mch_handle_bone(self, _i: int,
-                             prev_node: Optional[ControlBoneNode],
-                             node: ControlBoneNode,
-                             next_node: Optional[ControlBoneNode]
-                             ) -> str:
-        name = self.copy_bone(node.org, make_derived_name(node.name, 'mch', '_handle'))
+    def make_mch_handle_bone(
+        self,
+        _i: int,
+        prev_node: ControlBoneNode | None,
+        node: ControlBoneNode,
+        next_node: ControlBoneNode | None,
+    ) -> str:
+        name = self.copy_bone(node.org, make_derived_name(node.name, "mch", "_handle"))
 
         handle_start = prev_node or node
         handle_end = next_node or node
@@ -286,7 +302,7 @@ class Rig(BaseSkinChainRigWithRotationOption):
         return name
 
     def make_mch_pre_handle_bone(self, _i: int, handle: str) -> str:
-        return self.copy_bone(handle, make_derived_name(handle, 'mch', '_pre'))
+        return self.copy_bone(handle, make_derived_name(handle, "mch", "_pre"))
 
     @stage.parent_bones
     def parent_mch_handle_bones(self):
@@ -295,10 +311,14 @@ class Rig(BaseSkinChainRigWithRotationOption):
 
             if self.use_pre_handles:
                 for pre in mch.handles_pre:
-                    self.set_bone_parent(pre, self.rig_parent_bone, inherit_scale='AVERAGE')
+                    self.set_bone_parent(
+                        pre, self.rig_parent_bone, inherit_scale="AVERAGE"
+                    )
 
             for handle in mch.handles:
-                self.set_bone_parent(handle, self.rig_parent_bone, inherit_scale='AVERAGE')
+                self.set_bone_parent(
+                    handle, self.rig_parent_bone, inherit_scale="AVERAGE"
+                )
 
     @stage.rig_bones
     def rig_mch_handle_bones(self):
@@ -311,47 +331,71 @@ class Rig(BaseSkinChainRigWithRotationOption):
                 self.rig_mch_handle_auto(*args)
 
             # Apply user transformation to the final handles
-            for args in zip(count(0), mch.handles, chain, chain[1:], chain[2:], mch.handles_pre):
+            for args in zip(
+                count(0), mch.handles, chain, chain[1:], chain[2:], mch.handles_pre
+            ):
                 self.rig_mch_handle_user(*args)
 
-    def rig_mch_handle_auto(self, _i: int, mch: str,
-                            prev_node: Optional[ControlBoneNode],
-                            node: ControlBoneNode,
-                            next_node: Optional[ControlBoneNode]):
+    def rig_mch_handle_auto(
+        self,
+        _i: int,
+        mch: str,
+        prev_node: ControlBoneNode | None,
+        node: ControlBoneNode,
+        next_node: ControlBoneNode | None,
+    ):
         handle_start = prev_node or node
         handle_end = next_node or node
 
         # Emulate auto handle
-        self.make_constraint(mch, 'COPY_LOCATION', handle_start.control_bone, name='locate_prev')
-        self.make_constraint(mch, 'DAMPED_TRACK', handle_end.control_bone, name='track_next')
+        self.make_constraint(
+            mch, "COPY_LOCATION", handle_start.control_bone, name="locate_prev"
+        )
+        self.make_constraint(
+            mch, "DAMPED_TRACK", handle_end.control_bone, name="track_next"
+        )
 
-    def rig_mch_handle_user(self, _i: int, mch: str,
-                            prev_node: Optional[ControlBoneNode],
-                            node: ControlBoneNode,
-                            next_node: Optional[ControlBoneNode],
-                            pre: str):
+    def rig_mch_handle_user(
+        self,
+        _i: int,
+        mch: str,
+        prev_node: ControlBoneNode | None,
+        node: ControlBoneNode,
+        next_node: ControlBoneNode | None,
+        pre: str,
+    ):
         # Copy from the pre handle if used. Before Full is used to allow
         # drivers on local transform channels to still work.
         if pre != mch:
             self.make_constraint(
-                mch, 'COPY_TRANSFORMS', pre, name='copy_pre',
-                space='LOCAL', mix_mode='BEFORE_FULL',
+                mch,
+                "COPY_TRANSFORMS",
+                pre,
+                name="copy_pre",
+                space="LOCAL",
+                mix_mode="BEFORE_FULL",
             )
 
         # Apply user rotation and scale.
         # If the node belongs to a parent of this rig, there is a good chance this
         # may cause weird double transformation, so skip it in that case.
         if not rig_is_child(self, node.merged_master.rig, strict=True):
-            input_bone = node.reparent_bone if self.use_reparent_handles else node.control_bone
+            input_bone = (
+                node.reparent_bone if self.use_reparent_handles else node.control_bone
+            )
 
             self.make_constraint(
-                mch, 'COPY_TRANSFORMS', input_bone, name='copy_user',
-                target_space='LOCAL_OWNER_ORIENT', owner_space='LOCAL',
-                mix_mode='BEFORE_FULL',
+                mch,
+                "COPY_TRANSFORMS",
+                input_bone,
+                name="copy_user",
+                target_space="LOCAL_OWNER_ORIENT",
+                owner_space="LOCAL",
+                mix_mode="BEFORE_FULL",
             )
 
         # Remove any shear created by the previous steps
-        self.make_constraint(mch, 'LIMIT_ROTATION', name='remove_shear')
+        self.make_constraint(mch, "LIMIT_ROTATION", name="remove_shear")
 
     ##############################
     # ORG chain
@@ -359,19 +403,25 @@ class Rig(BaseSkinChainRigWithRotationOption):
     @stage.parent_bones
     def parent_org_chain(self):
         orgs = self.bones.org
-        self.set_bone_parent(orgs[0], self.rig_parent_bone, inherit_scale='AVERAGE')
-        self.parent_bone_chain(orgs, use_connect=True, inherit_scale='AVERAGE')
+        self.set_bone_parent(orgs[0], self.rig_parent_bone, inherit_scale="AVERAGE")
+        self.parent_bone_chain(orgs, use_connect=True, inherit_scale="AVERAGE")
 
     @stage.rig_bones
     def rig_org_chain(self):
-        for args in zip(count(0), self.bones.org, self.control_nodes, self.control_nodes[1:]):
+        for args in zip(
+            count(0), self.bones.org, self.control_nodes, self.control_nodes[1:]
+        ):
             self.rig_org_bone(*args)
 
-    def rig_org_bone(self, i: int, org: str, node: ControlBoneNode, next_node: ControlBoneNode):
+    def rig_org_bone(
+        self, i: int, org: str, node: ControlBoneNode, next_node: ControlBoneNode
+    ):
         if i == 0:
-            self.make_constraint(org, 'COPY_LOCATION', node.control_bone)
+            self.make_constraint(org, "COPY_LOCATION", node.control_bone)
 
-        self.make_constraint(org, 'STRETCH_TO', next_node.control_bone, keep_axis='SWING_Y')
+        self.make_constraint(
+            org, "STRETCH_TO", next_node.control_bone, keep_axis="SWING_Y"
+        )
 
     ##############################
     # Deform chain
@@ -381,7 +431,7 @@ class Rig(BaseSkinChainRigWithRotationOption):
         self.bones.deform = map_list(self.make_deform_bone, count(0), self.bones.org)
 
     def make_deform_bone(self, _i: int, org: str):
-        name = self.copy_bone(org, make_derived_name(org, 'def'), bbone=True)
+        name = self.copy_bone(org, make_derived_name(org, "def"), bbone=True)
         self.get_bone(name).bbone_segments = self.bbone_segments
         return name
 
@@ -389,24 +439,30 @@ class Rig(BaseSkinChainRigWithRotationOption):
     def parent_deform_chain(self):
         deform = self.bones.deform
 
-        self.set_bone_parent(deform[0], self.rig_parent_bone, inherit_scale='AVERAGE')
-        self.parent_bone_chain(deform, use_connect=True, inherit_scale='AVERAGE')
+        self.set_bone_parent(deform[0], self.rig_parent_bone, inherit_scale="AVERAGE")
+        self.parent_bone_chain(deform, use_connect=True, inherit_scale="AVERAGE")
 
         if self.use_bbones:
             handles = self.get_all_mch_handles()
 
             for name, start_handle, end_handle in zip(deform, handles, handles[1:]):
                 bone = self.get_bone(name)
-                bone.bbone_handle_type_start = 'TANGENT'
+                bone.bbone_handle_type_start = "TANGENT"
                 bone.bbone_custom_handle_start = self.get_bone(start_handle)
-                bone.bbone_handle_type_end = 'TANGENT'
+                bone.bbone_handle_type_end = "TANGENT"
                 bone.bbone_custom_handle_end = self.get_bone(end_handle)
 
                 if self.use_scale:
-                    bone.bbone_handle_use_scale_start = self.params.skin_chain_use_scale[0:3]
-                    bone.bbone_handle_use_scale_end = self.params.skin_chain_use_scale[0:3]
+                    bone.bbone_handle_use_scale_start = (
+                        self.params.skin_chain_use_scale[0:3]
+                    )
+                    bone.bbone_handle_use_scale_end = self.params.skin_chain_use_scale[
+                        0:3
+                    ]
 
-                    bone.bbone_handle_use_ease_start = self.params.skin_chain_use_scale[3]
+                    bone.bbone_handle_use_ease_start = self.params.skin_chain_use_scale[
+                        3
+                    ]
                     bone.bbone_handle_use_ease_end = self.params.skin_chain_use_scale[3]
 
     @stage.rig_bones
@@ -415,27 +471,38 @@ class Rig(BaseSkinChainRigWithRotationOption):
             self.rig_deform_bone(*args)
 
     def rig_deform_bone(self, i: int, deform: str, org: str):
-        self.make_constraint(deform, 'COPY_TRANSFORMS', org)
+        self.make_constraint(deform, "COPY_TRANSFORMS", org)
 
         if self.use_bbones:
             if i == 0 and self.prev_corner > 1e-3:
                 self.make_corner_driver(
-                    deform, 'bbone_easein',
-                    self.control_nodes[0], self.control_nodes[1],
-                    self.prev_node, self.prev_corner
+                    deform,
+                    "bbone_easein",
+                    self.control_nodes[0],
+                    self.control_nodes[1],
+                    self.prev_node,
+                    self.prev_corner,
                 )
 
             elif i == self.num_orgs - 1 and self.next_corner > 1e-3:
                 self.make_corner_driver(
-                    deform, 'bbone_easeout',
-                    self.control_nodes[-1], self.control_nodes[-2],
-                    self.next_node, self.next_corner
+                    deform,
+                    "bbone_easeout",
+                    self.control_nodes[-1],
+                    self.control_nodes[-2],
+                    self.next_node,
+                    self.next_corner,
                 )
 
-    def make_corner_driver(self, bbone: str, field: str,
-                           corner_node: ControlBoneNode,
-                           next_node1: ControlBoneNode, next_node2: ControlBoneNode,
-                           angle_threshold: float):
+    def make_corner_driver(
+        self,
+        bbone: str,
+        field: str,
+        corner_node: ControlBoneNode,
+        next_node1: ControlBoneNode,
+        next_node2: ControlBoneNode,
+        angle_threshold: float,
+    ):
         """
         Create a driver adjusting B-Bone Ease based on the angle between controls,
         gradually making the corner sharper when the angle drops below the threshold.
@@ -447,23 +514,30 @@ class Rig(BaseSkinChainRigWithRotationOption):
         c = (next_node1.point - next_node2.point).length
 
         var_map = {
-            'a': driver_var_distance(
-                self.obj, bone1=corner_node.control_bone, bone2=next_node1.control_bone),
-            'b': driver_var_distance(
-                self.obj, bone1=corner_node.control_bone, bone2=next_node2.control_bone),
-            'c': driver_var_distance(
-                self.obj, bone1=next_node1.control_bone, bone2=next_node2.control_bone),
+            "a": driver_var_distance(
+                self.obj, bone1=corner_node.control_bone, bone2=next_node1.control_bone
+            ),
+            "b": driver_var_distance(
+                self.obj, bone1=corner_node.control_bone, bone2=next_node2.control_bone
+            ),
+            "c": driver_var_distance(
+                self.obj, bone1=next_node1.control_bone, bone2=next_node2.control_bone
+            ),
         }
 
         # Compute and set the ease in rest pose
-        init_val = -1 + 2 * smoothstep(-1, 1, acos((a * a + b * b - c * c) / max(2 * a * b, 1e-10)) / angle_threshold)
+        init_val = -1 + 2 * smoothstep(
+            -1,
+            1,
+            acos((a * a + b * b - c * c) / max(2 * a * b, 1e-10)) / angle_threshold,
+        )
 
         setattr(pbone.bone, field, init_val)
 
         # Create the actual driver
         bias = -1 - init_val
 
-        expr = f'{bias}+2*smoothstep(-1,1,acos((a*a+b*b-c*c)/max(2*a*b,1e-10))/{angle_threshold})'
+        expr = f"{bias}+2*smoothstep(-1,1,acos((a*a+b*b-c*c)/max(2*a*b,1e-10))/{angle_threshold})"
 
         self.make_driver(pbone, field, expression=expr, variables=var_map)
 
@@ -473,51 +547,51 @@ class Rig(BaseSkinChainRigWithRotationOption):
     @classmethod
     def add_parameters(cls, params):
         params.bbones = bpy.props.IntProperty(
-            name='B-Bone Segments',
+            name="B-Bone Segments",
             default=10,
             min=1,
-            description='Number of B-Bone segments'
+            description="Number of B-Bone segments",
         )
 
         params.skin_chain_use_reparent = bpy.props.BoolProperty(
-            name='Merge Parent Rotation And Scale',
+            name="Merge Parent Rotation And Scale",
             default=False,
-            description='When controls are merged into ones owned by other chains, include '
-                        'parent-induced rotation/scale difference into handle motion. Otherwise '
-                        'only local motion of the control bone is used',
+            description="When controls are merged into ones owned by other chains, include "
+            "parent-induced rotation/scale difference into handle motion. Otherwise "
+            "only local motion of the control bone is used",
         )
 
         params.skin_chain_use_scale = bpy.props.BoolVectorProperty(
             size=4,
-            name='Use Handle Scale',
+            name="Use Handle Scale",
             default=(False, False, False, False),
-            description='Use control scaling to scale the B-Bone'
+            description="Use control scaling to scale the B-Bone",
         )
 
         params.skin_chain_connect_mirror = bpy.props.BoolVectorProperty(
             size=2,
-            name='Connect With Mirror',
+            name="Connect With Mirror",
             default=(True, True),
-            description='Create a smooth B-Bone transition if an end of the chain meets its mirror'
+            description="Create a smooth B-Bone transition if an end of the chain meets its mirror",
         )
 
         params.skin_chain_connect_sharp_angle = bpy.props.FloatVectorProperty(
             size=2,
-            name='Sharpen Corner',
+            name="Sharpen Corner",
             default=(0, 0),
             min=0,
             max=math.pi,
-            description='Create a mechanism to sharpen a connected corner when the angle is '
-                        'below this value',
-            unit='ROTATION',
+            description="Create a mechanism to sharpen a connected corner when the angle is "
+            "below this value",
+            unit="ROTATION",
         )
 
         params.skin_chain_connect_ends = bpy.props.BoolVectorProperty(
             size=2,
-            name='Connect Matching Ends',
+            name="Connect Matching Ends",
             default=(False, False),
-            description='Create a smooth B-Bone transition if an end of the chain meets another '
-                        'chain going in the same direction'
+            description="Create a smooth B-Bone transition if an end of the chain meets another "
+            "chain going in the same direction",
         )
 
         super().add_parameters(params)
@@ -542,7 +616,9 @@ class Rig(BaseSkinChainRigWithRotationOption):
         row = col.split(factor=0.3)
         row.label(text="Connect Mirror:")
         row = row.row(align=True)
-        row.prop(params, "skin_chain_connect_mirror", index=0, text="Start", toggle=True)
+        row.prop(
+            params, "skin_chain_connect_mirror", index=0, text="Start", toggle=True
+        )
         row.prop(params, "skin_chain_connect_mirror", index=1, text="End", toggle=True)
 
         row = col.split(factor=0.3)
@@ -562,4 +638,5 @@ class Rig(BaseSkinChainRigWithRotationOption):
 
 def create_sample(obj):
     from rigforge.rigs.basic.copy_chain import create_sample as inner
-    obj.pose.bones[inner(obj)["bone.01"]].rigforge_type = 'skin.basic_chain'
+
+    obj.pose.bones[inner(obj)["bone.01"]].rigforge_type = "skin.basic_chain"

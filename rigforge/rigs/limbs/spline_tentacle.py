@@ -2,40 +2,40 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import bisect
+import itertools
+import json
+import math
+import re
+from collections.abc import Sequence
+from itertools import count
+from typing import NamedTuple
+
 import bpy
 from bpy.app.translations import pgettext_iface as iface_
 
-import re
-import itertools
-import bisect
-import math
-import json
-
-from ...utils.naming import strip_org, make_derived_name
-from ...utils.bones import set_bone_widget_transform
-from ...utils.mechanism import make_driver, make_constraint, driver_var_transform
-from ...utils.widgets import create_widget
-from ...utils.widgets_basic import create_circle_widget, create_sphere_widget
-from ...utils.layers import ControlLayersOption
-from ...utils.misc import map_list, TypedObject
-from ...utils.animation import add_generic_snap_fk_to_ik
-from ...utils.switch_parent import SwitchParentBuilder
-
 from ...base_rig import stage
-from ...rig_ui_template import PanelLayout, UTILITIES_FUNC_COMMON_IK_FK
-
+from ...rig_ui_template import UTILITIES_FUNC_COMMON_IK_FK, PanelLayout
 from ...rigs.chain_rigs import SimpleChainRig
 from ...rigs.widgets import create_gear_widget
-
-from typing import NamedTuple, Sequence
-from itertools import count
+from ...utils.animation import add_generic_snap_fk_to_ik
+from ...utils.bones import set_bone_widget_transform
+from ...utils.layers import ControlLayersOption
+from ...utils.mechanism import driver_var_transform, make_constraint, make_driver
+from ...utils.misc import TypedObject, map_list
+from ...utils.naming import make_derived_name, strip_org
+from ...utils.switch_parent import SwitchParentBuilder
+from ...utils.widgets import create_widget
+from ...utils.widgets_basic import create_circle_widget, create_sphere_widget
 
 
 class Rig(SimpleChainRig):
     ##############################
     # Initialization
 
-    stretch_control_mode: str | None = None  # Override in a subclass to disable the Tip Control option
+    stretch_control_mode: str | None = (
+        None  # Override in a subclass to disable the Tip Control option
+    )
 
     name_base: str
     name_sep: str
@@ -61,9 +61,9 @@ class Rig(SimpleChainRig):
         name: str
 
     num_main_controls: int
-    main_control_pos_list: list['Rig.PosSpec']
-    start_control_pos_list: list['Rig.PosSpec']
-    end_control_pos_list: list['Rig.PosSpec']
+    main_control_pos_list: list["Rig.PosSpec"]
+    start_control_pos_list: list["Rig.PosSpec"]
+    end_control_pos_list: list["Rig.PosSpec"]
 
     def initialize(self):
         super().initialize()
@@ -72,23 +72,25 @@ class Rig(SimpleChainRig):
         org_bones = [self.get_bone(org) for org in org_chain]
 
         # Compute master bone name: inherit .LR suffix, but strip trailing digits
-        name_parts = re.match(r'^(.*?)(?:([._-])\d+)?((?:[._-][LlRr])?)(?:\.\d+)?$',
-                              strip_org(org_chain[0]))
+        name_parts = re.match(
+            r"^(.*?)(?:([._-])\d+)?((?:[._-][LlRr])?)(?:\.\d+)?$",
+            strip_org(org_chain[0]),
+        )
         name_base, name_sep, name_suffix = name_parts.groups()
 
         self.name_base = name_base
-        self.name_sep = name_sep if name_sep else '-'
+        self.name_sep = name_sep if name_sep else "-"
         self.name_suffix = name_suffix
 
         # Create a spline object (replacing the old one if it exists)
-        self.spline_obj = self.generator.artifacts.create_new(self, 'CURVE', 'spline')
+        self.spline_obj = self.generator.artifacts.create_new(self, "CURVE", "spline")
 
         # Options
         if self.stretch_control_mode is None:
             self.stretch_control_mode = self.params.sik_stretch_control
 
-        self.use_stretch = (self.stretch_control_mode == 'MANUAL_STRETCH')
-        self.use_tip = (self.stretch_control_mode == 'DIRECT_TIP')
+        self.use_stretch = self.stretch_control_mode == "MANUAL_STRETCH"
+        self.use_tip = self.stretch_control_mode == "DIRECT_TIP"
         self.use_fk = self.params.sik_fk_controls
 
         # Compute org chain lengths and control distribution
@@ -108,7 +110,8 @@ class Rig(SimpleChainRig):
 
         self.main_control_pos_list = [
             self.find_bone_by_length(
-                i * main_control_step, name=self.get_main_control_name(i))
+                i * main_control_step, name=self.get_main_control_name(i)
+            )
             for i in range(self.num_main_controls)
         ]
 
@@ -119,7 +122,8 @@ class Rig(SimpleChainRig):
 
         self.start_control_pos_list = [
             self.PosSpec(
-                0, (i + 1) * start_control_step, self.make_name('start%02d' % (idx + 1)))
+                0, (i + 1) * start_control_step, self.make_name("start%02d" % (idx + 1))
+            )
             for idx, i in enumerate(reversed(range(num_start_controls)))
         ]
 
@@ -129,18 +133,24 @@ class Rig(SimpleChainRig):
 
         self.end_control_pos_list = [
             self.PosSpec(
-                end_idx, 1.0 - (i + 1) * end_control_step, self.make_name('end%02d' % (idx + 1)))
+                end_idx,
+                1.0 - (i + 1) * end_control_step,
+                self.make_name("end%02d" % (idx + 1)),
+            )
             for idx, i in enumerate(reversed(range(num_end_controls)))
         ]
 
         # Adjust control bindings if using manual tip control
         if self.use_tip:
             # tip = self.main_control_pos_list[-1]
-            self.main_control_pos_list[-1] = self.PosSpec(end_idx + 1, 0, strip_org(org_chain[-1]))
+            self.main_control_pos_list[-1] = self.PosSpec(
+                end_idx + 1, 0, strip_org(org_chain[-1])
+            )
 
             # tip_extra = self.end_control_pos_list[0]
             self.end_control_pos_list[0] = self.PosSpec(
-                end_idx, max(0.0, 1 - end_range * 0.25), self.make_name('end'))
+                end_idx, max(0.0, 1 - end_range * 0.25), self.make_name("end")
+            )
 
         # Radius scaling
         self.use_radius = self.params.sik_radius_scaling
@@ -154,7 +164,9 @@ class Rig(SimpleChainRig):
         idx = bisect.bisect_left(tot_lengths, pos)
         idx = min(idx, len(tot_lengths) - 1)
         prev = tot_lengths[idx - 1] if idx > 0 else 0
-        return self.PosSpec(idx, min(1.0, (pos - prev) / (tot_lengths[idx] - prev)), name)
+        return self.PosSpec(
+            idx, min(1.0, (pos - prev) / (tot_lengths[idx] - prev)), name
+        )
 
     def make_name(self, mid_part: str):
         """Make a name for a bone not tied to a specific org bone"""
@@ -162,15 +174,15 @@ class Rig(SimpleChainRig):
 
     def get_main_control_name(self, i: int):
         if i == 0:
-            base = 'start'
+            base = "start"
         elif i == self.num_main_controls - 1:
-            base = 'end'
+            base = "end"
         else:
-            base = 'mid%02d' % i
+            base = "mid%02d" % i
 
         return self.make_name(base)
 
-    def make_bone_by_spec(self, pos_spec: 'Rig.PosSpec', name: str, scale: float):
+    def make_bone_by_spec(self, pos_spec: "Rig.PosSpec", name: str, scale: float):
         """Make a bone positioned along the chain."""
         org_name = self.bones.org[pos_spec[0]]
         new_name = self.copy_bone(org_name, name, parent=False)
@@ -182,9 +194,11 @@ class Rig(SimpleChainRig):
 
         return new_name
 
-    ENABLE_CONTROL_PROPERTY = [None, 'start_controls', 'end_controls']
+    ENABLE_CONTROL_PROPERTY = [None, "start_controls", "end_controls"]
 
-    def rig_enable_control_driver(self, owner, prop: str, subtype: int, index: int, disable=False):
+    def rig_enable_control_driver(
+        self, owner, prop: str, subtype: int, index: int, disable=False
+    ):
         if subtype != 0:
             if self.use_tip and subtype == 2:
                 if index == 0:
@@ -195,37 +209,35 @@ class Rig(SimpleChainRig):
             var_prop = self.ENABLE_CONTROL_PROPERTY[subtype]
 
             make_driver(
-                owner, prop,
-                expression='active %s %d' % ('<=' if disable else '>', index),
-                variables={'active': (self.obj, master, var_prop)}
+                owner,
+                prop,
+                expression="active %s %d" % ("<=" if disable else ">", index),
+                variables={"active": (self.obj, master, var_prop)},
             )
 
     ##############################
     # BONES
 
     class CtrlBones(SimpleChainRig.CtrlBones):
-        master: str                    # Root control for moving and scaling the whole rig.
-        main: list[str]                # List of main spline controls (always visible and active).
-        start: list[str]               # List of extra spline controls attached to the
-        end: list[str]                 # tip main ones (can disable).
-        end_twist: str                 # Twist control at the end of the tentacle.
+        master: str  # Root control for moving and scaling the whole rig.
+        main: list[str]  # List of main spline controls (always visible and active).
+        start: list[str]  # List of extra spline controls attached to the
+        end: list[str]  # tip main ones (can disable).
+        end_twist: str  # Twist control at the end of the tentacle.
 
     class MchBones(SimpleChainRig.MchBones):
-        start_parent: str              # Intermediate bones for parenting extra controls
-        end_parent: str                # - discards scale of the main.
-        start_hooks: list[str]         # Proxy bones for extra control hooks.
+        start_parent: str  # Intermediate bones for parenting extra controls
+        end_parent: str  # - discards scale of the main.
+        start_hooks: list[str]  # Proxy bones for extra control hooks.
         end_hooks: list[str]
-        ik: list[str]                  # Spline IK chain, extracting the shape of the curve.
-        ik_final: list[str]            # Final IK result with tip_fix.
-        end_stretch: str               # Bone used in distributing the end twist control scaling.
-        tip_fix_parent: str            # Bones used to match tip control rotation and scale.
+        ik: list[str]  # Spline IK chain, extracting the shape of the curve.
+        ik_final: list[str]  # Final IK result with tip_fix.
+        end_stretch: str  # Bone used in distributing the end twist control scaling.
+        tip_fix_parent: str  # Bones used to match tip control rotation and scale.
         tip_fix: str
 
     bones: SimpleChainRig.ToplevelBones[
-        list[str],
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        list[str]
+        list[str], "Rig.CtrlBones", "Rig.MchBones", list[str]
     ]
 
     ##############################
@@ -234,8 +246,10 @@ class Rig(SimpleChainRig):
     @stage.generate_bones
     def make_master_control(self):
         self.bones.ctrl.master = self.copy_bone(
-            self.bones.org[0], self.make_name('master'), parent=True,
-            length=self.avg_length * 1.5
+            self.bones.org[0],
+            self.make_name("master"),
+            parent=True,
+            length=self.avg_length * 1.5,
         )
 
         self.register_parents()
@@ -258,18 +272,24 @@ class Rig(SimpleChainRig):
         # Properties for enabling extra controls
         if self.params.sik_start_controls > 0:
             self.make_property(
-                master, 'start_controls', 0,
-                min=0, max=self.params.sik_start_controls,
-                description="Enabled extra start controls for " + rig_name
+                master,
+                "start_controls",
+                0,
+                min=0,
+                max=self.params.sik_start_controls,
+                description="Enabled extra start controls for " + rig_name,
             )
 
             self.add_start_controls_buttons(panel, master, rig_name)
 
         if self.params.sik_end_controls > 0:
             self.make_property(
-                master, 'end_controls', 0,
-                min=0, max=self.params.sik_end_controls,
-                description="Enabled extra end controls for " + rig_name
+                master,
+                "end_controls",
+                0,
+                min=0,
+                max=self.params.sik_end_controls,
+                description="Enabled extra end controls for " + rig_name,
             )
 
             self.add_end_controls_buttons(panel, master, rig_name)
@@ -279,35 +299,59 @@ class Rig(SimpleChainRig):
             max_val = len(self.bones.org) * math.pi
 
             self.make_property(
-                master, 'end_twist', 0.0, min=-max_val, max=max_val,
-                subtype='ANGLE', precision=0, step=1000.0,
+                master,
+                "end_twist",
+                0.0,
+                min=-max_val,
+                max=max_val,
+                subtype="ANGLE",
+                precision=0,
+                step=1000.0,
                 description="Rough end twist estimate. The rig auto-corrects it to the actual tip orientation "
-                            "within 180 degrees of the specified value"
+                "within 180 degrees of the specified value",
             )
 
             self.add_direct_tip_buttons(panel, master, rig_name)
 
         # IK/FK switch
         if self.use_fk:
-            self.make_property(master, 'IK_FK', 0.0, description='IK/FK switch for ' + rig_name)
+            self.make_property(
+                master, "IK_FK", 0.0, description="IK/FK switch for " + rig_name
+            )
 
             self.add_fk_snap_buttons(panel, master, rig_name)
 
-    def add_start_controls_buttons(self, panel: 'PanelLayout', master: str, _rig_name: str):
+    def add_start_controls_buttons(
+        self, panel: "PanelLayout", master: str, _rig_name: str
+    ):
         row = panel.row(align=True)
-        row.custom_prop(master, 'start_controls', text="Start Controls")
+        row.custom_prop(master, "start_controls", text="Start Controls")
 
         ctrl_bones = self.bones.ctrl.start
         hook_bones = self.bones.mch.start_hooks
 
-        add_toggle_control_button(row, prop_bone=master, prop_name='start_controls',
-                                  ctrl_bones=ctrl_bones, hook_bones=hook_bones, enable=True)
-        add_toggle_control_button(row, prop_bone=master, prop_name='start_controls',
-                                  ctrl_bones=ctrl_bones, hook_bones=hook_bones, enable=False)
+        add_toggle_control_button(
+            row,
+            prop_bone=master,
+            prop_name="start_controls",
+            ctrl_bones=ctrl_bones,
+            hook_bones=hook_bones,
+            enable=True,
+        )
+        add_toggle_control_button(
+            row,
+            prop_bone=master,
+            prop_name="start_controls",
+            ctrl_bones=ctrl_bones,
+            hook_bones=hook_bones,
+            enable=False,
+        )
 
-    def add_end_controls_buttons(self, panel: 'PanelLayout', master: str, _rig_name: str):
+    def add_end_controls_buttons(
+        self, panel: "PanelLayout", master: str, _rig_name: str
+    ):
         row = panel.row(align=True)
-        row.custom_prop(master, 'end_controls', text="End Controls")
+        row.custom_prop(master, "end_controls", text="End Controls")
 
         ctrl_bones = self.bones.ctrl.end
         hook_bones = self.bones.mch.end_hooks
@@ -316,17 +360,29 @@ class Rig(SimpleChainRig):
             ctrl_bones = ctrl_bones[1:]
             hook_bones = hook_bones[1:]
 
-        add_toggle_control_button(row, prop_bone=master, prop_name='end_controls',
-                                  ctrl_bones=ctrl_bones, hook_bones=hook_bones, enable=True)
-        add_toggle_control_button(row, prop_bone=master, prop_name='end_controls',
-                                  ctrl_bones=ctrl_bones, hook_bones=hook_bones, enable=False)
+        add_toggle_control_button(
+            row,
+            prop_bone=master,
+            prop_name="end_controls",
+            ctrl_bones=ctrl_bones,
+            hook_bones=hook_bones,
+            enable=True,
+        )
+        add_toggle_control_button(
+            row,
+            prop_bone=master,
+            prop_name="end_controls",
+            ctrl_bones=ctrl_bones,
+            hook_bones=hook_bones,
+            enable=False,
+        )
 
     # noinspection PyMethodMayBeStatic
-    def add_direct_tip_buttons(self, panel: 'PanelLayout', master: str, _rig_name: str):
-        panel.custom_prop(master, 'end_twist', text="End Twist Estimate")
+    def add_direct_tip_buttons(self, panel: "PanelLayout", master: str, _rig_name: str):
+        panel.custom_prop(master, "end_twist", text="End Twist Estimate")
 
-    def add_fk_snap_buttons(self, panel: 'PanelLayout', master: str, rig_name: str):
-        panel.custom_prop(master, 'IK_FK', text="IK - FK", slider=True)
+    def add_fk_snap_buttons(self, panel: "PanelLayout", master: str, rig_name: str):
+        panel.custom_prop(master, "IK_FK", text="IK - FK", slider=True)
 
         ik_controls = [item[0] for item in self.all_controls]
         if not self.use_tip:
@@ -334,19 +390,21 @@ class Rig(SimpleChainRig):
 
         add_generic_snap_fk_to_ik(
             panel,
-            fk_bones=self.bones.ctrl.fk, ik_bones=self.get_ik_final(),
+            fk_bones=self.bones.ctrl.fk,
+            ik_bones=self.get_ik_final(),
             ik_ctrl_bones=ik_controls,
             undo_copy_scale=True,
-            rig_name=rig_name
+            rig_name=rig_name,
         )
 
         add_spline_snap_ik_to_fk(
             panel,
-            fk_bones=self.bones.ctrl.fk, ik_bones=self.get_ik_final(),
+            fk_bones=self.bones.ctrl.fk,
+            ik_bones=self.get_ik_final(),
             ik_ctrl_bones=ik_controls,
             use_tip=self.use_tip,
             use_stretch=self.use_stretch,
-            rig_name=rig_name
+            rig_name=rig_name,
         )
 
     @stage.generate_widgets
@@ -360,16 +418,21 @@ class Rig(SimpleChainRig):
     @stage.generate_bones
     def make_twist_control_bones(self):
         if not self.use_tip:
-            self.bones.ctrl.end_twist = self.make_twist_control_bone('end-twist', 1.15)
+            self.bones.ctrl.end_twist = self.make_twist_control_bone("end-twist", 1.15)
 
     def make_twist_control_bone(self, name, size):
-        return self.copy_bone(self.bones.org[0], self.make_name(name),
-                              length=self.avg_length * size)
+        return self.copy_bone(
+            self.bones.org[0], self.make_name(name), length=self.avg_length * size
+        )
 
     @stage.parent_bones
     def parent_twist_control_bones(self):
         if not self.use_tip:
-            self.set_bone_parent(self.bones.ctrl.end_twist, self.bones.ctrl.master, inherit_scale='ALIGNED')
+            self.set_bone_parent(
+                self.bones.ctrl.end_twist,
+                self.bones.ctrl.master,
+                inherit_scale="ALIGNED",
+            )
 
     @stage.configure_bones
     def configure_twist_control_bones(self):
@@ -378,7 +441,7 @@ class Rig(SimpleChainRig):
 
     def configure_twist_control_bone(self, name):
         bone = self.get_bone(name)
-        bone.rotation_mode = 'XYZ'
+        bone.rotation_mode = "XYZ"
         bone.lock_location = (True, True, True)
         bone.lock_rotation = (True, False, True)
         if not self.use_stretch:
@@ -388,12 +451,16 @@ class Rig(SimpleChainRig):
     def rig_twist_control_bones(self):
         if not self.use_tip:
             # Copy the location of the end bone to provide more convenient tool behavior.
-            self.make_constraint(self.bones.ctrl.end_twist, 'COPY_LOCATION', self.bones.org[-1])
+            self.make_constraint(
+                self.bones.ctrl.end_twist, "COPY_LOCATION", self.bones.org[-1]
+            )
 
     @stage.generate_widgets
     def make_twist_control_widgets(self):
         if not self.use_tip:
-            self.make_twist_control_widget(self.bones.ctrl.end_twist, self.bones.org[-1], 0.85)
+            self.make_twist_control_widget(
+                self.bones.ctrl.end_twist, self.bones.org[-1], 0.85
+            )
 
     def make_twist_control_widget(self, ctrl, org, size=1.0, head_tail=0.5):
         set_bone_widget_transform(self.obj, ctrl, org, target_size=True)
@@ -406,29 +473,41 @@ class Rig(SimpleChainRig):
     @stage.generate_bones
     def make_mch_twist_control_bones(self):
         if self.use_stretch:
-            self.bones.mch.end_stretch = self.make_mch_end_stretch_bone('end-twist.stretch', 1.15)
+            self.bones.mch.end_stretch = self.make_mch_end_stretch_bone(
+                "end-twist.stretch", 1.15
+            )
 
     def make_mch_end_stretch_bone(self, name_base, size):
-        name = make_derived_name(self.make_name(name_base), 'mch')
-        return self.copy_bone(self.bones.org[0], name, length=self.avg_length * size * 0.5)
+        name = make_derived_name(self.make_name(name_base), "mch")
+        return self.copy_bone(
+            self.bones.org[0], name, length=self.avg_length * size * 0.5
+        )
 
     @stage.parent_bones
     def parent_mch_twist_control_bones(self):
         if self.use_stretch:
-            self.set_bone_parent(self.bones.mch.end_stretch, self.bones.ctrl.master, inherit_scale='AVERAGE')
+            self.set_bone_parent(
+                self.bones.mch.end_stretch,
+                self.bones.ctrl.master,
+                inherit_scale="AVERAGE",
+            )
 
     @stage.rig_bones
     def rig_mch_twist_control_bones(self):
         if self.use_stretch:
-            self.rig_mch_end_stretch_bone(self.bones.mch.end_stretch, self.bones.ctrl.end_twist)
+            self.rig_mch_end_stretch_bone(
+                self.bones.mch.end_stretch, self.bones.ctrl.end_twist
+            )
 
     def rig_mch_end_stretch_bone(self, mch, ctrl):
         # Break the dependency cycle caused by COPY_LOCATION above by copying raw properties.
-        self.make_driver(mch, 'scale', index=0, variables=[(ctrl, '.scale.x')])
-        self.make_driver(mch, 'scale', index=1, variables=[(ctrl, '.scale.y')])
-        self.make_driver(mch, 'scale', index=2, variables=[(ctrl, '.scale.z')])
+        self.make_driver(mch, "scale", index=0, variables=[(ctrl, ".scale.x")])
+        self.make_driver(mch, "scale", index=1, variables=[(ctrl, ".scale.y")])
+        self.make_driver(mch, "scale", index=2, variables=[(ctrl, ".scale.z")])
 
-        self.make_constraint(mch, 'MAINTAIN_VOLUME', mode='UNIFORM', owner_space='LOCAL')
+        self.make_constraint(
+            mch, "MAINTAIN_VOLUME", mode="UNIFORM", owner_space="LOCAL"
+        )
 
     ##############################
     # Spline controls
@@ -439,29 +518,47 @@ class Rig(SimpleChainRig):
         index: int
 
     tip_controls_table: list[str | None]
-    all_controls: list['Rig.ControlEntry']
+    all_controls: list["Rig.ControlEntry"]
 
     @stage.generate_bones
     def make_main_control_chain(self):
-        self.bones.ctrl.main = map_list(self.make_main_control_bone, self.main_control_pos_list)
-        self.bones.ctrl.start = map_list(self.make_extra_control_bone, self.start_control_pos_list)
-        self.bones.ctrl.end = map_list(self.make_extra_control_bone, self.end_control_pos_list)
+        self.bones.ctrl.main = map_list(
+            self.make_main_control_bone, self.main_control_pos_list
+        )
+        self.bones.ctrl.start = map_list(
+            self.make_extra_control_bone, self.start_control_pos_list
+        )
+        self.bones.ctrl.end = map_list(
+            self.make_extra_control_bone, self.end_control_pos_list
+        )
 
         self.make_all_controls_list()
         self.make_controls_switch_parent()
 
     def make_all_controls_list(self):
-        main_controls = [self.ControlEntry(bone, 0, i)
-                         for i, bone in enumerate(self.bones.ctrl.main)]
-        start_controls = [self.ControlEntry(bone, 1, i)
-                          for i, bone in enumerate(self.bones.ctrl.start)]
-        end_controls = [self.ControlEntry(bone, 2, i)
-                        for i, bone in enumerate(self.bones.ctrl.end)]
+        main_controls = [
+            self.ControlEntry(bone, 0, i) for i, bone in enumerate(self.bones.ctrl.main)
+        ]
+        start_controls = [
+            self.ControlEntry(bone, 1, i)
+            for i, bone in enumerate(self.bones.ctrl.start)
+        ]
+        end_controls = [
+            self.ControlEntry(bone, 2, i) for i, bone in enumerate(self.bones.ctrl.end)
+        ]
 
-        self.tip_controls_table = [None, self.bones.ctrl.main[0], self.bones.ctrl.main[-1]]
-        self.all_controls = [main_controls[0], *reversed(start_controls),
-                             *main_controls[1:-1],
-                             *end_controls, main_controls[-1]]
+        self.tip_controls_table = [
+            None,
+            self.bones.ctrl.main[0],
+            self.bones.ctrl.main[-1],
+        ]
+        self.all_controls = [
+            main_controls[0],
+            *reversed(start_controls),
+            *main_controls[1:-1],
+            *end_controls,
+            main_controls[-1],
+        ]
 
     def make_controls_switch_parent(self):
         builder = SwitchParentBuilder(self.generator)
@@ -469,23 +566,28 @@ class Rig(SimpleChainRig):
         def extra():
             return [
                 (self.bones.mch.start_parent, self.bones.ctrl.main[0]),
-                (self.bones.mch.end_parent, self.bones.ctrl.main[-1])
+                (self.bones.mch.end_parent, self.bones.ctrl.main[-1]),
             ]
 
         select_table = [
             lambda: self.bones.ctrl.master,
             lambda: self.bones.mch.start_parent,
-            lambda: self.bones.mch.end_parent
+            lambda: self.bones.mch.end_parent,
         ]
 
-        for (bone, subtype, index) in self.all_controls[1:-1]:
+        for bone, subtype, index in self.all_controls[1:-1]:
             builder.build_child(
-                self, bone, extra_parents=extra,
+                self,
+                bone,
+                extra_parents=extra,
                 select_parent=select_table[subtype],
-                no_fix_rotation=True, no_fix_scale=True
+                no_fix_rotation=True,
+                no_fix_scale=True,
             )
 
-        builder.build_child(self, self.bones.ctrl.main[-1], no_fix_scale=not self.use_tip)
+        builder.build_child(
+            self, self.bones.ctrl.main[-1], no_fix_scale=not self.use_tip
+        )
 
     def make_main_control_bone(self, pos_spec):
         return self.make_bone_by_spec(pos_spec, pos_spec[2], 1.1)
@@ -495,7 +597,9 @@ class Rig(SimpleChainRig):
 
     @stage.parent_bones
     def parent_main_control_chain(self):
-        self.set_bone_parent(self.bones.ctrl.main[0], self.bones.ctrl.master, inherit_scale='ALIGNED')
+        self.set_bone_parent(
+            self.bones.ctrl.main[0], self.bones.ctrl.master, inherit_scale="ALIGNED"
+        )
 
     @stage.configure_bones
     def configure_main_control_chain(self):
@@ -507,13 +611,16 @@ class Rig(SimpleChainRig):
 
         if subtype == 0 and index == 0:
             if self.params.sik_start_controls > 0:
-                bone.rotation_mode = 'QUATERNION'
+                bone.rotation_mode = "QUATERNION"
             else:
-                bone.rotation_mode = 'XYZ'
+                bone.rotation_mode = "XYZ"
                 bone.lock_rotation = (True, False, True)
-        elif (subtype == 0 and index == self.num_main_controls - 1
-              and self.params.sik_end_controls > 0):
-            bone.rotation_mode = 'QUATERNION'
+        elif (
+            subtype == 0
+            and index == self.num_main_controls - 1
+            and self.params.sik_end_controls > 0
+        ):
+            bone.rotation_mode = "QUATERNION"
         else:
             bone.lock_rotation_w = True
             bone.lock_rotation = (True, True, True)
@@ -530,10 +637,13 @@ class Rig(SimpleChainRig):
 
     def rig_main_control_bone(self, ctrl, subtype, index):
         if self.use_stretch and subtype == 0 and index == 0:
-            self.make_constraint(ctrl, 'MAINTAIN_VOLUME', mode='UNIFORM', owner_space='LOCAL')
+            self.make_constraint(
+                ctrl, "MAINTAIN_VOLUME", mode="UNIFORM", owner_space="LOCAL"
+            )
 
         self.rig_enable_control_driver(
-            self.get_bone(ctrl), 'hide', subtype, index, disable=True)
+            self.get_bone(ctrl), "hide", subtype, index, disable=True
+        )
 
     @stage.generate_widgets
     def make_main_control_widgets(self):
@@ -562,8 +672,12 @@ class Rig(SimpleChainRig):
     @stage.parent_bones
     def parent_control_chain(self):
         if self.use_fk:
-            self.parent_bone_chain(self.bones.ctrl.fk, use_connect=True, inherit_scale='ALIGNED')
-            self.set_bone_parent(self.bones.ctrl.fk[0], self.bones.ctrl.master, inherit_scale='ALIGNED')
+            self.parent_bone_chain(
+                self.bones.ctrl.fk, use_connect=True, inherit_scale="ALIGNED"
+            )
+            self.set_bone_parent(
+                self.bones.ctrl.fk[0], self.bones.ctrl.master, inherit_scale="ALIGNED"
+            )
 
     @stage.configure_bones
     def configure_control_chain(self):
@@ -585,28 +699,39 @@ class Rig(SimpleChainRig):
 
     @stage.generate_bones
     def make_mch_extra_parent_bones(self):
-        self.bones.mch.start_parent = \
-            self.make_mch_extra_parent_bone(self.main_control_pos_list[0])
-        self.bones.mch.end_parent = \
-            self.make_mch_extra_parent_bone(self.main_control_pos_list[-1])
+        self.bones.mch.start_parent = self.make_mch_extra_parent_bone(
+            self.main_control_pos_list[0]
+        )
+        self.bones.mch.end_parent = self.make_mch_extra_parent_bone(
+            self.main_control_pos_list[-1]
+        )
 
     def make_mch_extra_parent_bone(self, pos_spec):
         return self.make_bone_by_spec(
-            pos_spec, make_derived_name(pos_spec[2], 'mch', '.psocket'), 0.40)
+            pos_spec, make_derived_name(pos_spec[2], "mch", ".psocket"), 0.40
+        )
 
     @stage.parent_bones
     def parent_mch_extra_parent_bones(self):
-        self.set_bone_parent(self.bones.mch.start_parent, self.bones.ctrl.master, inherit_scale='AVERAGE')
-        self.set_bone_parent(self.bones.mch.end_parent, self.bones.ctrl.master, inherit_scale='AVERAGE')
+        self.set_bone_parent(
+            self.bones.mch.start_parent, self.bones.ctrl.master, inherit_scale="AVERAGE"
+        )
+        self.set_bone_parent(
+            self.bones.mch.end_parent, self.bones.ctrl.master, inherit_scale="AVERAGE"
+        )
 
     @stage.rig_bones
     def rig_mch_extra_parent_bones(self):
-        self.rig_mch_extra_parent_bone(self.bones.mch.start_parent, self.bones.ctrl.main[0])
-        self.rig_mch_extra_parent_bone(self.bones.mch.end_parent, self.bones.ctrl.main[-1])
+        self.rig_mch_extra_parent_bone(
+            self.bones.mch.start_parent, self.bones.ctrl.main[0]
+        )
+        self.rig_mch_extra_parent_bone(
+            self.bones.mch.end_parent, self.bones.ctrl.main[-1]
+        )
 
     def rig_mch_extra_parent_bone(self, bone, ctrl):
-        self.make_constraint(bone, 'COPY_LOCATION', ctrl)
-        self.make_constraint(bone, 'COPY_ROTATION', ctrl)
+        self.make_constraint(bone, "COPY_LOCATION", ctrl)
+        self.make_constraint(bone, "COPY_ROTATION", ctrl)
 
     ##############################
     # Spline extra hook proxy MCH
@@ -616,15 +741,22 @@ class Rig(SimpleChainRig):
     @stage.generate_bones
     def make_mch_extra_hook_bones(self):
         self.bones.mch.start_hooks = map_list(
-            self.make_mch_extra_hook_bone, self.start_control_pos_list)
+            self.make_mch_extra_hook_bone, self.start_control_pos_list
+        )
         self.bones.mch.end_hooks = map_list(
-            self.make_mch_extra_hook_bone, self.end_control_pos_list)
+            self.make_mch_extra_hook_bone, self.end_control_pos_list
+        )
 
-        self.mch_hooks_table = [None, self.bones.mch.start_hooks, self.bones.mch.end_hooks]
+        self.mch_hooks_table = [
+            None,
+            self.bones.mch.start_hooks,
+            self.bones.mch.end_hooks,
+        ]
 
     def make_mch_extra_hook_bone(self, pos_spec):
         return self.make_bone_by_spec(
-            pos_spec, make_derived_name(pos_spec[2], 'mch', '.hook'), 0.30)
+            pos_spec, make_derived_name(pos_spec[2], "mch", ".hook"), 0.30
+        )
 
     @stage.parent_bones
     def parent_mch_extra_hook_bones(self):
@@ -636,7 +768,7 @@ class Rig(SimpleChainRig):
 
     @stage.rig_bones
     def rig_mch_extra_hook_bones(self):
-        for (bone, subtype, index) in self.all_controls:
+        for bone, subtype, index in self.all_controls:
             hooks = self.mch_hooks_table[subtype]
             if hooks:
                 self.rig_mch_extra_hook_bone(hooks[index], bone, subtype, index)
@@ -644,15 +776,15 @@ class Rig(SimpleChainRig):
     def rig_mch_extra_hook_bone(self, hook, ctrl, subtype, index):
         tip_ctrl = self.tip_controls_table[subtype]
 
-        con = self.make_constraint(hook, 'COPY_LOCATION', ctrl)
-        self.rig_enable_control_driver(con, 'mute', subtype, index, disable=True)
+        con = self.make_constraint(hook, "COPY_LOCATION", ctrl)
+        self.rig_enable_control_driver(con, "mute", subtype, index, disable=True)
 
-        con = self.make_constraint(hook, 'COPY_SCALE', ctrl, space='LOCAL')
-        self.rig_enable_control_driver(con, 'mute', subtype, index, disable=True)
+        con = self.make_constraint(hook, "COPY_SCALE", ctrl, space="LOCAL")
+        self.rig_enable_control_driver(con, "mute", subtype, index, disable=True)
 
         if subtype == 2 and not self.use_tip:
-            con = self.make_constraint(hook, 'COPY_SCALE', tip_ctrl, space='LOCAL')
-            self.rig_enable_control_driver(con, 'mute', subtype, index, disable=False)
+            con = self.make_constraint(hook, "COPY_SCALE", tip_ctrl, space="LOCAL")
+            self.rig_enable_control_driver(con, "mute", subtype, index, disable=False)
 
     ##############################
     # Spline Object
@@ -660,7 +792,7 @@ class Rig(SimpleChainRig):
     @stage.configure_bones
     def make_spline_object(self):
         spline_data = self.spline_obj.data
-        spline_data.dimensions = '3D'
+        spline_data.dimensions = "3D"
 
         self.make_spline_points(spline_data, self.all_controls)
 
@@ -668,17 +800,17 @@ class Rig(SimpleChainRig):
             self.make_spline_keys(self.spline_obj, self.all_controls)
 
     def make_spline_points(self, spline_data, all_controls):
-        spline = spline_data.splines.new('BEZIER')
+        spline = spline_data.splines.new("BEZIER")
 
         spline.bezier_points.add(len(all_controls) - 1)
 
         for i, (name, subtype, index) in enumerate(all_controls):
             point = spline.bezier_points[i]
-            point.handle_left_type = point.handle_right_type = 'AUTO'
+            point.handle_left_type = point.handle_right_type = "AUTO"
             point.co = point.handle_left = point.handle_right = self.get_bone(name).head
 
     def make_spline_keys(self, spline_obj, all_controls):
-        spline_obj.shape_key_add(name='Basis', from_mix=False)
+        spline_obj.shape_key_add(name="Basis", from_mix=False)
 
         controls = all_controls[1:-1] if self.use_tip else all_controls[1:]
 
@@ -693,7 +825,9 @@ class Rig(SimpleChainRig):
             self.rig_spline_hook(i, *info)
 
         if self.use_radius:
-            controls = self.all_controls[1:-1] if self.use_tip else self.all_controls[1:]
+            controls = (
+                self.all_controls[1:-1] if self.use_tip else self.all_controls[1:]
+            )
 
             for i, info in enumerate(controls):
                 self.rig_spline_radius_shapekey(i, *info)
@@ -702,7 +836,7 @@ class Rig(SimpleChainRig):
         hooks = self.mch_hooks_table[subtype]
         bone = self.get_bone(ctrl)
 
-        hook = self.spline_obj.modifiers.new(ctrl, 'HOOK')
+        hook = self.spline_obj.modifiers.new(ctrl, "HOOK")
 
         assert isinstance(hook, bpy.types.HookModifier)
 
@@ -719,10 +853,12 @@ class Rig(SimpleChainRig):
         hooks = self.mch_hooks_table[subtype]
         target = hooks[index] if hooks else ctrl
 
-        expr = '1 - var'
-        scale_var = [driver_var_transform(self.obj, target, type='SCALE_AVG', space='LOCAL')]
+        expr = "1 - var"
+        scale_var = [
+            driver_var_transform(self.obj, target, type="SCALE_AVG", space="LOCAL")
+        ]
 
-        make_driver(key, 'value', expression=expr, variables=scale_var)
+        make_driver(key, "value", expression=expr, variables=scale_var)
         key.slider_min = 1 - self.max_curve_radius
 
     ##############################
@@ -734,12 +870,16 @@ class Rig(SimpleChainRig):
         self.bones.mch.ik = map_list(self.make_mch_ik_bone, orgs)
 
     def make_mch_ik_bone(self, org):
-        return self.copy_bone(org, make_derived_name(org, 'mch', '.ik'))
+        return self.copy_bone(org, make_derived_name(org, "mch", ".ik"))
 
     @stage.parent_bones
     def parent_mch_ik_chain(self):
-        self.parent_bone_chain(self.bones.mch.ik, use_connect=True, inherit_scale='NONE')
-        self.set_bone_parent(self.bones.mch.ik[0], self.bones.ctrl.main[0], inherit_scale='NONE')
+        self.parent_bone_chain(
+            self.bones.mch.ik, use_connect=True, inherit_scale="NONE"
+        )
+        self.set_bone_parent(
+            self.bones.mch.ik[0], self.bones.ctrl.main[0], inherit_scale="NONE"
+        )
 
     @stage.rig_bones
     def rig_mch_ik_chain(self):
@@ -749,39 +889,49 @@ class Rig(SimpleChainRig):
         self.rig_mch_ik_constraint(self.bones.mch.ik[-1])
 
     def rig_mch_ik_bone(self, i, mch):
-        self.get_bone(mch).rotation_mode = 'XYZ'
+        self.get_bone(mch).rotation_mode = "XYZ"
 
         num_ik = len(self.bones.org)
 
         # Apply end twist rotation
         rot_fac = 1.0 / num_ik
         if self.use_tip:
-            rot_var = [(self.bones.ctrl.master, 'end_twist')]
+            rot_var = [(self.bones.ctrl.master, "end_twist")]
         else:
-            rot_var = [(self.bones.ctrl.end_twist, '.rotation_euler.y')]
+            rot_var = [(self.bones.ctrl.end_twist, ".rotation_euler.y")]
 
         self.make_driver(
-            mch, 'rotation_euler', index=1, expression='var * %f' % rot_fac, variables=rot_var)
+            mch,
+            "rotation_euler",
+            index=1,
+            expression="var * %f" % rot_fac,
+            variables=rot_var,
+        )
 
         # Copy the common scale
-        self.make_constraint(mch, 'COPY_SCALE', self.bones.ctrl.main[0])
+        self.make_constraint(mch, "COPY_SCALE", self.bones.ctrl.main[0])
 
         if self.use_stretch:
             self.make_constraint(
-                mch, 'COPY_SCALE', self.bones.mch.end_stretch,
-                use_offset=True, space='LOCAL',
-                power=(i + 1) / num_ik
+                mch,
+                "COPY_SCALE",
+                self.bones.mch.end_stretch,
+                use_offset=True,
+                space="LOCAL",
+                power=(i + 1) / num_ik,
             )
 
     def rig_mch_ik_constraint(self, mch):
         ik_bone = self.get_bone(mch)
 
         make_constraint(
-            ik_bone, 'SPLINE_IK', self.spline_obj,
+            ik_bone,
+            "SPLINE_IK",
+            self.spline_obj,
             chain_count=len(self.bones.mch.ik),
             use_curve_radius=self.use_radius,
-            y_scale_mode='BONE_ORIGINAL' if self.use_stretch else 'FIT_CURVE',
-            xz_scale_mode='VOLUME_PRESERVE',
+            y_scale_mode="BONE_ORIGINAL" if self.use_stretch else "FIT_CURVE",
+            xz_scale_mode="VOLUME_PRESERVE",
             use_original_scale=True,
         )
 
@@ -793,15 +943,25 @@ class Rig(SimpleChainRig):
         if self.use_tip:
             org = self.bones.org[-1]
             self.bones.mch.tip_fix_parent = self.copy_bone(
-                org, make_derived_name(org, 'mch', '.fix.parent'), scale=0.8)
+                org, make_derived_name(org, "mch", ".fix.parent"), scale=0.8
+            )
             self.bones.mch.tip_fix = self.copy_bone(
-                org, make_derived_name(org, 'mch', '.fix'), scale=0.7)
+                org, make_derived_name(org, "mch", ".fix"), scale=0.7
+            )
 
     @stage.parent_bones
     def parent_mch_tip_fix(self):
         if self.use_tip:
-            self.set_bone_parent(self.bones.mch.tip_fix_parent, self.bones.mch.ik[-1], inherit_scale='NONE')
-            self.set_bone_parent(self.bones.mch.tip_fix, self.bones.mch.tip_fix_parent, inherit_scale='ALIGNED')
+            self.set_bone_parent(
+                self.bones.mch.tip_fix_parent,
+                self.bones.mch.ik[-1],
+                inherit_scale="NONE",
+            )
+            self.set_bone_parent(
+                self.bones.mch.tip_fix,
+                self.bones.mch.tip_fix_parent,
+                inherit_scale="ALIGNED",
+            )
 
     @stage.rig_bones
     def rig_mch_tip_fix(self):
@@ -814,11 +974,11 @@ class Rig(SimpleChainRig):
             self.rig_mch_ik_bone(len(self.bones.mch.ik), parent)
 
             # Align the baseline to the tip control direction
-            self.make_constraint(parent, 'DAMPED_TRACK', ctrl, head_tail=1.0)
+            self.make_constraint(parent, "DAMPED_TRACK", ctrl, head_tail=1.0)
 
             # Deduce the scale and twist correction by subtracting baseline
             # from tip control transform via parenting and local space.
-            self.make_constraint(fix, 'COPY_TRANSFORMS', ctrl)
+            self.make_constraint(fix, "COPY_TRANSFORMS", ctrl)
 
     ###################################
     # Final IK Chain MCH (tip matched)
@@ -826,10 +986,12 @@ class Rig(SimpleChainRig):
     @stage.generate_bones
     def make_mch_ik_final_chain(self):
         if self.use_tip:
-            self.bones.mch.ik_final = map_list(self.make_mch_ik_final_bone, self.bones.org[0:-1])
+            self.bones.mch.ik_final = map_list(
+                self.make_mch_ik_final_bone, self.bones.org[0:-1]
+            )
 
     def make_mch_ik_final_bone(self, org):
-        return self.copy_bone(org, make_derived_name(org, 'mch', '.ik.final'))
+        return self.copy_bone(org, make_derived_name(org, "mch", ".ik.final"))
 
     def get_ik_final(self):
         if self.use_tip:
@@ -841,7 +1003,7 @@ class Rig(SimpleChainRig):
     def parent_mch_ik_final_chain(self):
         if self.use_tip:
             for final, ik in zip(self.bones.mch.ik_final, self.bones.mch.ik):
-                self.set_bone_parent(final, ik, inherit_scale='ALIGNED')
+                self.set_bone_parent(final, ik, inherit_scale="ALIGNED")
 
     @stage.rig_bones
     def rig_mch_ik_final_chain(self):
@@ -854,12 +1016,16 @@ class Rig(SimpleChainRig):
         factor = (i + 1) / len(self.bones.org)
 
         self.make_constraint(
-            mch, 'COPY_ROTATION', fix, space='LOCAL',
-            use_x=False, use_z=False, influence=factor
+            mch,
+            "COPY_ROTATION",
+            fix,
+            space="LOCAL",
+            use_x=False,
+            use_z=False,
+            influence=factor,
         )
         self.make_constraint(
-            mch, 'COPY_SCALE', fix, space='LOCAL',
-            use_y=False, power=factor
+            mch, "COPY_SCALE", fix, space="LOCAL", use_y=False, power=factor
         )
 
     ##############################
@@ -867,7 +1033,9 @@ class Rig(SimpleChainRig):
 
     @stage.parent_bones
     def parent_org_chain(self):
-        self.set_bone_parent(self.bones.org[0], self.bones.ctrl.master, inherit_scale='ALIGNED')
+        self.set_bone_parent(
+            self.bones.org[0], self.bones.ctrl.master, inherit_scale="ALIGNED"
+        )
 
     @stage.rig_bones
     def rig_org_chain(self):
@@ -875,81 +1043,105 @@ class Rig(SimpleChainRig):
             self.rig_org_bone(*args)
 
     def rig_org_bone(self, i, org, ik):
-        self.make_constraint(org, 'COPY_TRANSFORMS', ik)
+        self.make_constraint(org, "COPY_TRANSFORMS", ik)
 
         if self.use_fk:
-            con = self.make_constraint(org, 'COPY_TRANSFORMS', self.bones.ctrl.fk[i])
+            con = self.make_constraint(org, "COPY_TRANSFORMS", self.bones.ctrl.fk[i])
 
-            self.make_driver(con, 'influence', variables=[(self.bones.ctrl.master, 'IK_FK')])
+            self.make_driver(
+                con, "influence", variables=[(self.bones.ctrl.master, "IK_FK")]
+            )
 
     ##############################
     # UI
 
     @classmethod
     def add_parameters(cls, params):
-        """ Register the rig parameters. """
+        """Register the rig parameters."""
 
         params.sik_start_controls = bpy.props.IntProperty(
-            name="Extra Start Controls", min=0, default=1,
-            description="Number of extra spline control points attached to the start control"
+            name="Extra Start Controls",
+            min=0,
+            default=1,
+            description="Number of extra spline control points attached to the start control",
         )
         params.sik_mid_controls = bpy.props.IntProperty(
-            name="Middle Controls", min=1, default=1,
-            description="Number of spline control points in the middle"
+            name="Middle Controls",
+            min=1,
+            default=1,
+            description="Number of spline control points in the middle",
         )
         params.sik_end_controls = bpy.props.IntProperty(
-            name="Extra End Controls", min=0, default=1,
-            description="Number of extra spline control points attached to the end control"
+            name="Extra End Controls",
+            min=0,
+            default=1,
+            description="Number of extra spline control points attached to the end control",
         )
 
         params.sik_stretch_control = bpy.props.EnumProperty(
             name="Tip Control",
             description="How the stretching of the tentacle is controlled",
-            items=[('FIT_CURVE', 'Stretch To Fit', 'The tentacle stretches to fit the curve'),
-                   ('DIRECT_TIP', 'Direct Tip Control',
-                    'The last bone of the chain is directly controlled, like the hand in an IK '
-                    'arm, and the middle stretches to reach it'),
-                   ('MANUAL_STRETCH', 'Manual Squash & Stretch',
-                    'The tentacle scaling is manually controlled via twist controls.')]
+            items=[
+                (
+                    "FIT_CURVE",
+                    "Stretch To Fit",
+                    "The tentacle stretches to fit the curve",
+                ),
+                (
+                    "DIRECT_TIP",
+                    "Direct Tip Control",
+                    "The last bone of the chain is directly controlled, like the hand in an IK "
+                    "arm, and the middle stretches to reach it",
+                ),
+                (
+                    "MANUAL_STRETCH",
+                    "Manual Squash & Stretch",
+                    "The tentacle scaling is manually controlled via twist controls.",
+                ),
+            ],
         )
 
         params.sik_radius_scaling = bpy.props.BoolProperty(
-            name="Radius Scaling", default=True,
+            name="Radius Scaling",
+            default=True,
             description="Allow scaling the spline control bones to affect the thickness via "
-                        "curve radius"
+            "curve radius",
         )
         params.sik_max_radius = bpy.props.FloatProperty(
-            name="Maximum Radius", min=1, default=10,
-            description="Maximum supported scale factor for the spline control bones"
+            name="Maximum Radius",
+            min=1,
+            default=10,
+            description="Maximum supported scale factor for the spline control bones",
         )
 
         params.sik_fk_controls = bpy.props.BoolProperty(
-            name="FK Controls", default=True,
-            description="Generate an FK control chain for the tentacle"
+            name="FK Controls",
+            default=True,
+            description="Generate an FK control chain for the tentacle",
         )
 
         ControlLayersOption.FK.add_parameters(params)
 
     @classmethod
     def parameters_ui(cls, layout, params):
-        """ Create the ui for the rig parameters. """
+        """Create the ui for the rig parameters."""
 
-        layout.label(icon='INFO', text='A straight line rest shape works best.')
+        layout.label(icon="INFO", text="A straight line rest shape works best.")
 
-        layout.prop(params, 'sik_start_controls')
-        layout.prop(params, 'sik_mid_controls')
-        layout.prop(params, 'sik_end_controls')
+        layout.prop(params, "sik_start_controls")
+        layout.prop(params, "sik_mid_controls")
+        layout.prop(params, "sik_end_controls")
 
         if cls.stretch_control_mode is None:
-            layout.prop(params, 'sik_stretch_control', text='')
+            layout.prop(params, "sik_stretch_control", text="")
 
-        layout.prop(params, 'sik_radius_scaling')
+        layout.prop(params, "sik_radius_scaling")
 
         col = layout.column()
         col.active = params.sik_radius_scaling
-        col.prop(params, 'sik_max_radius')
+        col.prop(params, "sik_max_radius")
 
-        layout.prop(params, 'sik_fk_controls')
+        layout.prop(params, "sik_fk_controls")
 
         col = layout.column()
         col.active = params.sik_fk_controls
@@ -960,14 +1152,15 @@ class Rig(SimpleChainRig):
 # Limb IK to FK operator ##
 ###########################
 
-SCRIPT_REGISTER_OP_SNAP_IK_FK = ['POSE_OT_rigforge_spline_tentacle_ik2fk']
+SCRIPT_REGISTER_OP_SNAP_IK_FK = ["POSE_OT_rigforge_spline_tentacle_ik2fk"]
 
-SCRIPT_UTILITIES_OP_SNAP_IK_FK = UTILITIES_FUNC_COMMON_IK_FK + ['''
+SCRIPT_UTILITIES_OP_SNAP_IK_FK = UTILITIES_FUNC_COMMON_IK_FK + [
+    """
 ########################
 ## Limb Snap IK to FK ##
 ########################
 
-class RigifySplineTentacleIk2FkBase:
+class RigforgeSplineTentacleIk2FkBase:
     fk_bones:     StringProperty(name="FK Bone Chain")
     ik_bones:     StringProperty(name="IK Result Bone Chain")
     ctrl_bones:   StringProperty(name="IK Controls")
@@ -1096,49 +1289,55 @@ class RigifySplineTentacleIk2FkBase:
                 space='LOCAL', keyflags=self.keyflags, no_loc=True
             )
 
-class POSE_OT_rigforge_spline_tentacle_ik2fk(RigifySplineTentacleIk2FkBase, RigifySingleUpdateMixin, bpy.types.Operator):
+class POSE_OT_rigforge_spline_tentacle_ik2fk(RigforgeSplineTentacleIk2FkBase, RigforgeSingleUpdateMixin, bpy.types.Operator):
     bl_idname = "pose.rigforge_spline_tentacle_ik2fk_" + rig_id
     bl_label = "Snap IK->FK"
     bl_description = "Approximately snap the IK chain to FK result. Note that this will never produce an exact match"
-''']
+"""
+]
 
 
-def add_spline_snap_ik_to_fk(panel: 'PanelLayout', *,
-                             fk_bones: Sequence[str],
-                             ik_bones: Sequence[str],
-                             ik_ctrl_bones: Sequence[str],
-                             use_tip: bool, use_stretch: bool,
-                             rig_name=''):
+def add_spline_snap_ik_to_fk(
+    panel: "PanelLayout",
+    *,
+    fk_bones: Sequence[str],
+    ik_bones: Sequence[str],
+    ik_ctrl_bones: Sequence[str],
+    use_tip: bool,
+    use_stretch: bool,
+    rig_name="",
+):
     panel.use_bake_settings()
     panel.script.add_utilities(SCRIPT_UTILITIES_OP_SNAP_IK_FK)
     panel.script.register_classes(SCRIPT_REGISTER_OP_SNAP_IK_FK)
 
     op_props = {
-        'fk_bones': json.dumps(fk_bones),
-        'ik_bones': json.dumps(ik_bones),
-        'ctrl_bones': json.dumps(ik_ctrl_bones),
-        'use_tip': use_tip,
-        'use_stretch': use_stretch,
+        "fk_bones": json.dumps(fk_bones),
+        "ik_bones": json.dumps(ik_bones),
+        "ctrl_bones": json.dumps(ik_ctrl_bones),
+        "use_tip": use_tip,
+        "use_stretch": use_stretch,
     }
 
     text = iface_("IK->FK ({:s})").format(rig_name)
     panel.operator(
-        'pose.rigforge_spline_tentacle_ik2fk_{rig_id}',
+        "pose.rigforge_spline_tentacle_ik2fk_{rig_id}",
         text=text,
         translate=False,
-        icon='SNAP_ON',
-        properties=op_props
+        icon="SNAP_ON",
+        properties=op_props,
     )
 
 
-SCRIPT_REGISTER_OP_TOGGLE_CONTROLS = ['POSE_OT_rigforge_spline_tentacle_toggle_control']
+SCRIPT_REGISTER_OP_TOGGLE_CONTROLS = ["POSE_OT_rigforge_spline_tentacle_toggle_control"]
 
-SCRIPT_UTILITIES_OP_TOGGLE_CONTROLS = ['''
+SCRIPT_UTILITIES_OP_TOGGLE_CONTROLS = [
+    """
 #####################################
 ## Toggle Spline Tentacle Controls ##
 #####################################
 
-class RigifySplineTentacleToggleControlBase:
+class RigforgeSplineTentacleToggleControlBase:
     prop_bone:      StringProperty(name="Settings Bone")
     prop_name:      StringProperty(name="Switch Property")
 
@@ -1228,7 +1427,7 @@ class RigifySplineTentacleToggleControlBase:
 
         keyframe_transform_properties(obj, ctrl.name, get_keying_flags(context), no_rot=True)
 
-class POSE_OT_rigforge_spline_tentacle_toggle_control(RigifySplineTentacleToggleControlBase, bpy.types.Operator):
+class POSE_OT_rigforge_spline_tentacle_toggle_control(RigforgeSplineTentacleToggleControlBase, bpy.types.Operator):
     bl_idname = "pose.rigforge_spline_tentacle_toggle_control_" + rig_id
     bl_label = "Toggle And Keyframe Extra Control"
     bl_options = {'UNDO', 'INTERNAL', 'REGISTER'}
@@ -1286,26 +1485,30 @@ class POSE_OT_rigforge_spline_tentacle_toggle_control(RigifySplineTentacleToggle
 
         obj.update_tag(refresh={'DATA'})
         return {'FINISHED'}
-''']
+"""
+]
 
 
-def add_toggle_control_button(panel: 'PanelLayout', *,
-                              prop_bone: str,
-                              prop_name: str,
-                              ctrl_bones: Sequence[str],
-                              hook_bones: Sequence[str],
-                              enable=True,
-                              text=''):
+def add_toggle_control_button(
+    panel: "PanelLayout",
+    *,
+    prop_bone: str,
+    prop_name: str,
+    ctrl_bones: Sequence[str],
+    hook_bones: Sequence[str],
+    enable=True,
+    text="",
+):
     panel.use_bake_settings()
     panel.script.add_utilities(SCRIPT_UTILITIES_OP_TOGGLE_CONTROLS)
     panel.script.register_classes(SCRIPT_REGISTER_OP_TOGGLE_CONTROLS)
 
     op_props = {
-        'prop_bone': prop_bone,
-        'prop_name': prop_name,
-        'ctrl_bones': json.dumps(ctrl_bones),
-        'hook_bones': json.dumps(hook_bones),
-        'enable': enable,
+        "prop_bone": prop_bone,
+        "prop_name": prop_name,
+        "ctrl_bones": json.dumps(ctrl_bones),
+        "hook_bones": json.dumps(hook_bones),
+        "enable": enable,
     }
 
     row = panel.row(align=True)
@@ -1315,68 +1518,247 @@ def add_toggle_control_button(panel: 'PanelLayout', *,
     else:
         row.enabled = row.expr_bone(prop_bone)[prop_name] > 0
 
-    row.operator('pose.rigforge_spline_tentacle_toggle_control_{rig_id}', text=text,
-                 icon='ADD' if enable else 'REMOVE',
-                 properties=op_props)
+    row.operator(
+        "pose.rigforge_spline_tentacle_toggle_control_{rig_id}",
+        text=text,
+        icon="ADD" if enable else "REMOVE",
+        properties=op_props,
+    )
 
 
-def create_twist_widget(rig, bone_name, size=1.0, head_tail=0.5, bone_transform_name=None):
+def create_twist_widget(
+    rig, bone_name, size=1.0, head_tail=0.5, bone_transform_name=None
+):
     obj = create_widget(rig, bone_name, bone_transform_name)
     if obj is not None:
-        verts = [(0.3429814279079437 * size, head_tail, 0.22917263209819794 * size),
-                 (0.38110050559043884 * size, head_tail - 0.05291016772389412 * size, 0.1578568667 * size),
-                 (0.40457412600517273 * size, head_tail - 0.05291016772389412 * size, 0.0804747119 * size),
-                 (0.41250014305114746 * size, head_tail - 0.05291016772389412 * size, 0.0),
-                 (0.40457412600517273 * size, head_tail - 0.05291016772389412 * size, -0.080474764 * size),
-                 (0.38110050559043884 * size, head_tail - 0.05291016772389412 * size, -0.157856911 * size),
-                 (0.3429814279079437 * size, head_tail, -0.22917278110980988 * size),
-                 (0.22917293012142181 * size, head_tail, -0.3429813086986542 * size),
-                 (0.1578570008277893 * size, head_tail - 0.05291016772389412 * size, -0.3811003565 * size),
-                 (0.0804748609662056 * size, head_tail - 0.05291016772389412 * size, -0.4045739769 * size),
-                 (0.0, head_tail - 0.05291026830673218 * size, -0.4124999940395355 * size),
-                 (-0.080474711954593 * size, head_tail - 0.052910167723892 * size, -0.40457397699 * size),
-                 (-0.15785688161849 * size, head_tail - 0.05291016772394 * size, -0.38110026717974 * size),
-                 (-0.22917267680168152 * size, head_tail, -0.3429811894893646 * size),
-                 (-0.34298115968704224 * size, head_tail, -0.22917254269123077 * size),
-                 (-0.38110023736953 * size, head_tail - 0.05291016772389 * size, -0.15785665810108 * size),
-                 (-0.40457373857498 * size, head_tail - 0.05291016772389 * size, -0.08047446608543 * size),
-                 (-0.4124998152256012 * size, head_tail - 0.05291016772389412 * size, 0.0),
-                 (-0.40457355976104 * size, head_tail - 0.05291016772389 * size, 0.080475136637687 * size),
-                 (-0.38109982013702 * size, head_tail - 0.05291016772389 * size, 0.157857269048690 * size),
-                 (-0.34298068284988403 * size, head_tail, 0.22917301952838898 * size),
-                 (-0.2291719913482666 * size, head_tail, 0.34298139810562134 * size),
-                 (-0.15785618126392 * size, head_tail - 0.05291016772389 * size, 0.38110047578811 * size),
-                 (-0.08047392964363 * size, head_tail - 0.05291016772389 * size, 0.40457388758659 * size),
-                 (0.0, head_tail - 0.05291016772389412 * size, 0.41249993443489075 * size),
-                 (0.080475620925426 * size, head_tail - 0.05291016772389 * size, 0.40457367897033 * size),
-                 (0.157857790589332 * size, head_tail - 0.05291016772389 * size, 0.38109987974166 * size),
-                 (0.22917351126670837 * size, head_tail, 0.3429807126522064 * size),
-                 (0.381100505590438 * size, head_tail + 0.05290994420647 * size, 0.15785686671733 * size),
-                 (0.404574126005172 * size, head_tail + 0.05290994420647 * size, 0.08047470450401 * size),
-                 (0.41250014305114746 * size, head_tail + 0.05290994420647621 * size, 0.0),
-                 (0.404574126005172 * size, head_tail + 0.05290994420647 * size, -0.0804747715592 * size),
-                 (0.381100505590438 * size, head_tail + 0.05290994420647 * size, -0.1578569114208 * size),
-                 (0.157857000827789 * size, head_tail + 0.05290994420647 * size, -0.3811003565788 * size),
-                 (0.080474860966205 * size, head_tail + 0.05290994420647 * size, -0.4045739769935 * size),
-                 (0.0, head_tail + 0.05290984362363815 * size, -0.4124999940395355 * size),
-                 (-0.08047471195459 * size, head_tail + 0.05290994420647 * size, -0.4045739769935 * size),
-                 (-0.15785688161849 * size, head_tail + 0.05290994420647 * size, -0.38110026717185 * size),
-                 (-0.38110023736953 * size, head_tail + 0.05290994420647 * size, -0.15785665810108 * size),
-                 (-0.40457373857498 * size, head_tail + 0.05290994420647 * size, -0.08047447353601 * size),
-                 (-0.41249981522560 * size, head_tail + 0.05290994420647 * size, 0.0),
-                 (-0.40457355976104 * size, head_tail + 0.05290994420647 * size, 0.080475129187107 * size),
-                 (-0.38109982013702 * size, head_tail + 0.05290994420647 * size, 0.157857269048690 * size),
-                 (-0.15785618126392 * size, head_tail + 0.05290994420647 * size, 0.381100475788116 * size),
-                 (-0.08047392964363 * size, head_tail + 0.05290994420647 * size, 0.404573887586593 * size),
-                 (0.0, head_tail + 0.05290994420647621 * size, 0.41249993443489075 * size),
-                 (0.080475620925426 * size, head_tail + 0.05290994420647 * size, 0.404573678970339 * size),
-                 (0.157857790589332 * size, head_tail + 0.05290994420647 * size, 0.381099879741667 * size)]
-        edges = [(1, 0), (2, 1), (2, 3), (3, 4), (5, 4), (5, 6), (7, 8), (9, 8), (10, 9), (10, 11),
-                 (12, 11), (12, 13), (14, 15), (16, 15), (16, 17), (17, 18), (19, 18), (20, 19),
-                 (28, 0), (21, 22), (23, 22), (23, 24), (24, 25), (26, 25), (26, 27), (47, 27),
-                 (29, 28), (29, 30), (30, 31), (32, 31), (32, 6), (34, 33), (35, 34), (35, 36),
-                 (37, 36), (7, 33), (37, 13), (39, 38), (39, 40), (40, 41), (42, 41), (14, 38),
-                 (20, 42), (44, 43), (44, 45), (45, 46), (47, 46), (21, 43)]
+        verts = [
+            (0.3429814279079437 * size, head_tail, 0.22917263209819794 * size),
+            (
+                0.38110050559043884 * size,
+                head_tail - 0.05291016772389412 * size,
+                0.1578568667 * size,
+            ),
+            (
+                0.40457412600517273 * size,
+                head_tail - 0.05291016772389412 * size,
+                0.0804747119 * size,
+            ),
+            (0.41250014305114746 * size, head_tail - 0.05291016772389412 * size, 0.0),
+            (
+                0.40457412600517273 * size,
+                head_tail - 0.05291016772389412 * size,
+                -0.080474764 * size,
+            ),
+            (
+                0.38110050559043884 * size,
+                head_tail - 0.05291016772389412 * size,
+                -0.157856911 * size,
+            ),
+            (0.3429814279079437 * size, head_tail, -0.22917278110980988 * size),
+            (0.22917293012142181 * size, head_tail, -0.3429813086986542 * size),
+            (
+                0.1578570008277893 * size,
+                head_tail - 0.05291016772389412 * size,
+                -0.3811003565 * size,
+            ),
+            (
+                0.0804748609662056 * size,
+                head_tail - 0.05291016772389412 * size,
+                -0.4045739769 * size,
+            ),
+            (0.0, head_tail - 0.05291026830673218 * size, -0.4124999940395355 * size),
+            (
+                -0.080474711954593 * size,
+                head_tail - 0.052910167723892 * size,
+                -0.40457397699 * size,
+            ),
+            (
+                -0.15785688161849 * size,
+                head_tail - 0.05291016772394 * size,
+                -0.38110026717974 * size,
+            ),
+            (-0.22917267680168152 * size, head_tail, -0.3429811894893646 * size),
+            (-0.34298115968704224 * size, head_tail, -0.22917254269123077 * size),
+            (
+                -0.38110023736953 * size,
+                head_tail - 0.05291016772389 * size,
+                -0.15785665810108 * size,
+            ),
+            (
+                -0.40457373857498 * size,
+                head_tail - 0.05291016772389 * size,
+                -0.08047446608543 * size,
+            ),
+            (-0.4124998152256012 * size, head_tail - 0.05291016772389412 * size, 0.0),
+            (
+                -0.40457355976104 * size,
+                head_tail - 0.05291016772389 * size,
+                0.080475136637687 * size,
+            ),
+            (
+                -0.38109982013702 * size,
+                head_tail - 0.05291016772389 * size,
+                0.157857269048690 * size,
+            ),
+            (-0.34298068284988403 * size, head_tail, 0.22917301952838898 * size),
+            (-0.2291719913482666 * size, head_tail, 0.34298139810562134 * size),
+            (
+                -0.15785618126392 * size,
+                head_tail - 0.05291016772389 * size,
+                0.38110047578811 * size,
+            ),
+            (
+                -0.08047392964363 * size,
+                head_tail - 0.05291016772389 * size,
+                0.40457388758659 * size,
+            ),
+            (0.0, head_tail - 0.05291016772389412 * size, 0.41249993443489075 * size),
+            (
+                0.080475620925426 * size,
+                head_tail - 0.05291016772389 * size,
+                0.40457367897033 * size,
+            ),
+            (
+                0.157857790589332 * size,
+                head_tail - 0.05291016772389 * size,
+                0.38109987974166 * size,
+            ),
+            (0.22917351126670837 * size, head_tail, 0.3429807126522064 * size),
+            (
+                0.381100505590438 * size,
+                head_tail + 0.05290994420647 * size,
+                0.15785686671733 * size,
+            ),
+            (
+                0.404574126005172 * size,
+                head_tail + 0.05290994420647 * size,
+                0.08047470450401 * size,
+            ),
+            (0.41250014305114746 * size, head_tail + 0.05290994420647621 * size, 0.0),
+            (
+                0.404574126005172 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.0804747715592 * size,
+            ),
+            (
+                0.381100505590438 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.1578569114208 * size,
+            ),
+            (
+                0.157857000827789 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.3811003565788 * size,
+            ),
+            (
+                0.080474860966205 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.4045739769935 * size,
+            ),
+            (0.0, head_tail + 0.05290984362363815 * size, -0.4124999940395355 * size),
+            (
+                -0.08047471195459 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.4045739769935 * size,
+            ),
+            (
+                -0.15785688161849 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.38110026717185 * size,
+            ),
+            (
+                -0.38110023736953 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.15785665810108 * size,
+            ),
+            (
+                -0.40457373857498 * size,
+                head_tail + 0.05290994420647 * size,
+                -0.08047447353601 * size,
+            ),
+            (-0.41249981522560 * size, head_tail + 0.05290994420647 * size, 0.0),
+            (
+                -0.40457355976104 * size,
+                head_tail + 0.05290994420647 * size,
+                0.080475129187107 * size,
+            ),
+            (
+                -0.38109982013702 * size,
+                head_tail + 0.05290994420647 * size,
+                0.157857269048690 * size,
+            ),
+            (
+                -0.15785618126392 * size,
+                head_tail + 0.05290994420647 * size,
+                0.381100475788116 * size,
+            ),
+            (
+                -0.08047392964363 * size,
+                head_tail + 0.05290994420647 * size,
+                0.404573887586593 * size,
+            ),
+            (0.0, head_tail + 0.05290994420647621 * size, 0.41249993443489075 * size),
+            (
+                0.080475620925426 * size,
+                head_tail + 0.05290994420647 * size,
+                0.404573678970339 * size,
+            ),
+            (
+                0.157857790589332 * size,
+                head_tail + 0.05290994420647 * size,
+                0.381099879741667 * size,
+            ),
+        ]
+        edges = [
+            (1, 0),
+            (2, 1),
+            (2, 3),
+            (3, 4),
+            (5, 4),
+            (5, 6),
+            (7, 8),
+            (9, 8),
+            (10, 9),
+            (10, 11),
+            (12, 11),
+            (12, 13),
+            (14, 15),
+            (16, 15),
+            (16, 17),
+            (17, 18),
+            (19, 18),
+            (20, 19),
+            (28, 0),
+            (21, 22),
+            (23, 22),
+            (23, 24),
+            (24, 25),
+            (26, 25),
+            (26, 27),
+            (47, 27),
+            (29, 28),
+            (29, 30),
+            (30, 31),
+            (32, 31),
+            (32, 6),
+            (34, 33),
+            (35, 34),
+            (35, 36),
+            (37, 36),
+            (7, 33),
+            (37, 13),
+            (39, 38),
+            (39, 40),
+            (40, 41),
+            (42, 41),
+            (14, 38),
+            (20, 42),
+            (44, 43),
+            (44, 45),
+            (45, 46),
+            (47, 46),
+            (21, 43),
+        ]
         faces = []
 
         mesh = obj.data
@@ -1390,88 +1772,88 @@ def create_twist_widget(rig, bone_name, size=1.0, head_tail=0.5, bone_transform_
 
 def create_sample(obj):
     # generated by ...utils.write_metarig
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     arm = obj.data
 
     bones = {}
 
-    bone = arm.edit_bones.new('tentacle01')
+    bone = arm.edit_bones.new("tentacle01")
     bone.head[:] = 0.0000, 0.0000, 0.0000
     bone.tail[:] = 0.0000, 0.0000, 0.2000
     bone.roll = 0.0000
     bone.use_connect = False
-    bones['tentacle01'] = bone.name
-    bone = arm.edit_bones.new('tentacle02')
+    bones["tentacle01"] = bone.name
+    bone = arm.edit_bones.new("tentacle02")
     bone.head[:] = 0.0000, 0.0000, 0.2000
     bone.tail[:] = 0.0000, 0.0000, 0.4000
     bone.roll = 0.0000
     bone.use_connect = True
-    bone.inherit_scale = 'ALIGNED'
-    bone.parent = arm.edit_bones[bones['tentacle01']]
-    bones['tentacle02'] = bone.name
-    bone = arm.edit_bones.new('tentacle03')
+    bone.inherit_scale = "ALIGNED"
+    bone.parent = arm.edit_bones[bones["tentacle01"]]
+    bones["tentacle02"] = bone.name
+    bone = arm.edit_bones.new("tentacle03")
     bone.head[:] = 0.0000, 0.0000, 0.4000
     bone.tail[:] = 0.0000, 0.0000, 0.6000
     bone.roll = 0.0000
     bone.use_connect = True
-    bone.inherit_scale = 'ALIGNED'
-    bone.parent = arm.edit_bones[bones['tentacle02']]
-    bones['tentacle03'] = bone.name
-    bone = arm.edit_bones.new('tentacle04')
+    bone.inherit_scale = "ALIGNED"
+    bone.parent = arm.edit_bones[bones["tentacle02"]]
+    bones["tentacle03"] = bone.name
+    bone = arm.edit_bones.new("tentacle04")
     bone.head[:] = 0.0000, 0.0000, 0.6000
     bone.tail[:] = 0.0000, 0.0000, 0.8000
     bone.roll = 0.0000
     bone.use_connect = True
-    bone.inherit_scale = 'ALIGNED'
-    bone.parent = arm.edit_bones[bones['tentacle03']]
-    bones['tentacle04'] = bone.name
-    bone = arm.edit_bones.new('tentacle05')
+    bone.inherit_scale = "ALIGNED"
+    bone.parent = arm.edit_bones[bones["tentacle03"]]
+    bones["tentacle04"] = bone.name
+    bone = arm.edit_bones.new("tentacle05")
     bone.head[:] = 0.0000, 0.0000, 0.8000
     bone.tail[:] = 0.0000, 0.0000, 1.0000
     bone.roll = 0.0000
     bone.use_connect = True
-    bone.inherit_scale = 'ALIGNED'
-    bone.parent = arm.edit_bones[bones['tentacle04']]
-    bones['tentacle05'] = bone.name
+    bone.inherit_scale = "ALIGNED"
+    bone.parent = arm.edit_bones[bones["tentacle04"]]
+    bones["tentacle05"] = bone.name
 
-    bpy.ops.object.mode_set(mode='OBJECT')
-    pbone = obj.pose.bones[bones['tentacle01']]
-    pbone.rigforge_type = 'limbs.spline_tentacle'
+    bpy.ops.object.mode_set(mode="OBJECT")
+    pbone = obj.pose.bones[bones["tentacle01"]]
+    pbone.rigforge_type = "limbs.spline_tentacle"
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['tentacle02']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["tentacle02"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['tentacle03']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["tentacle03"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['tentacle04']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["tentacle04"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['tentacle05']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["tentacle05"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in arm.edit_bones:
         bone.select = False
         bone.select_head = False

@@ -2,19 +2,18 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
-import math
 import collections
+import math
 import typing
-
 from abc import ABC
-from itertools import tee, chain, islice, repeat, permutations
-from mathutils import Vector, Matrix, Color
+from itertools import chain, islice, permutations, repeat, tee
+
+import bpy
+from mathutils import Color, Matrix, Vector
 from rna_prop_ui import rna_idprop_value_to_python
 
-
-T = typing.TypeVar('T')
-IdType = typing.TypeVar('IdType', bound=bpy.types.ID)
+T = typing.TypeVar("T")
+IdType = typing.TypeVar("IdType", bound=bpy.types.ID)
 
 AnyVector = Vector | typing.Sequence[float]
 
@@ -23,30 +22,31 @@ AnyVector = Vector | typing.Sequence[float]
 ##############################################
 
 axis_vectors = {
-    'x': (1, 0, 0),
-    'y': (0, 1, 0),
-    'z': (0, 0, 1),
-    '-x': (-1, 0, 0),
-    '-y': (0, -1, 0),
-    '-z': (0, 0, -1),
+    "x": (1, 0, 0),
+    "y": (0, 1, 0),
+    "z": (0, 0, 1),
+    "-x": (-1, 0, 0),
+    "-y": (0, -1, 0),
+    "-z": (0, 0, -1),
 }
 
 
 # Matrices that reshuffle axis order and/or invert them
 shuffle_matrix = {
-    sx + x + sy + y + sz + z: Matrix((
-        axis_vectors[sx + x], axis_vectors[sy + y], axis_vectors[sz + z]
-    )).transposed().freeze()
-    for x, y, z in permutations(['x', 'y', 'z'])
-    for sx in ('', '-')
-    for sy in ('', '-')
-    for sz in ('', '-')
+    sx + x + sy + y + sz + z: Matrix(
+        (axis_vectors[sx + x], axis_vectors[sy + y], axis_vectors[sz + z])
+    )
+    .transposed()
+    .freeze()
+    for x, y, z in permutations(["x", "y", "z"])
+    for sx in ("", "-")
+    for sy in ("", "-")
+    for sz in ("", "-")
 }
 
 
 def angle_on_plane(plane: Vector, vec1: Vector, vec2: Vector):
-    """ Return the angle between two vectors projected onto a plane.
-    """
+    """Return the angle between two vectors projected onto a plane."""
     plane.normalize()
     vec1 = vec1 - (plane * (vec1.dot(plane)))
     vec2 = vec2 - (plane * (vec2.dot(plane)))
@@ -78,11 +78,11 @@ axis_roll_from_matrix = bpy.types.Bone.AxisRollFromMatrix
 
 
 def matrix_from_axis_pair(y_axis: AnyVector, other_axis: AnyVector, axis_name: str):
-    assert axis_name in 'xz'
+    assert axis_name in "xz"
 
     y_axis = Vector(y_axis).normalized()
 
-    if axis_name == 'x':
+    if axis_name == "x":
         z_axis = Vector(other_axis).cross(y_axis).normalized()
         x_axis = y_axis.cross(z_axis)
     else:
@@ -96,6 +96,7 @@ def matrix_from_axis_pair(y_axis: AnyVector, other_axis: AnyVector, axis_name: s
 # Color correction functions
 ##############################################
 
+
 # noinspection SpellCheckingInspection
 def linsrgb_to_srgb(linsrgb: float):
     """Convert physically linear RGB values into sRGB ones. The transform is
@@ -105,7 +106,7 @@ def linsrgb_to_srgb(linsrgb: float):
 
     """
     # From Wikipedia, but easy analogue to the above.
-    gamma = 1.055 * linsrgb**(1. / 2.4) - 0.055
+    gamma = 1.055 * linsrgb ** (1.0 / 2.4) - 0.055
     scale = linsrgb * 12.92
     # return np.where (linsrgb > 0.0031308, gamma, scale)
     if linsrgb > 0.0031308:
@@ -115,14 +116,15 @@ def linsrgb_to_srgb(linsrgb: float):
 
 def gamma_correct(color: Color):
     corrected_color = Color()
-    for i, component in enumerate(color):               # noqa
-        corrected_color[i] = linsrgb_to_srgb(color[i])  # noqa
+    for i, component in enumerate(color):  # noqa
+        corrected_color[i] = linsrgb_to_srgb(color[i])
     return corrected_color
 
 
 ##############################################
 # Iterators
 ##############################################
+
 
 # noinspection SpellCheckingInspection
 def padnone(iterable, pad=None):
@@ -191,7 +193,7 @@ def flatten_parents(item):
 ##############################################
 
 Lazy: typing.TypeAlias = T | typing.Callable[[], T]
-OptionalLazy: typing.TypeAlias = typing.Optional[T | typing.Callable[[], T]]
+OptionalLazy: typing.TypeAlias = T | typing.Callable[[], T] | None
 
 
 def force_lazy(value: OptionalLazy[T]) -> T:
@@ -214,18 +216,23 @@ class LazyRef(typing.Generic[T]):
         self.first_hashable = first.__hash__ is not None
 
     def __repr__(self):
-        return 'LazyRef{}'.format((self.first, *self.args))
+        return f"LazyRef{(self.first, *self.args)}"
 
     def __eq__(self, other):
         return (
-            isinstance(other, LazyRef) and
-            (self.first == other.first if self.first_hashable else self.first is other.first) and
-            self.args == other.args
+            isinstance(other, LazyRef)
+            and (
+                self.first == other.first
+                if self.first_hashable
+                else self.first is other.first
+            )
+            and self.args == other.args
         )
 
     def __hash__(self):
-        return (hash(self.first) if self.first_hashable
-                else hash(id(self.first))) ^ hash(self.args)
+        return (
+            hash(self.first) if self.first_hashable else hash(id(self.first))
+        ) ^ hash(self.args)
 
     def __call__(self) -> T:
         first = self.first
@@ -245,12 +252,15 @@ class LazyRef(typing.Generic[T]):
 # Misc
 ##############################################
 
+
 def copy_attributes(a, b):
     keys = dir(a)
     for key in keys:
-        if not (key.startswith("_") or
-                key.startswith("error_") or
-                key in ("group", "is_valid", "is_valid", "bl_rna")):
+        if not (
+            key.startswith("_")
+            or key.startswith("error_")
+            or key in ("group", "is_valid", "is_valid", "bl_rna")
+        ):
             try:
                 setattr(b, key, getattr(a, key))
             except AttributeError:
@@ -279,10 +289,12 @@ def propgroup_to_dict(source: bpy.types.PropertyGroup) -> dict[str, typing.Any]:
     """
 
     # Precondition check.
-    assert isinstance(source, bpy.types.PropertyGroup), "Source must be PropertyGroup, but is {!r}".format(type(source))
+    assert isinstance(source, bpy.types.PropertyGroup), (
+        f"Source must be PropertyGroup, but is {type(source)!r}"
+    )
 
     # Copy the property values one by one.
-    skip_properties = {'rna_type', 'bl_rna'}
+    skip_properties = {"rna_type", "bl_rna"}
     dictionary = {}
     for prop in source.bl_rna.properties:
         attr = prop.identifier
@@ -294,7 +306,7 @@ def propgroup_to_dict(source: bpy.types.PropertyGroup) -> dict[str, typing.Any]:
         try:
             is_set = source.is_property_set(attr)
         except TypeError as ex:
-            raise TypeError("{!s} on {!s}".format('; '.join(ex.args), source)) from None
+            raise TypeError("{!s} on {!s}".format("; ".join(ex.args), source)) from None
         if not is_set:
             continue
 
@@ -302,25 +314,27 @@ def propgroup_to_dict(source: bpy.types.PropertyGroup) -> dict[str, typing.Any]:
         value = getattr(source, attr)
         match prop.type:
             # Directly assignable types:
-            case 'BOOLEAN' | 'INT' | 'FLOAT' | 'ENUM' | 'STRING':
+            case "BOOLEAN" | "INT" | "FLOAT" | "ENUM" | "STRING":
                 dictionary[attr] = value
 
             # Treat as list-like:
-            case 'COLLECTION':
+            case "COLLECTION":
                 target_coll = [propgroup_to_dict(source_item) for source_item in value]
                 dictionary[attr] = target_coll
 
             # Pointer properties are treated depending on the type they point
             # to. PropertyGroups have to be dealt with by recursion, while other
             # types can be assigned directly.
-            case 'POINTER':
+            case "POINTER":
                 if isinstance(value, bpy.types.PropertyGroup):
                     dictionary[attr] = propgroup_to_dict(value)
                     continue
                 dictionary[attr] = value
 
             case _:
-                raise TypeError("no implementation for RNA property {!r} type {!r}".format(prop.identifier, prop.type))
+                raise TypeError(
+                    f"no implementation for RNA property {prop.identifier!r} type {prop.type!r}"
+                )
 
     return dictionary
 
@@ -341,19 +355,26 @@ def assign_parameters(target, val_dict=None, **params):
             raise Exception(f"Couldn't set {key} to {value}: {e}")
 
 
-def assign_rna_properties(target: bpy.types.PropertyGroup,
-                          source: bpy.types.PropertyGroup | dict[str, typing.Any]) -> None:
+def assign_rna_properties(
+    target: bpy.types.PropertyGroup,
+    source: bpy.types.PropertyGroup | dict[str, typing.Any],
+) -> None:
     """Basically calling `setattr(target, attribute, value_from_source)` for each property of `target`.
 
     Note that this follows much of the same logic as `propgroup_to_dict()` above.
     """
 
     # Precondition checks.
-    assert isinstance(target, bpy.types.PropertyGroup), "Target must be PropertyGroup, but is {!r}".format(type(target))
-    assert isinstance(source, (bpy.types.PropertyGroup, dict)
-                      ), "Source must be PropertyGroup or dict, but is {!r}".format(type(source))
+    assert isinstance(target, bpy.types.PropertyGroup), (
+        f"Target must be PropertyGroup, but is {type(target)!r}"
+    )
+    assert isinstance(source, (bpy.types.PropertyGroup, dict)), (
+        f"Source must be PropertyGroup or dict, but is {type(source)!r}"
+    )
     if isinstance(source, bpy.types.PropertyGroup):
-        assert (target.__class__ == source.__class__), "Source and target must be PropertyGroups of the same type."
+        assert target.__class__ == source.__class__, (
+            "Source and target must be PropertyGroups of the same type."
+        )
 
     def _setattr(prop_identifier, value):
         """Wrapper around setattr() that has more concrete info in its exception when it fails."""
@@ -361,17 +382,19 @@ def assign_rna_properties(target: bpy.types.PropertyGroup,
             setattr(target, prop_identifier, value)
         except AttributeError as ex:
             raise AttributeError(
-                "Could not set {!r}.{!s} = {!r} (type={!s}): {!s}".format(
-                    target, prop_identifier, value, type(value), ex)) from None
+                f"Could not set {target!r}.{prop_identifier!s} = {value!r} (type={type(value)!s}): {ex!s}"
+            ) from None
 
     # Dynamically construct functions to create an abstraction around dict vs. PropertyGroup.
     if isinstance(source, dict):
+
         def _is_property_set(prop_identifier: str) -> bool:
             return prop_identifier in source
 
         def _get_value(prop_identifier: str) -> typing.Any:
             return source[prop_identifier]
     else:
+
         def _is_property_set(prop_identifier: str) -> bool:
             return source.is_property_set(prop_identifier)
 
@@ -379,7 +402,7 @@ def assign_rna_properties(target: bpy.types.PropertyGroup,
             return getattr(source, prop_identifier)
 
     # Copy the property values one by one.
-    skip_properties = {'rna_type', 'bl_rna'}
+    skip_properties = {"rna_type", "bl_rna"}
     for prop in target.bl_rna.properties:
         attr = prop.identifier
 
@@ -390,7 +413,7 @@ def assign_rna_properties(target: bpy.types.PropertyGroup,
         try:
             is_set = _is_property_set(attr)
         except TypeError as ex:
-            raise TypeError("{!s} on {!s}".format('; '.join(ex.args), source)) from None
+            raise TypeError("{!s} on {!s}".format("; ".join(ex.args), source)) from None
         if not is_set:
             target.property_unset(attr)
             continue
@@ -399,13 +422,13 @@ def assign_rna_properties(target: bpy.types.PropertyGroup,
         value = _get_value(attr)
         match prop.type:
             # Directly assignable types:
-            case 'BOOLEAN' | 'INT' | 'FLOAT' | 'ENUM' | 'STRING':
+            case "BOOLEAN" | "INT" | "FLOAT" | "ENUM" | "STRING":
                 if target.is_property_readonly(attr):
                     continue
                 _setattr(attr, value)
 
             # Treat as list-like:
-            case 'COLLECTION':
+            case "COLLECTION":
                 target_coll = getattr(target, attr)
                 target_coll.clear()
                 for source_item in value:
@@ -415,7 +438,7 @@ def assign_rna_properties(target: bpy.types.PropertyGroup,
             # Pointer properties are treated depending on the type they point
             # to. PropertyGroups have to be dealt with by recursion, while other
             # types can be assigned directly.
-            case 'POINTER':
+            case "POINTER":
                 if isinstance(value, bpy.types.PropertyGroup):
                     assign_rna_properties(getattr(target, attr), value)
                     continue
@@ -424,10 +447,14 @@ def assign_rna_properties(target: bpy.types.PropertyGroup,
                 _setattr(attr, value)
 
             case _:
-                raise TypeError("no implementation for RNA property {!r} type {!r}".format(prop.identifier, prop.type))
+                raise TypeError(
+                    f"no implementation for RNA property {prop.identifier!r} type {prop.type!r}"
+                )
 
 
-def select_object(context: bpy.types.Context, obj: bpy.types.Object, deselect_all=False):
+def select_object(
+    context: bpy.types.Context, obj: bpy.types.Object, deselect_all=False
+):
     view_layer = context.view_layer
 
     if deselect_all:
@@ -449,9 +476,15 @@ def choose_next_uid(collection: typing.Iterable, prop_name: str, *, min_value=0)
 # Text
 ##############################################
 
-def wrap_list_to_lines(prefix: str, delimiters: tuple[str, str] | str,
-                       items: typing.Iterable[str], *,
-                       limit=90, indent=4) -> list[str]:
+
+def wrap_list_to_lines(
+    prefix: str,
+    delimiters: tuple[str, str] | str,
+    items: typing.Iterable[str],
+    *,
+    limit=90,
+    indent=4,
+) -> list[str]:
     """
     Generate a string representation of a list of items, wrapping lines if necessary.
 
@@ -464,25 +497,25 @@ def wrap_list_to_lines(prefix: str, delimiters: tuple[str, str] | str,
     """
     start, end = delimiters
     items = list(items)
-    simple_line = prefix + start + ', '.join(items) + end
+    simple_line = prefix + start + ", ".join(items) + end
 
     if not items or len(simple_line) <= limit:
         return [simple_line]
 
-    prefix_indent = prefix[0: len(prefix) - len(prefix.lstrip())]
-    inner_indent = prefix_indent + ' ' * indent
+    prefix_indent = prefix[0 : len(prefix) - len(prefix.lstrip())]
+    inner_indent = prefix_indent + " " * indent
 
     result = []
     line = prefix + start
 
     for item in items:
-        item_repr = item + ','
+        item_repr = item + ","
 
         if not result or len(line) + len(item_repr) + 1 > limit:
             result.append(line)
             line = inner_indent + item_repr
         else:
-            line += ' ' + item_repr
+            line += " " + item_repr
 
     result.append(line[:-1] + end)
     return result
@@ -491,6 +524,7 @@ def wrap_list_to_lines(prefix: str, delimiters: tuple[str, str] | str,
 ##############################################
 # Typing
 ##############################################
+
 
 class TypedObject(bpy.types.Object, typing.Generic[IdType]):
     data: IdType
@@ -501,13 +535,13 @@ MeshObject = TypedObject[bpy.types.Mesh]
 
 
 def verify_armature_obj(obj: bpy.types.Object) -> ArmatureObject:
-    assert obj and obj.type == 'ARMATURE'
-    return obj  # noqa
+    assert obj and obj.type == "ARMATURE"
+    return obj
 
 
 def verify_mesh_obj(obj: bpy.types.Object) -> MeshObject:
-    assert obj and obj.type == 'MESH'
-    return obj  # noqa
+    assert obj and obj.type == "MESH"
+    return obj
 
 
 class IdPropSequence(typing.Mapping[str, T], typing.Sequence[T], ABC):

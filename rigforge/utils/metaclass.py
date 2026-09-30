@@ -3,23 +3,24 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import collections
-
-from types import FunctionType
+from collections.abc import Callable, Collection
 from itertools import chain
-from typing import Collection, Callable
-
+from types import FunctionType
 
 ##############################################
 # Class With Stages
 ##############################################
 
+
 def rigforge_stage(stage):
     """Decorates the method with the specified stage."""
+
     def process(method: FunctionType):
         if not isinstance(method, FunctionType):
             raise ValueError("Stage decorator must be applied to a method definition")
         method._rigforge_stage = stage
         return method
+
     return process
 
 
@@ -31,6 +32,7 @@ class StagedMetaclass(type):
     method names from that definition as valid stages. After that, subclasses can
     register methods to those stages, to be called via rigforge_invoke_stage.
     """
+
     def __new__(mcs, class_name, bases, namespace, define_stages=None, **kwargs):
         # suppress keyword args to avoid issues with __init_subclass__
         return super().__new__(mcs, class_name, bases, namespace, **kwargs)
@@ -44,18 +46,21 @@ class StagedMetaclass(type):
 
         elif define_stages is True:
             define_stages = [
-                name for name, item in namespace.items()
-                if name[0] != '_' and isinstance(item, FunctionType)
+                name
+                for name, item in namespace.items()
+                if name[0] != "_" and isinstance(item, FunctionType)
             ]
 
         cls.rigforge_own_stages = frozenset(define_stages)
 
         # Compute complete set of inherited stages
-        staged_bases = [cls for cls in reversed(cls.__mro__) if isinstance(cls, StagedMetaclass)]
+        staged_bases = [
+            cls for cls in reversed(cls.__mro__) if isinstance(cls, StagedMetaclass)
+        ]
 
-        cls.rigforge_stages = stages = frozenset(chain.from_iterable(
-            cls.rigforge_own_stages for cls in staged_bases
-        ))
+        cls.rigforge_stages = stages = frozenset(
+            chain.from_iterable(cls.rigforge_own_stages for cls in staged_bases)
+        )
 
         # Compute the inherited stage to method mapping
         stage_map = collections.defaultdict(collections.OrderedDict)
@@ -70,14 +75,17 @@ class StagedMetaclass(type):
                     if method_name in stages:
                         raise ValueError(
                             f"Stage method '{method_name}' inherited @stage.{stage_name} "
-                            f"in class {class_name} ({cls.__module__})")
+                            f"in class {class_name} ({cls.__module__})"
+                        )
 
                     # Check consistency of inherited stage assignment to methods
                     if method_name in method_map:
                         if method_map[method_name] != stage_name:
-                            print(f"RIGIFY CLASS {class_name} ({cls.__module__}): "
-                                  f"method '{method_name}' has inherited both "
-                                  f"@stage.{method_map[method_name]} and @stage.{stage_name}\n")
+                            print(
+                                f"RIGFORGE CLASS {class_name} ({cls.__module__}): "
+                                f"method '{method_name}' has inherited both "
+                                f"@stage.{method_map[method_name]} and @stage.{stage_name}\n"
+                            )
                     else:
                         method_map[method_name] = stage_name
 
@@ -86,33 +94,40 @@ class StagedMetaclass(type):
         # Scan newly defined methods for stage decorations
         for method_name, item in namespace.items():
             if isinstance(item, FunctionType):
-                stage = getattr(item, '_rigforge_stage', None)
+                stage = getattr(item, "_rigforge_stage", None)
 
                 if stage and method_name in stages:
-                    print(f"RIGIFY CLASS {class_name} ({cls.__module__}): "
-                          f"cannot use stage decorator on the stage method '{method_name}' "
-                          f"(@stage.{stage} ignored)")
+                    print(
+                        f"RIGFORGE CLASS {class_name} ({cls.__module__}): "
+                        f"cannot use stage decorator on the stage method '{method_name}' "
+                        f"(@stage.{stage} ignored)"
+                    )
                     continue
 
                 # Ensure that decorators aren't lost when redefining methods
                 if method_name in method_map:
                     if not stage:
                         stage = method_map[method_name]
-                        print(f"RIGIFY CLASS {class_name} ({cls.__module__}): "
-                              f"missing stage decorator on method '{method_name}' "
-                              f"(should be @stage.{stage})")
+                        print(
+                            f"RIGFORGE CLASS {class_name} ({cls.__module__}): "
+                            f"missing stage decorator on method '{method_name}' "
+                            f"(should be @stage.{stage})"
+                        )
                     # Check that the method is assigned to only one stage
                     elif stage != method_map[method_name]:
-                        print(f"RIGIFY CLASS {class_name} ({cls.__module__}): "
-                              f"method '{method_name}' has decorator @stage.{stage}, "
-                              f"but inherited base has @stage.{method_map[method_name]}")
+                        print(
+                            f"RIGFORGE CLASS {class_name} ({cls.__module__}): "
+                            f"method '{method_name}' has decorator @stage.{stage}, "
+                            f"but inherited base has @stage.{method_map[method_name]}"
+                        )
 
                 # Assign the method to the stage, verifying that it's valid
                 if stage:
                     if stage not in stages:
                         raise ValueError(
                             f"Invalid stage name '{stage}' for method '{method_name}' "
-                            f"in class {class_name} ({cls.__module__})")
+                            f"in class {class_name} ({cls.__module__})"
+                        )
                     else:
                         stage_map[stage][method_name] = cls
                         own_stage_map[stage][method_name] = cls
@@ -128,8 +143,8 @@ class StagedMetaclass(type):
         return cls
 
 
-class BaseStagedClass(object, metaclass=StagedMetaclass):
-    rigforge_sub_objects: Collection['BaseStagedClass'] = tuple()
+class BaseStagedClass(metaclass=StagedMetaclass):
+    rigforge_sub_objects: Collection["BaseStagedClass"] = tuple()
     rigforge_sub_object_run_late = False
 
     def rigforge_invoke_stage(self, stage: str):
@@ -156,8 +171,10 @@ class BaseStagedClass(object, metaclass=StagedMetaclass):
 # Per-owner singleton class
 ##############################################
 
+
 class SingletonPluginMetaclass(StagedMetaclass):
     """Metaclass for maintaining one instance per owner object per constructor arg set."""
+
     def __call__(cls, owner, *constructor_args):
         key = (cls, *constructor_args)
         try:

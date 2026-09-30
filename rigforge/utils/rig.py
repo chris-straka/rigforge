@@ -2,85 +2,99 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import importlib
 import importlib.util
 import re
-
-from itertools import count
 from collections import defaultdict
+from itertools import count
 from typing import TYPE_CHECKING, Any, Optional
-from bpy.types import bpy_struct, Constraint, Object, PoseBone, Bone, Armature
 
-from bpy.types import bpy_prop_array, bpy_prop_collection  # noqa
+import bpy
+from bpy.types import (
+    Armature,
+    Bone,
+    Constraint,
+    Object,
+    PoseBone,
+    bpy_prop_array,
+    bpy_prop_collection,
+    bpy_struct,
+)
 from idprop.types import IDPropertyArray
 from mathutils import Vector
 
-from .misc import ArmatureObject, wrap_list_to_lines, IdPropSequence, find_index, flatten_children
+from .misc import (
+    ArmatureObject,
+    IdPropSequence,
+    find_index,
+    flatten_children,
+    wrap_list_to_lines,
+)
 
 if TYPE_CHECKING:
+    from .. import RigforgeColorSet
     from ..base_rig import BaseRig
-    from .. import RigifyColorSet
 
 RIG_DIR = "rigs"  # Name of the directory where rig types are kept
 METARIG_DIR = "metarigs"  # Name of the directory where metarigs are kept
 TEMPLATE_DIR = "ui_templates"  # Name of the directory where ui templates are kept
 
 # noinspection SpellCheckingInspection
-outdated_types = {"pitchipoy.limbs.super_limb": "limbs.super_limb",
-                  "pitchipoy.limbs.super_arm": "limbs.super_limb",
-                  "pitchipoy.limbs.super_leg": "limbs.super_limb",
-                  "pitchipoy.limbs.super_front_paw": "limbs.super_limb",
-                  "pitchipoy.limbs.super_rear_paw": "limbs.super_limb",
-                  "pitchipoy.limbs.super_finger": "limbs.super_finger",
-                  "pitchipoy.super_torso_turbo": "spines.super_spine",
-                  "pitchipoy.simple_tentacle": "limbs.simple_tentacle",
-                  "pitchipoy.super_face": "faces.super_face",
-                  "pitchipoy.super_palm": "limbs.super_palm",
-                  "pitchipoy.super_copy": "basic.super_copy",
-                  "pitchipoy.tentacle": "",
-                  "palm": "limbs.super_palm",
-                  "basic.copy": "basic.super_copy",
-                  "biped.arm": "",
-                  "biped.leg": "",
-                  "finger": "",
-                  "neck_short": "",
-                  "misc.delta": "",
-                  "spine": ""
-                  }
+outdated_types = {
+    "pitchipoy.limbs.super_limb": "limbs.super_limb",
+    "pitchipoy.limbs.super_arm": "limbs.super_limb",
+    "pitchipoy.limbs.super_leg": "limbs.super_limb",
+    "pitchipoy.limbs.super_front_paw": "limbs.super_limb",
+    "pitchipoy.limbs.super_rear_paw": "limbs.super_limb",
+    "pitchipoy.limbs.super_finger": "limbs.super_finger",
+    "pitchipoy.super_torso_turbo": "spines.super_spine",
+    "pitchipoy.simple_tentacle": "limbs.simple_tentacle",
+    "pitchipoy.super_face": "faces.super_face",
+    "pitchipoy.super_palm": "limbs.super_palm",
+    "pitchipoy.super_copy": "basic.super_copy",
+    "pitchipoy.tentacle": "",
+    "palm": "limbs.super_palm",
+    "basic.copy": "basic.super_copy",
+    "biped.arm": "",
+    "biped.leg": "",
+    "finger": "",
+    "neck_short": "",
+    "misc.delta": "",
+    "spine": "",
+}
 
 
 def get_rigforge_type(pose_bone: PoseBone) -> str:
-    rigforge_type = pose_bone.rigforge_type  # noqa
+    rigforge_type = pose_bone.rigforge_type
     return rigforge_type.replace(" ", "")
 
 
 def get_rigforge_params(pose_bone: PoseBone) -> Any:
-    return pose_bone.rigforge_parameters  # noqa
+    return pose_bone.rigforge_parameters
 
 
-def get_rigforge_colors(arm: Armature) -> IdPropSequence['RigifyColorSet']:
-    return arm.rigforge_colors  # noqa
+def get_rigforge_colors(arm: Armature) -> IdPropSequence["RigforgeColorSet"]:
+    return arm.rigforge_colors
 
 
-def get_rigforge_target_rig(arm: Armature) -> Optional[ArmatureObject]:
-    return arm.rigforge_target_rig  # noqa
+def get_rigforge_target_rig(arm: Armature) -> ArmatureObject | None:
+    return arm.rigforge_target_rig
 
 
 def get_rigforge_rig_basename(arm: Armature) -> str:
-    return arm.rigforge_rig_basename  # noqa
+    return arm.rigforge_rig_basename
 
 
 def get_rigforge_mirror_widgets(arm: Armature) -> bool:
-    return arm.rigforge_mirror_widgets  # noqa
+    return arm.rigforge_mirror_widgets
 
 
 def get_rigforge_force_widget_update(arm: Armature) -> bool:
-    return arm.rigforge_force_widget_update  # noqa
+    return arm.rigforge_force_widget_update
 
 
-def get_rigforge_finalize_script(arm: Armature) -> Optional[bpy.types.Text]:
-    return arm.rigforge_finalize_script  # noqa
+def get_rigforge_finalize_script(arm: Armature) -> bpy.types.Text | None:
+    return arm.rigforge_finalize_script
 
 
 def is_rig_base_bone(obj: Object, name):
@@ -95,7 +109,7 @@ def is_valid_metarig(context, *, allow_needs_upgrade=False):
     obj = context.object
     if not context.object:
         return False
-    if obj.type != 'ARMATURE' or obj.data.get("rig_id") is not None:
+    if obj.type != "ARMATURE" or obj.data.get("rig_id") is not None:
         return False
     return allow_needs_upgrade or not metarig_needs_upgrade(context.object)
 
@@ -121,12 +135,12 @@ def upgrade_metarig_types(metarig: Object, revert=False):
 
             parameters = get_rigforge_params(bone)
 
-            if 'leg' in rig_type:
-                parameters.limb_type = 'leg'
-            if 'arm' in rig_type:
-                parameters.limb_type = 'arm'
-            if 'paw' in rig_type:
-                parameters.limb_type = 'paw'
+            if "leg" in rig_type:
+                parameters.limb_type = "leg"
+            if "arm" in rig_type:
+                parameters.limb_type = "arm"
+            if "paw" in rig_type:
+                parameters.limb_type = "paw"
             if rig_type == "basic.copy":
                 parameters.make_widget = False
 
@@ -185,8 +199,14 @@ def resolve_layer_names(layers):
 
 
 def upgrade_metarig_layers(metarig: ArmatureObject):
-    from .layers import (REFS_LIST_SUFFIX, DEF_COLLECTION, MCH_COLLECTION, ORG_COLLECTION, ROOT_COLLECTION,
-                         ensure_collection_uid)
+    from .layers import (
+        DEF_COLLECTION,
+        MCH_COLLECTION,
+        ORG_COLLECTION,
+        REFS_LIST_SUFFIX,
+        ROOT_COLLECTION,
+        ensure_collection_uid,
+    )
 
     arm = metarig.data
 
@@ -194,11 +214,16 @@ def upgrade_metarig_layers(metarig: ArmatureObject):
     coll_table = {}
 
     for coll in arm.collections_all:
-        if m := re.match(r'^Layer (\d+)', coll.name):
+        if m := re.match(r"^Layer (\d+)", coll.name):
             coll_table[int(m[1]) - 1] = coll
 
     # Assign names to special layers if they exist
-    special_layers = {28: ROOT_COLLECTION, 29: DEF_COLLECTION, 30: MCH_COLLECTION, 31: ORG_COLLECTION}
+    special_layers = {
+        28: ROOT_COLLECTION,
+        29: DEF_COLLECTION,
+        30: MCH_COLLECTION,
+        31: ORG_COLLECTION,
+    }
 
     for idx, name in special_layers.items():
         if coll := coll_table.get(idx):
@@ -267,16 +292,16 @@ def upgrade_metarig_layers(metarig: ArmatureObject):
     # Convert the layer references in rig component parameters
     default_layers = [i == 1 for i in range(32)]
     default_map = {
-        'faces.super_face': ['primary', 'secondary'],
-        'limbs.arm': ['fk', 'tweak'],
-        'limbs.front_paw': ['fk', 'tweak'],
-        'limbs.leg': ['fk', 'tweak'],
-        'limbs.paw': ['fk', 'tweak'],
-        'limbs.rear_paw': ['fk', 'tweak'],
-        'limbs.simple_tentacle': ['tweak'],
-        'limbs.super_finger': ['tweak'],
-        'limbs.super_limb': ['fk', 'tweak'],
-        'spines.basic_spine': ['fk', 'tweak'],
+        "faces.super_face": ["primary", "secondary"],
+        "limbs.arm": ["fk", "tweak"],
+        "limbs.front_paw": ["fk", "tweak"],
+        "limbs.leg": ["fk", "tweak"],
+        "limbs.paw": ["fk", "tweak"],
+        "limbs.rear_paw": ["fk", "tweak"],
+        "limbs.simple_tentacle": ["tweak"],
+        "limbs.super_finger": ["tweak"],
+        "limbs.super_limb": ["fk", "tweak"],
+        "spines.basic_spine": ["fk", "tweak"],
     }
 
     for pose_bone in metarig.pose.bones:
@@ -289,7 +314,11 @@ def upgrade_metarig_layers(metarig: ArmatureObject):
                 params[prop_name] = default_layers
 
         for prop_name, prop_value in list(params.items()):
-            if prop_name.endswith("_layers") and isinstance(prop_value, IDPropertyArray) and len(prop_value) == 32:
+            if (
+                prop_name.endswith("_layers")
+                and isinstance(prop_value, IDPropertyArray)
+                and len(prop_value) == 32
+            ):
                 entries = []
 
                 for i, show in enumerate(prop_value.to_list()):
@@ -308,7 +337,8 @@ def upgrade_metarig_layers(metarig: ArmatureObject):
 # Misc
 ##############################################
 
-def rig_is_child(rig: 'BaseRig', parent: Optional['BaseRig'], *, strict=False):
+
+def rig_is_child(rig: "BaseRig", parent: Optional["BaseRig"], *, strict=False):
     """
     Checks if the rig is a child of the parent.
     Unless strict is True, returns true if the rig and parent are the same.
@@ -328,7 +358,7 @@ def rig_is_child(rig: 'BaseRig', parent: Optional['BaseRig'], *, strict=False):
     return False
 
 
-def get_parent_rigs(rig: 'BaseRig') -> list['BaseRig']:
+def get_parent_rigs(rig: "BaseRig") -> list["BaseRig"]:
     """Returns a list containing the rig and all of its parents."""
     result = []
     while rig:
@@ -338,17 +368,16 @@ def get_parent_rigs(rig: 'BaseRig') -> list['BaseRig']:
 
 
 def get_resource(resource_name):
-    """ Fetches a rig module by name, and returns it.
-    """
+    """Fetches a rig module by name, and returns it."""
     module = importlib.import_module(resource_name)
     importlib.reload(module)
     return module
 
 
 def connected_children_names(obj: ArmatureObject, bone_name: str) -> list[str]:
-    """ Returns a list of bone names (in order) of the bones that form a single
-        connected chain starting with the given bone as a parent.
-        If there is a connected branch, the list stops there.
+    """Returns a list of bone names (in order) of the bones that form a single
+    connected chain starting with the given bone as a parent.
+    If there is a connected branch, the list stops there.
     """
     bone = obj.data.bones[bone_name]
     names = []
@@ -372,8 +401,7 @@ def connected_children_names(obj: ArmatureObject, bone_name: str) -> list[str]:
 
 
 def has_connected_children(bone: Bone):
-    """ Returns true/false whether a bone has connected children or not.
-    """
+    """Returns true/false whether a bone has connected children or not."""
     t = False
     for b in bone.children:
         t = t or b.use_connect
@@ -410,22 +438,34 @@ def _format_property_value(prefix: str, value: Any, *, limit=90, indent=4) -> li
     """Format a property value assignment to lines, wrapping if too long."""
 
     if isinstance(value, tuple):
-        return wrap_list_to_lines(prefix, '()', map(repr, value), limit=limit, indent=indent)
+        return wrap_list_to_lines(
+            prefix, "()", map(repr, value), limit=limit, indent=indent
+        )
 
     if isinstance(value, list):
-        return wrap_list_to_lines(prefix, '[]', map(repr, value), limit=limit, indent=indent)
+        return wrap_list_to_lines(
+            prefix, "[]", map(repr, value), limit=limit, indent=indent
+        )
 
     return [prefix + repr(value)]
 
 
-def _generate_properties(lines, prefix, obj: bpy_struct, base_class: type, *,
-                         defaults: Optional[dict[str, Any]] = None,
-                         objects: Optional[dict[Any, str]] = None):
-    obj_rna: bpy.types.Struct = type(obj).bl_rna  # noqa
-    base_rna: bpy.types.Struct = base_class.bl_rna  # noqa
+def _generate_properties(
+    lines,
+    prefix,
+    obj: bpy_struct,
+    base_class: type,
+    *,
+    defaults: dict[str, Any] | None = None,
+    objects: dict[Any, str] | None = None,
+):
+    obj_rna: bpy.types.Struct = type(obj).bl_rna
+    base_rna: bpy.types.Struct = base_class.bl_rna
 
     defaults = defaults or {}
-    block_props = set(prop.identifier for prop in base_rna.properties) - set(defaults.keys())
+    block_props = set(prop.identifier for prop in base_rna.properties) - set(
+        defaults.keys()
+    )
 
     for prop in obj_rna.properties:
         if prop.identifier not in block_props and not prop.is_readonly:
@@ -437,9 +477,13 @@ def _generate_properties(lines, prefix, obj: bpy_struct, base_class: type, *,
 
             if isinstance(cur_value, bpy_struct):
                 if objects and cur_value in objects:
-                    lines.append('%s.%s = %s' % (prefix, prop.identifier, objects[cur_value]))
+                    lines.append(
+                        "%s.%s = %s" % (prefix, prop.identifier, objects[cur_value])
+                    )
             else:
-                lines += _format_property_value('%s.%s = ' % (prefix, prop.identifier), cur_value)
+                lines += _format_property_value(
+                    "%s.%s = " % (prefix, prop.identifier), cur_value
+                )
 
 
 def write_metarig_widgets(obj: Object):
@@ -460,7 +504,7 @@ def write_metarig_widgets(obj: Object):
 
         if ident in id_set:
             for i in count(1):
-                if ident + '_' + str(i) not in id_set:
+                if ident + "_" + str(i) not in id_set:
                     break
 
         id_set.add(ident)
@@ -471,8 +515,9 @@ def write_metarig_widgets(obj: Object):
     return widget_map, code
 
 
-def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
-                  groups=False, widgets=False):
+def write_metarig(
+    obj: ArmatureObject, layers=False, func_name="create", groups=False, widgets=False
+):
     """
     Write a metarig as a python script, this rig is to have all info needed for
     generating the real rig with rigforge.
@@ -498,13 +543,13 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
     # Start of the metarig function
     code.append("def %s(obj):  # noqa" % func_name)
     code.append("    # generated by rigforge.utils.write_metarig")
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     code.append("    bpy.ops.object.mode_set(mode='EDIT')")
     code.append("    arm = obj.data")
 
     arm = obj.data
 
-    # Rigify bone group colors info
+    # Rigforge bone group colors info
     rigforge_colors = get_rigforge_colors(arm)
 
     if groups and len(rigforge_colors) > 0:
@@ -517,31 +562,51 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
             normal = rigforge_colors[i].normal
             select = rigforge_colors[i].select
             standard_colors_lock = rigforge_colors[i].standard_colors_lock
-            code.append('    arm.rigforge_colors[' + str(i) + '].name = "' + name + '"')
-            code.append('    arm.rigforge_colors[' + str(i)
-                        + '].active = Color((%.4f, %.4f, %.4f))' % tuple(active[:]))
-            code.append('    arm.rigforge_colors[' + str(i)
-                        + '].normal = Color((%.4f, %.4f, %.4f))' % tuple(normal[:]))
-            code.append('    arm.rigforge_colors[' + str(i)
-                        + '].select = Color((%.4f, %.4f, %.4f))' % tuple(select[:]))
-            code.append('    arm.rigforge_colors[' + str(i)
-                        + '].standard_colors_lock = ' + str(standard_colors_lock))
+            code.append("    arm.rigforge_colors[" + str(i) + '].name = "' + name + '"')
+            code.append(
+                "    arm.rigforge_colors["
+                + str(i)
+                + "].active = Color((%.4f, %.4f, %.4f))" % tuple(active[:])
+            )
+            code.append(
+                "    arm.rigforge_colors["
+                + str(i)
+                + "].normal = Color((%.4f, %.4f, %.4f))" % tuple(normal[:])
+            )
+            code.append(
+                "    arm.rigforge_colors["
+                + str(i)
+                + "].select = Color((%.4f, %.4f, %.4f))" % tuple(select[:])
+            )
+            code.append(
+                "    arm.rigforge_colors["
+                + str(i)
+                + "].standard_colors_lock = "
+                + str(standard_colors_lock)
+            )
 
-    # Rigify collection layout info
+    # Rigforge collection layout info
     if layers:
         collection_attrs = {
-            'ui_row': 0, 'ui_title': '', 'sel_set': False, 'color_set_id': 0
+            "ui_row": 0,
+            "ui_title": "",
+            "sel_set": False,
+            "color_set_id": 0,
         }
 
-        code.append('\n    bone_collections = {}')
+        code.append("\n    bone_collections = {}")
 
-        code.append('\n    for bcoll in list(arm.collections_all):'
-                    '\n        arm.collections.remove(bcoll)\n')
+        code.append(
+            "\n    for bcoll in list(arm.collections_all):"
+            "\n        arm.collections.remove(bcoll)\n"
+        )
 
-        args = ', '.join(f'{k}={repr(v)}' for k, v in collection_attrs.items())
+        args = ", ".join(f"{k}={v!r}" for k, v in collection_attrs.items())
 
         code.append(f"    def add_bone_collection(name, *, parent=None, {args}):")
-        code.append(f"        new_bcoll = arm.collections.new(name, parent=bone_collections.get(parent))")
+        code.append(
+            "        new_bcoll = arm.collections.new(name, parent=bone_collections.get(parent))"
+        )
         for k, _v in collection_attrs.items():
             code.append(f"        new_bcoll.rigforge_{k} = {k}")
         code.append("        bone_collections[name] = new_bcoll")
@@ -566,7 +631,7 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
             for k, v in collection_attrs.items():
                 value = getattr(bcoll, "rigforge_" + k)
                 if value != v:
-                    args.append(f"{k}={repr(value)}")
+                    args.append(f"{k}={value!r}")
             code.append(f"    add_bone_collection({', '.join(args)})")
 
     # write parents first
@@ -578,14 +643,18 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
 
     # noinspection SpellCheckingInspection
     extra_props = {
-        'bbone_segments': 1,
-        'bbone_mapping_mode': 'STRAIGHT',
-        'bbone_easein': 1, 'bbone_easeout': 1,
-        'bbone_rollin': 0, 'bbone_rollout': 0,
-        'bbone_curveinx': 0, 'bbone_curveinz': 0,
-        'bbone_curveoutx': 0, 'bbone_curveoutz': 0,
-        'bbone_scalein': Vector((1, 1, 1)),
-        'bbone_scaleout': Vector((1, 1, 1)),
+        "bbone_segments": 1,
+        "bbone_mapping_mode": "STRAIGHT",
+        "bbone_easein": 1,
+        "bbone_easeout": 1,
+        "bbone_rollin": 0,
+        "bbone_rollout": 0,
+        "bbone_curveinx": 0,
+        "bbone_curveinz": 0,
+        "bbone_curveoutx": 0,
+        "bbone_curveoutz": 0,
+        "bbone_scalein": Vector((1, 1, 1)),
+        "bbone_scaleout": Vector((1, 1, 1)),
     }
 
     for bone_name in bones:
@@ -595,17 +664,19 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
         code.append("    bone.tail = %.4f, %.4f, %.4f" % bone.tail.to_tuple(4))
         code.append("    bone.roll = %.4f" % bone.roll)
         code.append("    bone.use_connect = %s" % str(bone.use_connect))
-        if bone.inherit_scale != 'FULL':
+        if bone.inherit_scale != "FULL":
             code.append("    bone.inherit_scale = %r" % str(bone.inherit_scale))
         if bone.parent:
-            code.append("    bone.parent = arm.edit_bones[bones[%r]]" % bone.parent.name)
+            code.append(
+                "    bone.parent = arm.edit_bones[bones[%r]]" % bone.parent.name
+            )
         for prop, default in extra_props.items():
             value = getattr(bone, prop)
             if value != default:
                 code.append(f"    bone.{prop} = {value!r}")
         code.append("    bones[%r] = bone.name" % bone.name)
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
     code.append("")
     code.append("    bpy.ops.object.mode_set(mode='OBJECT')")
 
@@ -627,7 +698,7 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
         code.append("    pbone.lock_scale = %s" % str(tuple(pbone.lock_scale)))
         code.append("    pbone.rotation_mode = %r" % pbone.rotation_mode)
         if layers and len(pbone.bone.collections):
-            args = ', '.join(f"'{bcoll.name}'" for bcoll in pbone.bone.collections)
+            args = ", ".join(f"'{bcoll.name}'" for bcoll in pbone.bone.collections)
             code.append(f"    assign_bone_collections(pbone, {args})")
 
         # Rig type parameters
@@ -635,56 +706,64 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
             param = _get_property_value(rigforge_parameters, param_name)
 
             if isinstance(param, bpy_prop_collection):
-                if layers and param_name.endswith(REFS_LIST_SUFFIX) and is_collection_ref_list_prop(param):
+                if (
+                    layers
+                    and param_name.endswith(REFS_LIST_SUFFIX)
+                    and is_collection_ref_list_prop(param)
+                ):
                     bcoll_set = [item.find_collection() for item in param]
                     bcoll_set = [bcoll for bcoll in bcoll_set if bcoll is not None]
                     if len(bcoll_set) > 0:
-                        args = ', '.join(f"'{bcoll.name}'" for bcoll in bcoll_set)
-                        code.append(f"    assign_bone_collection_refs("
-                                    f"pbone.rigforge_parameters, '{param_name[:-10]}', {args})")
+                        args = ", ".join(f"'{bcoll.name}'" for bcoll in bcoll_set)
+                        code.append(
+                            f"    assign_bone_collection_refs("
+                            f"pbone.rigforge_parameters, '{param_name[:-10]}', {args})"
+                        )
                 continue
 
             if param is not None:
                 code.append("    try:")
                 code += _format_property_value(
-                    f"        pbone.rigforge_parameters.{param_name} = ", param)
+                    f"        pbone.rigforge_parameters.{param_name} = ", param
+                )
                 code.append("    except AttributeError:")
                 code.append("        pass")
 
         # Custom properties
         custom_properties = {
-            property_name: value for property_name, value in pbone.items()
+            property_name: value
+            for property_name, value in pbone.items()
             if property_name not in pbone.bl_rna.properties.keys()
             and type(pbone[property_name]) in (float, int)
         }
 
         if custom_properties:
-            code.append('    # custom properties')
+            code.append("    # custom properties")
 
         for custom_property, current_value in custom_properties.items():
             props_data = pbone.id_properties_ui(custom_property).as_dict()
-            code.append(f"    rna_idprop_ui_create(")
-            code.append(f"        pbone,")
+            code.append("    rna_idprop_ui_create(")
+            code.append("        pbone,")
             code.append(f"        {custom_property!r},")
             code.append(f"        default={props_data['default']!r},")
-            if 'min' in props_data:
+            if "min" in props_data:
                 code.append(f"        min={props_data['min']},")
-            if 'max' in props_data:
+            if "max" in props_data:
                 code.append(f"        max={props_data['max']},")
-            if 'soft_min' in props_data:
+            if "soft_min" in props_data:
                 code.append(f"        soft_min={props_data['soft_min']},")
-            if 'soft_max' in props_data:
+            if "soft_max" in props_data:
                 code.append(f"        soft_max={props_data['soft_max']},")
-            if 'subtype' in props_data:
+            if "subtype" in props_data:
                 code.append(f"        subtype={props_data['subtype']!r},")
-            if 'description' in props_data:
+            if "description" in props_data:
                 code.append(f"        description={props_data['description']!r},")
-            if 'precision' in props_data:
+            if "precision" in props_data:
                 code.append(f"        precision={props_data['precision']},")
-            if 'step' in props_data:
+            if "step" in props_data:
                 code.append(f"        step={props_data['step']},")
-            code.append(f"    )")
-            if props_data['default'] != current_value:
+            code.append("    )")
+            if props_data["default"] != current_value:
                 code.append(f"    pbone[{custom_property!r}] = {current_value}")
 
         # Constraints
@@ -692,31 +771,40 @@ def write_metarig(obj: ArmatureObject, layers=False, func_name="create",
             code.append("    con = pbone.constraints.new(%r)" % con.type)
             code.append("    con.name = %r" % con.name)
             # Add target first because of target_space handling
-            if con.type == 'ARMATURE':
+            if con.type == "ARMATURE":
                 for tgt in con.targets:
                     code.append("    tgt = con.targets.new()")
                     code.append("    tgt.target = obj")
                     code.append("    tgt.subtarget = %r" % tgt.subtarget)
                     code.append("    tgt.weight = %.3f" % tgt.weight)
-            elif getattr(con, 'target', None) == obj:
+            elif getattr(con, "target", None) == obj:
                 code.append("    con.target = obj")
             # Generic properties
             _generate_properties(
-                code, "    con", con, Constraint,
+                code,
+                "    con",
+                con,
+                Constraint,
                 defaults={
-                    'owner_space': 'WORLD', 'target_space': 'WORLD',
-                    'mute': False, 'influence': 1.0,
-                    'target': obj,
+                    "owner_space": "WORLD",
+                    "target_space": "WORLD",
+                    "mute": False,
+                    "influence": 1.0,
+                    "target": obj,
                 },
-                objects={obj: 'obj'},
+                objects={obj: "obj"},
             )
         # Custom widgets
         if widgets and pbone.custom_shape:
             widget_id = widget_map[pbone.custom_shape]
             code.append("    if %r not in widget_map:" % widget_id)
-            code.append(("        widget_map[%r] = create_%s_widget(obj, pbone.name, "
-                         "widget_name=%r, widget_force_new=True)")
-                        % (widget_id, widget_id, pbone.custom_shape.name))
+            code.append(
+                (
+                    "        widget_map[%r] = create_%s_widget(obj, pbone.name, "
+                    "widget_name=%r, widget_force_new=True)"
+                )
+                % (widget_id, widget_id, pbone.custom_shape.name)
+            )
             code.append("    pbone.custom_shape = widget_map[%r]" % widget_id)
 
     code.append("\n    bpy.ops.object.mode_set(mode='EDIT')")

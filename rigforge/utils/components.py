@@ -2,15 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from typing import Optional
-from mathutils import Vector, Matrix
 
-from .naming import make_derived_name
-from .bones import put_bone, copy_bone_position, align_bone_orientation
-from .widgets_basic import create_pivot_widget
-from .misc import force_lazy, OptionalLazy
+from mathutils import Matrix, Vector
 
 from ..base_rig import BaseRig, RigComponent
+from .bones import align_bone_orientation, copy_bone_position, put_bone
+from .misc import OptionalLazy, force_lazy
+from .naming import make_derived_name
+from .widgets_basic import create_pivot_widget
 
 
 class CustomPivotControl(RigComponent):
@@ -24,17 +23,27 @@ class CustomPivotControl(RigComponent):
     mch: str
 
     def __init__(
-        self, rig: BaseRig, id_name: str, org_bone: str, *,
-        name: Optional[str] = None, parent: OptionalLazy[str] = None,
-        position: Optional[Vector] = None, matrix: Optional[Matrix] = None,
-        scale: float = 1.0, scale_mch: Optional[float] = None,
-        move_to: OptionalLazy[str] = None, align_to: OptionalLazy[str] = None,
+        self,
+        rig: BaseRig,
+        id_name: str,
+        org_bone: str,
+        *,
+        name: str | None = None,
+        parent: OptionalLazy[str] = None,
+        position: Vector | None = None,
+        matrix: Matrix | None = None,
+        scale: float = 1.0,
+        scale_mch: float | None = None,
+        move_to: OptionalLazy[str] = None,
+        align_to: OptionalLazy[str] = None,
         snap_to: OptionalLazy[str] = None,
-        widget_axis: float = 1.5, widget_cap: float = 1.0, widget_square: bool = True,
+        widget_axis: float = 1.5,
+        widget_cap: float = 1.0,
+        widget_square: bool = True,
     ):
         super().__init__(rig)
 
-        assert rig.generator.stage == 'generate_bones'
+        assert rig.generator.stage == "generate_bones"
 
         self.bones = rig.bones
         self.id_name = id_name
@@ -49,7 +58,7 @@ class CustomPivotControl(RigComponent):
         self.widget_cap = widget_cap
         self.widget_square = widget_square
 
-        name = name or make_derived_name(org_bone, 'ctrl', '_pivot')
+        name = name or make_derived_name(org_bone, "ctrl", "_pivot")
 
         self.do_make_bones(org_bone, name, position, matrix)
 
@@ -61,12 +70,15 @@ class CustomPivotControl(RigComponent):
     def output(self):
         return self.mch
 
-    def do_make_bones(self, org: str, name: str,
-                      position: Optional[Vector], matrix: Optional[Matrix]):
-        self.bones.ctrl[self.id_name] = self.ctrl =\
-            self.copy_bone(org, name, parent=not self.parent, scale=self.scale)
-        self.bones.mch[self.id_name] = self.mch =\
-            self.copy_bone(org, make_derived_name(name, 'mch'), scale=self.scale_mch)
+    def do_make_bones(
+        self, org: str, name: str, position: Vector | None, matrix: Matrix | None
+    ):
+        self.bones.ctrl[self.id_name] = self.ctrl = self.copy_bone(
+            org, name, parent=not self.parent, scale=self.scale
+        )
+        self.bones.mch[self.id_name] = self.mch = self.copy_bone(
+            org, make_derived_name(name, "mch"), scale=self.scale_mch
+        )
 
         if position or matrix:
             put_bone(self.obj, self.ctrl, position, matrix=matrix)
@@ -95,8 +107,14 @@ class CustomPivotControl(RigComponent):
 
     def rig_bones(self):
         self.make_constraint(
-            self.mch, 'COPY_LOCATION', self.ctrl, space='LOCAL', invert_xyz=(True,) * 3)
+            self.mch, "COPY_LOCATION", self.ctrl, space="LOCAL", invert_xyz=(True,) * 3
+        )
 
     def generate_widgets(self):
-        create_pivot_widget(self.obj, self.ctrl, axis_size=self.widget_axis,
-                            cap_size=self.widget_cap, square=self.widget_square)
+        create_pivot_widget(
+            self.obj,
+            self.ctrl,
+            axis_size=self.widget_axis,
+            cap_size=self.widget_cap,
+            square=self.widget_square,
+        )

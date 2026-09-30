@@ -3,17 +3,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
-
 from bpy.types import PoseBone
 from mathutils import Quaternion
 
-from ..skin_nodes import BaseSkinNode
+from ....base_rig import stage
+from ....utils.misc import Lazy, LazyRef
 from ....utils.naming import make_derived_name
 from ....utils.widgets_basic import create_cube_widget
-from ....utils.misc import LazyRef, Lazy
-
-from ....base_rig import stage
-
+from ..skin_nodes import BaseSkinNode
 from ..skin_parents import ControlBoneParentArmature, ControlBoneParentBase
 from ..skin_rigs import BaseSkinRig
 
@@ -39,7 +36,7 @@ class Rig(BaseSkinRig):
 
         # Choose the parent bone for the child nodes
         if self.make_control:
-            self.input_ref = LazyRef(self.bones.ctrl, 'master')
+            self.input_ref = LazyRef(self.bones.ctrl, "master")
         else:
             self.input_ref = self.base_bone
 
@@ -51,14 +48,17 @@ class Rig(BaseSkinRig):
     ####################################################
     # Control Nodes
 
-    def build_control_node_parent(self, node: BaseSkinNode,
-                                  parent_bone: str) -> ControlBoneParentBase:
+    def build_control_node_parent(
+        self, node: BaseSkinNode, parent_bone: str
+    ) -> ControlBoneParentBase:
         # Parent nodes to the control bone, but isolate rotation and scale
         return ControlBoneParentArmature(
-            self, node, bones=[self.input_ref],
+            self,
+            node,
+            bones=[self.input_ref],
             orientation=self.transform_orientation,
-            copy_scale=LazyRef(self.bones.mch, 'template'),
-            copy_rotation=LazyRef(self.bones.mch, 'template'),
+            copy_scale=LazyRef(self.bones.mch, "template"),
+            copy_rotation=LazyRef(self.bones.mch, "template"),
         )
 
     def get_child_chain_parent(self, rig: BaseSkinRig, parent_bone: str) -> str:
@@ -70,17 +70,12 @@ class Rig(BaseSkinRig):
     # BONES
 
     class CtrlBones(BaseSkinRig.CtrlBones):
-        master: str                    # Master control
+        master: str  # Master control
 
     class MchBones(BaseSkinRig.MchBones):
-        template: str                  # Bone used to lock rotation and scale of child nodes.
+        template: str  # Bone used to lock rotation and scale of child nodes.
 
-    bones: BaseSkinRig.ToplevelBones[
-        str,
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        str
-    ]
+    bones: BaseSkinRig.ToplevelBones[str, "Rig.CtrlBones", "Rig.MchBones", str]
 
     ####################################################
     # Master control
@@ -89,7 +84,8 @@ class Rig(BaseSkinRig):
     def make_master_control(self):
         if self.make_control:
             self.bones.ctrl.master = self.copy_bone(
-                self.bones.org, make_derived_name(self.bones.org, 'ctrl'), parent=True)
+                self.bones.org, make_derived_name(self.bones.org, "ctrl"), parent=True
+            )
 
     @stage.configure_bones
     def configure_master_control(self):
@@ -107,11 +103,16 @@ class Rig(BaseSkinRig):
     @stage.generate_bones
     def make_mch_template_bone(self):
         self.bones.mch.template = self.copy_bone(
-            self.bones.org, make_derived_name(self.bones.org, 'mch', '_orient'), parent=True)
+            self.bones.org,
+            make_derived_name(self.bones.org, "mch", "_orient"),
+            parent=True,
+        )
 
     @stage.parent_bones
     def parent_mch_template_bone(self):
-        self.set_bone_parent(self.bones.mch.template, self.get_child_chain_parent_next(self))
+        self.set_bone_parent(
+            self.bones.mch.template, self.get_child_chain_parent_next(self)
+        )
 
     ####################################################
     # ORG bone
@@ -128,7 +129,7 @@ class Rig(BaseSkinRig):
         params.make_control = bpy.props.BoolProperty(
             name="Control",
             default=True,
-            description="Create a control bone for the copy"
+            description="Create a control bone for the copy",
         )
 
     @classmethod
@@ -138,4 +139,5 @@ class Rig(BaseSkinRig):
 
 def create_sample(obj):
     from rigforge.rigs.basic.super_copy import create_sample as inner
-    obj.pose.bones[inner(obj)["Bone"]].rigforge_type = 'skin.transform.basic'
+
+    obj.pose.bones[inner(obj)["Bone"]].rigforge_type = "skin.transform.basic"

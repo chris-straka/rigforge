@@ -2,39 +2,38 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from typing import TYPE_CHECKING, List, Sequence, Optional
-
-import bpy
-from bpy.props import StringProperty
-from bpy.app.translations import pgettext_rpt as rpt_
-
+import importlib
 import os
 import re
-import importlib
 import traceback
-from zipfile import ZipFile
+from collections.abc import Sequence
 from shutil import rmtree
+from typing import TYPE_CHECKING
+from zipfile import ZipFile
+
+import bpy
+from bpy.app.translations import pgettext_rpt as rpt_
+from bpy.props import StringProperty
 
 from . import feature_sets
 
 if TYPE_CHECKING:
-    from . import RigifyFeatureSets
+    from . import RigforgeFeatureSets
 
 
-DEFAULT_NAME = 'rigforge'
+DEFAULT_NAME = "rigforge"
 
 # noinspection PyProtectedMember
 INSTALL_PATH = feature_sets._install_path()
-NAME_PREFIX = feature_sets.__name__.split('.')
+NAME_PREFIX = feature_sets.__name__.split(".")
 
 # noinspection SpellCheckingInspection
 PROMOTED_FEATURE_SETS = [
     {
         "name": "Experimental Rigs by Alexander Gavrilov",
         "author": "Alexander Gavrilov",
-        "description":
-            "Experimental and/or niche rigs made by a Rigify maintainer.\n"
-            "Includes a BlenRig-like spine, Body IK (knee & elbow IK), jiggles, skin transforms, etc.",
+        "description": "Experimental and/or niche rigs made by a Rigify maintainer.\n"
+        "Includes a BlenRig-like spine, Body IK (knee & elbow IK), jiggles, skin transforms, etc.",
         "link": "https://github.com/angavrilov/angavrilov-rigs",
     },
     {
@@ -43,7 +42,7 @@ PROMOTED_FEATURE_SETS = [
         "description": "Collection of original legacy Rigify rigs minimally ported to the modern Rigify",
         "warning": "This feature set is maintained at the bare minimal level",
         "link": "https://github.com/cessen/cessen_rigforge_ext",
-    }
+    },
 ]
 
 
@@ -57,7 +56,7 @@ def get_install_path(*, create=False):
     return INSTALL_PATH
 
 
-def get_installed_modules_names() -> List[str]:
+def get_installed_modules_names() -> list[str]:
     """Return a list of module names of all feature sets in the file system."""
     features_path = get_install_path()
     if not features_path:
@@ -66,7 +65,7 @@ def get_installed_modules_names() -> List[str]:
     sets = []
 
     for fs in os.listdir(features_path):
-        if fs and fs[0] != '.' and fs != DEFAULT_NAME:
+        if fs and fs[0] != "." and fs != DEFAULT_NAME:
             fs_path = os.path.join(features_path, fs)
             if os.path.isdir(fs_path):
                 sets.append(fs)
@@ -74,17 +73,20 @@ def get_installed_modules_names() -> List[str]:
     return sets
 
 
-def get_prefs_feature_sets() -> Sequence['RigifyFeatureSets']:
-    from . import RigifyPreferences
-    return RigifyPreferences.get_instance().rigforge_feature_sets
+def get_prefs_feature_sets() -> Sequence["RigforgeFeatureSets"]:
+    from . import RigforgePreferences
+
+    return RigforgePreferences.get_instance().rigforge_feature_sets
 
 
-def get_enabled_modules_names() -> List[str]:
+def get_enabled_modules_names() -> list[str]:
     """Return a list of module names of all enabled feature sets."""
     installed_module_names = get_installed_modules_names()
     rigforge_feature_sets = get_prefs_feature_sets()
 
-    enabled_module_names = {fs.module_name for fs in rigforge_feature_sets if fs.enabled}
+    enabled_module_names = {
+        fs.module_name for fs in rigforge_feature_sets if fs.enabled
+    }
 
     return [name for name in installed_module_names if name in enabled_module_names]
 
@@ -109,7 +111,7 @@ def mark_feature_set_exception(module_name: str):
 
 
 def get_module(feature_set: str):
-    return importlib.import_module('.'.join([*NAME_PREFIX, feature_set]))
+    return importlib.import_module(".".join([*NAME_PREFIX, feature_set]))
 
 
 def get_module_safe(feature_set: str):
@@ -134,7 +136,7 @@ def get_dir_path(feature_set: str, *extra_items: list[str]):
 def get_info_dict(feature_set: str):
     module = get_module_safe(feature_set)
 
-    if module and hasattr(module, 'rigforge_info'):
+    if module and hasattr(module, "rigforge_info"):
         data = module.rigforge_info
         if isinstance(data, dict):
             return data
@@ -142,9 +144,13 @@ def get_info_dict(feature_set: str):
     return {}
 
 
-def call_function_safe(module_name: str, func_name: str,
-                       args: Optional[list] = None, kwargs: Optional[dict] = None,
-                       mark_error=False):
+def call_function_safe(
+    module_name: str,
+    func_name: str,
+    args: list | None = None,
+    kwargs: dict | None = None,
+    mark_error=False,
+):
     module = get_module_safe(module_name)
 
     if module:
@@ -155,8 +161,10 @@ def call_function_safe(module_name: str, func_name: str,
             try:
                 return func(*(args or []), **(kwargs or {}))
             except Exception:
-                print(f"Rigify Error: Could not call function '{func_name}' of feature set "
-                      f"'{module_name}': exception occurred.\n")
+                print(
+                    f"Rigforge Error: Could not call function '{func_name}' of feature set "
+                    f"'{module_name}': exception occurred.\n"
+                )
                 traceback.print_exc()
                 print("")
 
@@ -167,26 +175,28 @@ def call_function_safe(module_name: str, func_name: str,
 
 
 def call_register_function(feature_set: str, do_register: bool):
-    call_function_safe(feature_set, 'register' if do_register else 'unregister', mark_error=do_register)
+    call_function_safe(
+        feature_set, "register" if do_register else "unregister", mark_error=do_register
+    )
 
 
 def get_ui_name(feature_set: str):
     # Try to get user-defined name
     info = get_info_dict(feature_set)
-    if 'name' in info:
-        return info['name']
+    if "name" in info:
+        return info["name"]
 
     # Default name based on directory
-    name = re.sub(r'[_.-]', ' ', feature_set)
-    name = re.sub(r'(?<=\d) (?=\d)', '.', name)
+    name = re.sub(r"[_.-]", " ", feature_set)
+    name = re.sub(r"(?<=\d) (?=\d)", ".", name)
     return name.title()
 
 
 def feature_set_items(_scene, _context):
     """Get items for the Feature Set EnumProperty"""
     items = [
-        ('all', 'All', 'All installed feature sets and rigs bundled with Rigify'),
-        ('rigforge', 'Rigify Built-in', 'Rigs bundled with Rigify'),
+        ("all", "All", "All installed feature sets and rigs bundled with Rigforge"),
+        ("rigforge", "Rigforge Built-in", "Rigs bundled with Rigforge"),
     ]
 
     for fs in get_enabled_modules_names():
@@ -203,7 +213,7 @@ def verify_feature_set_archive(zipfile):
     data_found = False
 
     for name in zipfile.namelist():
-        parts = re.split(r'[/\\]', name)
+        parts = re.split(r"[/\\]", name)
 
         if dirname is None:
             dirname = parts[0]
@@ -211,10 +221,14 @@ def verify_feature_set_archive(zipfile):
             dirname = None
             break
 
-        if len(parts) == 2 and parts[1] == '__init__.py':
+        if len(parts) == 2 and parts[1] == "__init__.py":
             init_found = True
 
-        if len(parts) > 2 and parts[1] in {'rigs', 'metarigs'} and parts[-1] == '__init__.py':
+        if (
+            len(parts) > 2
+            and parts[1] in {"rigs", "metarigs"}
+            and parts[-1] == "__init__.py"
+        ):
             data_found = True
 
     return dirname, init_found, data_found
@@ -227,8 +241,10 @@ class DATA_OT_rigforge_add_feature_set(bpy.types.Operator):
     bl_description = "Add external feature set (rigs, metarigs, ui templates)"
     bl_options = {"REGISTER", "UNDO", "INTERNAL"}
 
-    filter_glob: StringProperty(default="*.zip", options={'HIDDEN'})
-    filepath: StringProperty(maxlen=1024, subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
+    filter_glob: StringProperty(default="*.zip", options={"HIDDEN"})
+    filepath: StringProperty(
+        maxlen=1024, subtype="FILE_PATH", options={"HIDDEN", "SKIP_SAVE"}
+    )
 
     @classmethod
     def poll(cls, context):
@@ -236,49 +252,61 @@ class DATA_OT_rigforge_add_feature_set(bpy.types.Operator):
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
+        return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        from . import RigifyPreferences
-        addon_prefs = RigifyPreferences.get_instance()
+        from . import RigforgePreferences
+
+        addon_prefs = RigforgePreferences.get_instance()
 
         rigforge_config_path = get_install_path(create=True)
 
-        with ZipFile(bpy.path.abspath(self.filepath), 'r') as zip_archive:
-            base_dirname, init_found, data_found = verify_feature_set_archive(zip_archive)
+        with ZipFile(bpy.path.abspath(self.filepath), "r") as zip_archive:
+            base_dirname, init_found, data_found = verify_feature_set_archive(
+                zip_archive
+            )
 
             if not base_dirname:
-                self.report({'ERROR'}, "The feature set archive must contain one base directory")
-                return {'CANCELLED'}
+                self.report(
+                    {"ERROR"}, "The feature set archive must contain one base directory"
+                )
+                return {"CANCELLED"}
 
             # Patch up some invalid characters to allow using 'Download ZIP' on GitHub.
-            fixed_dirname = re.sub(r'[.-]', '_', base_dirname)
+            fixed_dirname = re.sub(r"[.-]", "_", base_dirname)
 
-            if not re.fullmatch(r'[a-zA-Z][a-zA-Z_0-9]*', fixed_dirname):
-                message = rpt_("The feature set archive base directory name is not a valid "
-                               "identifier: '{:s}'").format(base_dirname)
-                self.report({'ERROR'}, message)
-                return {'CANCELLED'}
+            if not re.fullmatch(r"[a-zA-Z][a-zA-Z_0-9]*", fixed_dirname):
+                message = rpt_(
+                    "The feature set archive base directory name is not a valid "
+                    "identifier: '{:s}'"
+                ).format(base_dirname)
+                self.report({"ERROR"}, message)
+                return {"CANCELLED"}
 
             if fixed_dirname == DEFAULT_NAME:
-                message = rpt_("The name '{:s}' is not allowed for feature sets").format(DEFAULT_NAME)
-                self.report({'ERROR'}, message)
-                return {'CANCELLED'}
+                message = rpt_(
+                    "The name '{:s}' is not allowed for feature sets"
+                ).format(DEFAULT_NAME)
+                self.report({"ERROR"}, message)
+                return {"CANCELLED"}
 
             if not init_found or not data_found:
                 self.report(
-                    {'ERROR'},
-                    "The feature set archive has no rigs or metarigs, or is missing __init__.py")
-                return {'CANCELLED'}
+                    {"ERROR"},
+                    "The feature set archive has no rigs or metarigs, or is missing __init__.py",
+                )
+                return {"CANCELLED"}
 
             base_dir = os.path.join(rigforge_config_path, base_dirname)
             fixed_dir = os.path.join(rigforge_config_path, fixed_dirname)
 
             for path, name in [(base_dir, base_dirname), (fixed_dir, fixed_dirname)]:
                 if os.path.exists(path):
-                    message = rpt_("Feature set directory already exists: '{:s}'").format(name)
-                    self.report({'ERROR'}, message)
-                    return {'CANCELLED'}
+                    message = rpt_(
+                        "Feature set directory already exists: '{:s}'"
+                    ).format(name)
+                    self.report({"ERROR"}, message)
+                    return {"CANCELLED"}
 
             # Unpack the validated archive and fix the directory name if necessary
             zip_archive.extractall(rigforge_config_path)
@@ -299,7 +327,7 @@ class DATA_OT_rigforge_add_feature_set(bpy.types.Operator):
                     addon_prefs.active_feature_set_index = i
                     break
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 # noinspection PyPep8Naming
@@ -317,11 +345,12 @@ class DATA_OT_rigforge_remove_feature_set(bpy.types.Operator):
         return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
-        from . import RigifyPreferences
-        addon_prefs = RigifyPreferences.get_instance()
+        from . import RigforgePreferences
+
+        addon_prefs = RigforgePreferences.get_instance()
         feature_set_list = addon_prefs.rigforge_feature_sets
         active_idx = addon_prefs.active_feature_set_index
-        active_fs: 'RigifyFeatureSets' = feature_set_list[active_idx]
+        active_fs: RigforgeFeatureSets = feature_set_list[active_idx]
 
         # Call the 'unregister' callback of the set being removed.
         if active_fs.enabled:
@@ -344,7 +373,7 @@ class DATA_OT_rigforge_remove_feature_set(bpy.types.Operator):
         # Update active index.
         addon_prefs.active_feature_set_index -= 1
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def register():

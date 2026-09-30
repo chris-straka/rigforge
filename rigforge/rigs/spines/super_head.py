@@ -2,19 +2,17 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
-
 from itertools import count
 
-from ...utils.naming import make_derived_name
-from ...utils.bones import align_bone_orientation
-from ...utils.widgets_basic import create_circle_widget
-from ...utils.widgets_special import create_neck_bend_widget, create_neck_tweak_widget
-from ...utils.switch_parent import SwitchParentBuilder
-from ...utils.misc import map_list
+import bpy
 
 from ...base_rig import stage
-
+from ...utils.bones import align_bone_orientation
+from ...utils.misc import map_list
+from ...utils.naming import make_derived_name
+from ...utils.switch_parent import SwitchParentBuilder
+from ...utils.widgets_basic import create_circle_widget
+from ...utils.widgets_special import create_neck_bend_widget, create_neck_tweak_widget
 from .spine_rigs import BaseHeadTailRig
 
 
@@ -39,22 +37,19 @@ class Rig(BaseHeadTailRig):
     # BONES
 
     class CtrlBones(BaseHeadTailRig.CtrlBones):
-        neck: str                      # Main neck control
-        head: str                      # Main head control
-        neck_bend: str                 # Extra neck bend control for long neck
+        neck: str  # Main neck control
+        head: str  # Main head control
+        neck_bend: str  # Extra neck bend control for long neck
 
     class MchBones(BaseHeadTailRig.MchBones):
-        rot_neck: str                  # Main neck control parent for FK follow
-        rot_head: str                  # Main head control parent for FK follow
-        stretch: str                   # Long neck stretch helper
-        ik: list[str]                  # Long neck IK system
-        chain: list[str]               # Tweak parents
+        rot_neck: str  # Main neck control parent for FK follow
+        rot_head: str  # Main head control parent for FK follow
+        stretch: str  # Long neck stretch helper
+        ik: list[str]  # Long neck IK system
+        chain: list[str]  # Tweak parents
 
     bones: BaseHeadTailRig.ToplevelBones[
-        list[str],
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        list[str]
+        list[str], "Rig.CtrlBones", "Rig.MchBones", list[str]
     ]
 
     ####################################################
@@ -66,12 +61,14 @@ class Rig(BaseHeadTailRig):
         ctrl = self.bones.ctrl
 
         if self.has_neck:
-            ctrl.neck = self.make_neck_control_bone(orgs[0], 'neck', orgs[-1])
+            ctrl.neck = self.make_neck_control_bone(orgs[0], "neck", orgs[-1])
 
-        ctrl.head = self.make_head_control_bone(orgs[-1], 'head')
+        ctrl.head = self.make_head_control_bone(orgs[-1], "head")
 
         if self.long_neck:
-            ctrl.neck_bend = self.make_neck_bend_control_bone(orgs[0], 'neck_bend', ctrl.neck)
+            ctrl.neck_bend = self.make_neck_bend_control_bone(
+                orgs[0], "neck_bend", ctrl.neck
+            )
 
         self.default_prop_bone = ctrl.head
 
@@ -89,7 +86,7 @@ class Rig(BaseHeadTailRig):
 
         # Neck pivot position
         neck_bones = self.bones.org
-        if (len(neck_bones) - 1) % 2:     # odd num of neck bones (head excluded)
+        if (len(neck_bones) - 1) % 2:  # odd num of neck bones (head excluded)
             center_bone = self.get_bone(neck_bones[int((len(neck_bones)) / 2) - 1])
             neck_bend_eb.head = (center_bone.head + center_bone.tail) / 2
         else:
@@ -141,7 +138,8 @@ class Rig(BaseHeadTailRig):
         radius = 1 / max(1, len(self.bones.mch.chain))
 
         create_circle_widget(
-            self.obj, ctrl,
+            self.obj,
+            ctrl,
             radius=radius,
             head_tail=0.5,
         )
@@ -150,7 +148,8 @@ class Rig(BaseHeadTailRig):
         radius = 1 / max(1, len(self.bones.mch.chain))
 
         create_neck_bend_widget(
-            self.obj, ctrl,
+            self.obj,
+            ctrl,
             radius=radius / 2,
             head_tail=0.0,
         )
@@ -163,7 +162,8 @@ class Rig(BaseHeadTailRig):
             head_tail = 1.0
 
         create_circle_widget(
-            self.obj, ctrl,
+            self.obj,
+            ctrl,
             radius=0.5,
             head_tail=head_tail,
             with_line=False,
@@ -178,12 +178,14 @@ class Rig(BaseHeadTailRig):
         mch = self.bones.mch
 
         if self.has_neck:
-            mch.rot_neck = self.make_mch_follow_bone(orgs[0], 'neck', 0.5, copy_scale=True)
-            mch.stretch = self.make_mch_stretch_bone(orgs[0], 'STR-neck', orgs[-1])
-        mch.rot_head = self.make_mch_follow_bone(orgs[-1], 'head', 0.0, copy_scale=True)
+            mch.rot_neck = self.make_mch_follow_bone(
+                orgs[0], "neck", 0.5, copy_scale=True
+            )
+            mch.stretch = self.make_mch_stretch_bone(orgs[0], "STR-neck", orgs[-1])
+        mch.rot_head = self.make_mch_follow_bone(orgs[-1], "head", 0.0, copy_scale=True)
 
     def make_mch_stretch_bone(self, org: str, name: str, org_head: str):
-        name = self.copy_bone(org, make_derived_name(name, 'mch'), parent=False)
+        name = self.copy_bone(org, make_derived_name(name, "mch"), parent=False)
         self.get_bone(name).tail = self.get_bone(org_head).head
         return name
 
@@ -202,7 +204,7 @@ class Rig(BaseHeadTailRig):
             self.rig_mch_stretch_bone(self.bones.mch.stretch, self.bones.ctrl.head)
 
     def rig_mch_stretch_bone(self, mch: str, head: str):
-        self.make_constraint(mch, 'STRETCH_TO', head, keep_axis='SWING_Y')
+        self.make_constraint(mch, "STRETCH_TO", head, keep_axis="SWING_Y")
 
     ####################################################
     # MCH IK chain for the long neck
@@ -214,7 +216,7 @@ class Rig(BaseHeadTailRig):
             self.bones.mch.ik = map_list(self.make_mch_ik_bone, orgs[0:-1])
 
     def make_mch_ik_bone(self, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'mch', '_ik'), parent=False)
+        return self.copy_bone(org, make_derived_name(org, "mch", "_ik"), parent=False)
 
     @stage.parent_bones
     def parent_mch_ik_chain(self):
@@ -233,7 +235,7 @@ class Rig(BaseHeadTailRig):
 
     def rig_mch_ik_bone(self, i: int, mch: str, ik_len: int, head: str):
         if i == ik_len - 1:
-            self.make_constraint(mch, 'IK', head, chain_count=ik_len)
+            self.make_constraint(mch, "IK", head, chain_count=ik_len)
 
         self.get_bone(mch).ik_stretch = 0.1
 
@@ -246,7 +248,9 @@ class Rig(BaseHeadTailRig):
         self.bones.mch.chain = map_list(self.make_mch_bone, orgs[1:-1])
 
     def make_mch_bone(self, org: str):
-        return self.copy_bone(org, make_derived_name(org, 'mch'), parent=False, scale=1 / 4)
+        return self.copy_bone(
+            org, make_derived_name(org, "mch"), parent=False, scale=1 / 4
+        )
 
     @stage.parent_bones
     def align_mch_chain(self):
@@ -257,7 +261,7 @@ class Rig(BaseHeadTailRig):
     def parent_mch_chain(self):
         mch = self.bones.mch
         for bone in mch.chain:
-            self.set_bone_parent(bone, mch.stretch, inherit_scale='NONE')
+            self.set_bone_parent(bone, mch.stretch, inherit_scale="NONE")
 
     @stage.rig_bones
     def rig_mch_chain(self):
@@ -273,29 +277,32 @@ class Rig(BaseHeadTailRig):
     def rig_mch_bone_long(self, i: int, mch: str, ik: str, len_mch: int):
         ctrl = self.bones.ctrl
 
-        self.make_constraint(mch, 'COPY_LOCATION', ik)
+        self.make_constraint(mch, "COPY_LOCATION", ik)
 
         step = 2 / (len_mch + 1)
         x_val = (i + 1) * step
-        influence = 2 * x_val - x_val**2    # parabolic influence of pivot
+        influence = 2 * x_val - x_val**2  # parabolic influence of pivot
 
         self.make_constraint(
-            mch, 'COPY_LOCATION', ctrl.neck_bend,
-            influence=influence, use_offset=True, space='LOCAL'
+            mch,
+            "COPY_LOCATION",
+            ctrl.neck_bend,
+            influence=influence,
+            use_offset=True,
+            space="LOCAL",
         )
 
-        self.make_constraint(mch, 'COPY_SCALE', ctrl.neck)
+        self.make_constraint(mch, "COPY_SCALE", ctrl.neck)
 
     def rig_mch_bone(self, i, mch, len_mch):
         ctrl = self.bones.ctrl
 
         n_factor = float((i + 1) / (len_mch + 1))
         self.make_constraint(
-            mch, 'COPY_ROTATION', ctrl.head,
-            influence=n_factor, space='LOCAL'
+            mch, "COPY_ROTATION", ctrl.head, influence=n_factor, space="LOCAL"
         )
 
-        self.make_constraint(mch, 'COPY_SCALE', ctrl.neck)
+        self.make_constraint(mch, "COPY_SCALE", ctrl.neck)
 
     ####################################################
     # Tweak bones
@@ -333,8 +340,12 @@ class Rig(BaseHeadTailRig):
         rig = self.rigforge_parent or self
         builder = SwitchParentBuilder(self.generator)
         builder.register_parent(
-            self, self.bones.org[-1], name='Head',
-            inject_into=rig, exclude_self=True, tags={'head'},
+            self,
+            self.bones.org[-1],
+            name="Head",
+            inject_into=rig,
+            exclude_self=True,
+            tags={"head"},
         )
 
     @stage.configure_bones
@@ -354,62 +365,62 @@ class Rig(BaseHeadTailRig):
 
 def create_sample(obj, *, parent=None):
     # generated by rigforge.utils.write_metarig
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     arm = obj.data
 
     bones = {}
 
-    bone = arm.edit_bones.new('neck')
+    bone = arm.edit_bones.new("neck")
     bone.head[:] = 0.0000, 0.0114, 1.6582
     bone.tail[:] = 0.0000, -0.0130, 1.7197
     bone.roll = 0.0000
     bone.use_connect = False
     if parent:
         bone.parent = arm.edit_bones[parent]
-    bones['neck'] = bone.name
-    bone = arm.edit_bones.new('neck.001')
+    bones["neck"] = bone.name
+    bone = arm.edit_bones.new("neck.001")
     bone.head[:] = 0.0000, -0.0130, 1.7197
     bone.tail[:] = 0.0000, -0.0247, 1.7813
     bone.roll = 0.0000
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['neck']]
-    bones['neck.001'] = bone.name
-    bone = arm.edit_bones.new('head')
+    bone.parent = arm.edit_bones[bones["neck"]]
+    bones["neck.001"] = bone.name
+    bone = arm.edit_bones.new("head")
     bone.head[:] = 0.0000, -0.0247, 1.7813
     bone.tail[:] = 0.0000, -0.0247, 1.9796
     bone.roll = 0.0000
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['neck.001']]
-    bones['head'] = bone.name
+    bone.parent = arm.edit_bones[bones["neck.001"]]
+    bones["head"] = bone.name
 
-    bpy.ops.object.mode_set(mode='OBJECT')
-    pbone = obj.pose.bones[bones['neck']]
-    pbone.rigforge_type = 'spines.super_head'
+    bpy.ops.object.mode_set(mode="OBJECT")
+    pbone = obj.pose.bones[bones["neck"]]
+    pbone.rigforge_type = "spines.super_head"
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
     try:
         pbone.rigforge_parameters.connect_chain = bool(parent)
     except AttributeError:
         pass
-    pbone = obj.pose.bones[bones['neck.001']]
-    pbone.rigforge_type = ''
+    pbone = obj.pose.bones[bones["neck.001"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['head']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["head"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in arm.edit_bones:
         bone.select = False
         bone.select_head = False

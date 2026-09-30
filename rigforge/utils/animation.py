@@ -6,7 +6,8 @@ import bpy  # noqa
 import math  # noqa
 from mathutils import Matrix, Vector  # noqa
 
-from typing import TYPE_CHECKING, Callable, Any, Collection, Iterator, Optional, Sequence
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Collection, Iterator, Sequence
 from bpy.types import Action, bpy_struct, FCurve
 from bpy_extras import anim_utils
 
@@ -23,6 +24,7 @@ rig_id = None
 # Keyframing functions
 ##############################################
 
+
 def _get_channelbag_for_rig(rig: bpy.types.Object) -> bpy.types.ActionChannelbag | None:
     assert isinstance(rig, bpy.types.Object)
     if not rig.animation_data:
@@ -33,13 +35,15 @@ def _get_channelbag_for_rig(rig: bpy.types.Object) -> bpy.types.ActionChannelbag
     return anim_utils.action_get_channelbag_for_slot(action, action_slot)
 
 
-def get_keyed_frames_in_range(context: bpy.types.Context, rig: bpy.types.Object) -> list[float]:
+def get_keyed_frames_in_range(
+    context: bpy.types.Context, rig: bpy.types.Object
+) -> list[float]:
     channelbag = _get_channelbag_for_rig(rig)
     if not channelbag:
         return []
 
-    frame_range = RIGIFY_OT_get_frame_range.get_range(context)
-    return sorted(get_curve_frame_set(channelbag.fcurves, frame_range))
+    frame_range = RIGFORGE_OT_get_frame_range.get_range(context)  # noqa: F821 - defined via exec'd template script
+    return sorted(get_curve_frame_set(channelbag.fcurves, frame_range))  # noqa: F821 - defined via exec'd template script
 
 
 def bones_in_frame(f, rig, *args):
@@ -74,7 +78,11 @@ def overwrite_prop_animation(rig, bone, prop_name, value, frames):
 
     for fcu in channelbag.fcurves:
         words = fcu.data_path.split('"')
-        if words[0] == "pose.bones[" and words[1] == bone_name and words[-2] == prop_name:
+        if (
+            words[0] == "pose.bones["
+            and words[1] == bone_name
+            and words[-2] == prop_name
+        ):
             curve = fcu
             break
 
@@ -90,7 +98,8 @@ def overwrite_prop_animation(rig, bone, prop_name, value, frames):
 # Utilities for inserting keyframes and/or setting transforms ##
 ################################################################
 
-SCRIPT_UTILITIES_KEYING = ['''
+SCRIPT_UTILITIES_KEYING = [
+    '''
 ######################
 ## Keyframing tools ##
 ######################
@@ -306,7 +315,8 @@ def set_chain_transforms_from_matrices(context, obj, bone_names, matrices, **opt
     for bone, matrix in zip(bone_names, matrices):
         set_transform_from_matrix(obj, bone, matrix, **options)
         context.view_layer.update()
-''']
+'''
+]
 
 exec(SCRIPT_UTILITIES_KEYING[-1])
 
@@ -314,7 +324,8 @@ exec(SCRIPT_UTILITIES_KEYING[-1])
 # Utilities for managing animation curves ##
 ############################################
 
-SCRIPT_UTILITIES_CURVES = ['''
+SCRIPT_UTILITIES_CURVES = [
+    """
 ###########################
 ## Animation curve tools ##
 ###########################
@@ -464,7 +475,8 @@ class DriverCurveTable(FCurveTable):
         self.anim_data = object.animation_data
         if self.anim_data:
             self.index_curves(self.anim_data.drivers)
-''']
+"""
+]
 
 AnyCurveSet = None | FCurve | dict | Collection
 flatten_curve_set: Callable[[AnyCurveSet], Iterator[FCurve]]
@@ -490,7 +502,7 @@ exec(SCRIPT_UTILITIES_CURVES[-1])
 # Utilities for operators that bake keyframes ##
 ################################################
 
-_SCRIPT_REGISTER_WM_PROPS = '''
+_SCRIPT_REGISTER_WM_PROPS = """
 bpy.types.WindowManager.rigforge_transfer_use_all_keys = bpy.props.BoolProperty(
     name="Bake All Keyed Frames",
     description="Bake on every frame that has a key for any of the bones, as opposed to just the relevant ones",
@@ -505,17 +517,17 @@ bpy.types.WindowManager.rigforge_transfer_start_frame = bpy.props.IntProperty(
 bpy.types.WindowManager.rigforge_transfer_end_frame = bpy.props.IntProperty(
     name="End", description="Last frame to transfer", default=0, min=0
 )
-'''
+"""
 
-_SCRIPT_UNREGISTER_WM_PROPS = '''
+_SCRIPT_UNREGISTER_WM_PROPS = """
 del bpy.types.WindowManager.rigforge_transfer_use_all_keys
 del bpy.types.WindowManager.rigforge_transfer_use_frame_range
 del bpy.types.WindowManager.rigforge_transfer_start_frame
 del bpy.types.WindowManager.rigforge_transfer_end_frame
-'''
+"""
 
-_SCRIPT_UTILITIES_BAKE_OPS = '''
-class RIGIFY_OT_get_frame_range(bpy.types.Operator):
+_SCRIPT_UTILITIES_BAKE_OPS = """
+class RIGFORGE_OT_get_frame_range(bpy.types.Operator):
     bl_idname = "rigforge.get_frame_range" + ('_'+rig_id if rig_id else '')
     bl_label = "Get Frame Range"
     bl_description = "Set start and end frame from scene"
@@ -548,9 +560,9 @@ class RIGIFY_OT_get_frame_range(bpy.types.Operator):
         row.prop(id_store, 'rigforge_transfer_start_frame')
         row.prop(id_store, 'rigforge_transfer_end_frame')
         row.operator(self.bl_idname, icon='TIME', text='')
-'''
+"""
 
-RIGIFY_OT_get_frame_range: Any
+RIGFORGE_OT_get_frame_range: Any
 
 exec(_SCRIPT_UTILITIES_BAKE_OPS)
 
@@ -558,18 +570,25 @@ exec(_SCRIPT_UTILITIES_BAKE_OPS)
 # Framework for operators that bake keyframes ##
 ################################################
 
-SCRIPT_REGISTER_BAKE = ['RIGIFY_OT_get_frame_range']
+SCRIPT_REGISTER_BAKE = ["RIGFORGE_OT_get_frame_range"]
 
-SCRIPT_UTILITIES_BAKE = SCRIPT_UTILITIES_KEYING + SCRIPT_UTILITIES_CURVES + ['''
+SCRIPT_UTILITIES_BAKE = (
+    SCRIPT_UTILITIES_KEYING
+    + SCRIPT_UTILITIES_CURVES
+    + [
+        """
 ##################################
 # Common bake operator settings ##
 ##################################
-''' + _SCRIPT_REGISTER_WM_PROPS + _SCRIPT_UTILITIES_BAKE_OPS + '''
+"""
+        + _SCRIPT_REGISTER_WM_PROPS
+        + _SCRIPT_UTILITIES_BAKE_OPS
+        + '''
 #######################################
 # Keyframe baking operator framework ##
 #######################################
 
-class RigifyOperatorMixinBase:
+class RigforgeOperatorMixinBase:
     bl_options = {'UNDO', 'INTERNAL'}
 
     def init_invoke(self, context):
@@ -585,7 +604,7 @@ class RigifyOperatorMixinBase:
         "Override to undo before_save_state."
 
 
-class RigifyBakeKeyframesMixin(RigifyOperatorMixinBase):
+class RigforgeBakeKeyframesMixin(RigforgeOperatorMixinBase):
     """Basic framework for an operator that updates a set of keyed frames."""
 
     # Utilities
@@ -648,7 +667,7 @@ class RigifyBakeKeyframesMixin(RigifyOperatorMixinBase):
     def bake_init(self, context):
         self.bake_rig = context.active_object
         self.bake_anim = self.bake_rig.animation_data
-        self.bake_frame_range = RIGIFY_OT_get_frame_range.get_range(context)
+        self.bake_frame_range = RIGFORGE_OT_get_frame_range.get_range(context)
         self.bake_frame_range_raw = self.nla_to_raw(self.bake_frame_range)
         self.bake_curve_table = ActionCurveTable(self.bake_rig)
         self.bake_current_frame = context.scene.frame_current
@@ -731,7 +750,7 @@ class RigifyBakeKeyframesMixin(RigifyOperatorMixinBase):
     def draw_common_bake_ui(context, layout):
         layout.prop(context.window_manager, 'rigforge_transfer_use_all_keys')
 
-        RIGIFY_OT_get_frame_range.draw_range_ui(context, layout)
+        RIGFORGE_OT_get_frame_range.draw_range_ui(context, layout)
 
     @classmethod
     def poll(cls, context):
@@ -778,7 +797,7 @@ class RigifyBakeKeyframesMixin(RigifyOperatorMixinBase):
             return context.window_manager.invoke_confirm(self, event)
 
 
-class RigifySingleUpdateMixin(RigifyOperatorMixinBase):
+class RigforgeSingleUpdateMixin(RigforgeOperatorMixinBase):
     """Basic framework for an operator that updates only the current frame."""
 
     def execute(self, context):
@@ -809,11 +828,13 @@ class RigifySingleUpdateMixin(RigifyOperatorMixinBase):
             return context.window_manager.invoke_props_popup(self, event)
         else:
             return self.execute(context)
-''']
+'''
+    ]
+)
 
-RigifyOperatorMixinBase: Any
-RigifyBakeKeyframesMixin: Any
-RigifySingleUpdateMixin: Any
+RigforgeOperatorMixinBase: Any
+RigforgeBakeKeyframesMixin: Any
+RigforgeSingleUpdateMixin: Any
 
 exec(SCRIPT_UTILITIES_BAKE[-1])
 
@@ -821,9 +842,10 @@ exec(SCRIPT_UTILITIES_BAKE[-1])
 # Generic Clear Keyframes operator ##
 #####################################
 
-SCRIPT_REGISTER_OP_CLEAR_KEYS = ['POSE_OT_rigforge_clear_keyframes']
+SCRIPT_REGISTER_OP_CLEAR_KEYS = ["POSE_OT_rigforge_clear_keyframes"]
 
-SCRIPT_UTILITIES_OP_CLEAR_KEYS = ['''
+SCRIPT_UTILITIES_OP_CLEAR_KEYS = [
+    """
 #############################
 ## Generic Clear Keyframes ##
 #############################
@@ -850,7 +872,7 @@ class POSE_OT_rigforge_clear_keyframes(bpy.types.Operator):
         curve_table = ActionCurveTable(context.active_object)
         curves = list(curve_table.list_all_prop_curves(bone_list, TRANSFORM_PROPS_ALL))
 
-        key_range = RIGIFY_OT_get_frame_range.get_range(context)
+        key_range = RIGFORGE_OT_get_frame_range.get_range(context)
         range_raw = nla_tweak_to_scene(obj.animation_data, key_range, invert=True)
         delete_curve_keys_in_range(curves, range_raw)
 
@@ -863,33 +885,43 @@ class POSE_OT_rigforge_clear_keyframes(bpy.types.Operator):
         clean_action_empty_curves(obj)
         obj.update_tag(refresh={'TIME'})
         return {'FINISHED'}
-''']
+"""
+]
 
 
-def add_clear_keyframes_button(panel: 'PanelLayout', *,
-                               bones: Sequence[str] = (), text=''):
+def add_clear_keyframes_button(
+    panel: "PanelLayout", *, bones: Sequence[str] = (), text=""
+):
     panel.use_bake_settings()
     panel.script.add_utilities(SCRIPT_UTILITIES_OP_CLEAR_KEYS)
     panel.script.register_classes(SCRIPT_REGISTER_OP_CLEAR_KEYS)
 
-    op_props = {'bones': json.dumps(bones)}
+    op_props = {"bones": json.dumps(bones)}
 
-    panel.operator('pose.rigforge_clear_keyframes_{rig_id}', text=text, icon='CANCEL',
-                   properties=op_props)
+    panel.operator(
+        "pose.rigforge_clear_keyframes_{rig_id}",
+        text=text,
+        icon="CANCEL",
+        properties=op_props,
+    )
 
 
 ###################################
 # Generic Snap FK to IK operator ##
 ###################################
 
-SCRIPT_REGISTER_OP_SNAP = ['POSE_OT_rigforge_generic_snap', 'POSE_OT_rigforge_generic_snap_bake']
+SCRIPT_REGISTER_OP_SNAP = [
+    "POSE_OT_rigforge_generic_snap",
+    "POSE_OT_rigforge_generic_snap_bake",
+]
 
-SCRIPT_UTILITIES_OP_SNAP = ['''
+SCRIPT_UTILITIES_OP_SNAP = [
+    """
 #############################
 ## Generic Snap (FK to IK) ##
 #############################
 
-class RigifyGenericSnapBase:
+class RigforgeGenericSnapBase:
     input_bones:   StringProperty(name="Input Chain")
     output_bones:  StringProperty(name="Output Chain")
     ctrl_bones:    StringProperty(name="Input Controls")
@@ -913,7 +945,7 @@ class RigifyGenericSnapBase:
             no_loc=self.locks[0], no_rot=self.locks[1], no_scale=self.locks[2],
         )
 
-class POSE_OT_rigforge_generic_snap(RigifyGenericSnapBase, RigifySingleUpdateMixin, bpy.types.Operator):
+class POSE_OT_rigforge_generic_snap(RigforgeGenericSnapBase, RigforgeSingleUpdateMixin, bpy.types.Operator):
     bl_idname = "pose.rigforge_generic_snap_" + rig_id
     bl_label = "Snap Bones"
     bl_description = "Snap on the current frame"
@@ -922,7 +954,7 @@ class POSE_OT_rigforge_generic_snap(RigifyGenericSnapBase, RigifySingleUpdateMix
     def description(cls, context, props):
         return "Snap " + props.tooltip + " on the current frame"
 
-class POSE_OT_rigforge_generic_snap_bake(RigifyGenericSnapBase, RigifyBakeKeyframesMixin, bpy.types.Operator):
+class POSE_OT_rigforge_generic_snap_bake(RigforgeGenericSnapBase, RigforgeBakeKeyframesMixin, bpy.types.Operator):
     bl_idname = "pose.rigforge_generic_snap_bake_" + rig_id
     bl_label = "Apply Snap To Keyframes"
     bl_description = "Apply snap to keyframes"
@@ -935,72 +967,108 @@ class POSE_OT_rigforge_generic_snap_bake(RigifyGenericSnapBase, RigifyBakeKeyfra
         props = transform_props_with_locks(*self.locks)
         self.bake_add_bone_frames(self.ctrl_bone_list, TRANSFORM_PROPS_ALL)
         return self.bake_get_all_bone_curves(self.output_bone_list, props)
-''']
+"""
+]
 
 
-def add_fk_ik_snap_buttons(panel: 'PanelLayout', op_single: str, op_bake: str, *,
-                           label, rig_name='', properties: dict[str, Any],
-                           clear_bones: Optional[list[str]] = None,
-                           compact: Optional[bool] = None):
+def add_fk_ik_snap_buttons(
+    panel: "PanelLayout",
+    op_single: str,
+    op_bake: str,
+    *,
+    label,
+    rig_name="",
+    properties: dict[str, Any],
+    clear_bones: list[str] | None = None,
+    compact: bool | None = None,
+):
     assert label and properties
 
     if rig_name:
-        label += ' (%s)' % rig_name
+        label += " (%s)" % rig_name
 
     if compact or not clear_bones:
         row = panel.row(align=True)
-        row.operator(op_single, text=label, icon='SNAP_ON', properties=properties)
-        row.operator(op_bake, text='', icon='ACTION_TWEAK', properties=properties)
+        row.operator(op_single, text=label, icon="SNAP_ON", properties=properties)
+        row.operator(op_bake, text="", icon="ACTION_TWEAK", properties=properties)
 
         if clear_bones:
             add_clear_keyframes_button(row, bones=clear_bones)
     else:
         col = panel.column(align=True)
-        col.operator(op_single, text=label, icon='SNAP_ON', properties=properties)
+        col.operator(op_single, text=label, icon="SNAP_ON", properties=properties)
         row = col.row(align=True)
-        row.operator(op_bake, text='Action', icon='ACTION_TWEAK', properties=properties)
-        add_clear_keyframes_button(row, bones=clear_bones, text='Clear')
+        row.operator(op_bake, text="Action", icon="ACTION_TWEAK", properties=properties)
+        add_clear_keyframes_button(row, bones=clear_bones, text="Clear")
 
 
-def add_generic_snap(panel: 'PanelLayout', *,
-                     output_bones: Sequence[str] = (), input_bones: Sequence[str] = (),
-                     input_ctrl_bones: Sequence[str] = (), label='Snap',
-                     rig_name='', undo_copy_scale=False, compact: Optional[bool] = None,
-                     clear=True, locks: Optional[Sequence[bool]] = None,
-                     tooltip: Optional[str] = None):
+def add_generic_snap(
+    panel: "PanelLayout",
+    *,
+    output_bones: Sequence[str] = (),
+    input_bones: Sequence[str] = (),
+    input_ctrl_bones: Sequence[str] = (),
+    label="Snap",
+    rig_name="",
+    undo_copy_scale=False,
+    compact: bool | None = None,
+    clear=True,
+    locks: Sequence[bool] | None = None,
+    tooltip: str | None = None,
+):
     panel.use_bake_settings()
     panel.script.add_utilities(SCRIPT_UTILITIES_OP_SNAP)
     panel.script.register_classes(SCRIPT_REGISTER_OP_SNAP)
 
     op_props = {
-        'output_bones': json.dumps(output_bones),
-        'input_bones': json.dumps(input_bones),
-        'ctrl_bones': json.dumps(input_ctrl_bones or input_bones),
+        "output_bones": json.dumps(output_bones),
+        "input_bones": json.dumps(input_bones),
+        "ctrl_bones": json.dumps(input_ctrl_bones or input_bones),
     }
 
     if undo_copy_scale:
-        op_props['undo_copy_scale'] = undo_copy_scale
+        op_props["undo_copy_scale"] = undo_copy_scale
     if locks is not None:
-        op_props['locks'] = tuple(locks[0:3])
+        op_props["locks"] = tuple(locks[0:3])
     if tooltip is not None:
-        op_props['tooltip'] = tooltip
+        op_props["tooltip"] = tooltip
 
     clear_bones = output_bones if clear else None
 
     add_fk_ik_snap_buttons(
-        panel, 'pose.rigforge_generic_snap_{rig_id}', 'pose.rigforge_generic_snap_bake_{rig_id}',
-        label=label, rig_name=rig_name, properties=op_props, clear_bones=clear_bones, compact=compact,
+        panel,
+        "pose.rigforge_generic_snap_{rig_id}",
+        "pose.rigforge_generic_snap_bake_{rig_id}",
+        label=label,
+        rig_name=rig_name,
+        properties=op_props,
+        clear_bones=clear_bones,
+        compact=compact,
     )
 
 
-def add_generic_snap_fk_to_ik(panel: 'PanelLayout', *,
-                              fk_bones: Sequence[str] = (), ik_bones: Sequence[str] = (),
-                              ik_ctrl_bones: Sequence[str] = (), label='FK->IK',
-                              rig_name='', undo_copy_scale=False,
-                              compact: Optional[bool] = None, clear=True):
+def add_generic_snap_fk_to_ik(
+    panel: "PanelLayout",
+    *,
+    fk_bones: Sequence[str] = (),
+    ik_bones: Sequence[str] = (),
+    ik_ctrl_bones: Sequence[str] = (),
+    label="FK->IK",
+    rig_name="",
+    undo_copy_scale=False,
+    compact: bool | None = None,
+    clear=True,
+):
     add_generic_snap(
-        panel, output_bones=fk_bones, input_bones=ik_bones, input_ctrl_bones=ik_ctrl_bones,
-        label=label, rig_name=rig_name, undo_copy_scale=undo_copy_scale, compact=compact, clear=clear
+        panel,
+        output_bones=fk_bones,
+        input_bones=ik_bones,
+        input_ctrl_bones=ik_ctrl_bones,
+        label=label,
+        rig_name=rig_name,
+        undo_copy_scale=undo_copy_scale,
+        compact=compact,
+        clear=clear,
     )
 
 
@@ -1008,12 +1076,13 @@ def add_generic_snap_fk_to_ik(panel: 'PanelLayout', *,
 # Module register/unregister ##
 ###############################
 
+
 def register():
     from bpy.utils import register_class
 
     exec(_SCRIPT_REGISTER_WM_PROPS)
 
-    register_class(RIGIFY_OT_get_frame_range)
+    register_class(RIGFORGE_OT_get_frame_range)  # noqa: F821 - defined via exec'd template script
 
 
 def unregister():
@@ -1021,4 +1090,4 @@ def unregister():
 
     exec(_SCRIPT_UNREGISTER_WM_PROPS)
 
-    unregister_class(RIGIFY_OT_get_frame_range)
+    unregister_class(RIGFORGE_OT_get_frame_range)  # noqa: F821 - defined via exec'd template script

@@ -2,22 +2,23 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import importlib
 import os
 import traceback
-import importlib
-import typing
-
-from typing import Optional, Iterable
-
-from .utils.rig import RIG_DIR
+from collections.abc import Iterable
 
 from . import feature_set_list
+from .utils.rig import RIG_DIR
 
 
-def get_rigs(base_dir: str, base_path: list[str], *,
-             path: Iterable[str] = (),
-             feature_set=feature_set_list.DEFAULT_NAME):
-    """ Recursively searches for rig types, and returns a list.
+def get_rigs(
+    base_dir: str,
+    base_path: list[str],
+    *,
+    path: Iterable[str] = (),
+    feature_set=feature_set_list.DEFAULT_NAME,
+):
+    """Recursively searches for rig types, and returns a list.
 
     Args:
         base_dir:      root directory
@@ -39,30 +40,36 @@ def get_rigs(base_dir: str, base_path: list[str], *,
     files.sort()
 
     for f in files:
-        is_dir = os.path.isdir(os.path.join(dir_path, f))  # Whether the file is a directory
+        is_dir = os.path.isdir(
+            os.path.join(dir_path, f)
+        )  # Whether the file is a directory
 
         # Stop cases
         if f[0] in [".", "_"]:
             continue
         if f.count(".") >= 2 or (is_dir and "." in f):
-            print("Warning: %r, filename contains a '.', skipping" % os.path.join(*base_path, *path, f))
+            print(
+                "Warning: %r, filename contains a '.', skipping"
+                % os.path.join(*base_path, *path, f)
+            )
             continue
 
         if is_dir:
             # Check for sub-rigs
-            sub_rigs, sub_impls = get_rigs(base_dir, base_path, path=[*path, f], feature_set=feature_set)
+            sub_rigs, sub_impls = get_rigs(
+                base_dir, base_path, path=[*path, f], feature_set=feature_set
+            )
             rig_table.update(sub_rigs)
             impl_rigs.update(sub_impls)
         elif f.endswith(".py"):
             # Check straight-up python files
             sub_path = [*path, f[:-3]]
-            key = '.'.join(sub_path)
+            key = ".".join(sub_path)
             # Don't reload rig modules - it breaks isinstance
-            rig_module = importlib.import_module('.'.join(base_path + sub_path))
+            rig_module = importlib.import_module(".".join(base_path + sub_path))
             if hasattr(rig_module, "Rig"):
-                rig_table[key] = {"module": rig_module,
-                                  "feature_set": feature_set}
-            if hasattr(rig_module, 'IMPLEMENTATION') and rig_module.IMPLEMENTATION:
+                rig_table[key] = {"module": rig_module, "feature_set": feature_set}
+            if hasattr(rig_module, "IMPLEMENTATION") and rig_module.IMPLEMENTATION:
                 impl_rigs[key] = rig_module
 
     return rig_table, impl_rigs
@@ -73,7 +80,7 @@ rigs = {}
 implementation_rigs = {}
 
 
-def get_rig_class(name: str) -> Optional[typing.Type]:
+def get_rig_class(name: str) -> type | None:
     try:
         return rigs[name]["module"].Rig
     except (KeyError, AttributeError):
@@ -84,10 +91,11 @@ def get_internal_rigs():
     global rigs, implementation_rigs
 
     base_rigforge_dir = os.path.dirname(__file__)
-    base_rigforge_path = __name__.split('.')[:-1]
+    base_rigforge_path = __name__.split(".")[:-1]
 
-    rigs, implementation_rigs = get_rigs(os.path.join(base_rigforge_dir, RIG_DIR),
-                                         [*base_rigforge_path, RIG_DIR])
+    rigs, implementation_rigs = get_rigs(
+        os.path.join(base_rigforge_dir, RIG_DIR), [*base_rigforge_path, RIG_DIR]
+    )
 
 
 def get_external_rigs(set_list):
@@ -104,9 +112,13 @@ def get_external_rigs(set_list):
         try:
             base_dir, base_path = feature_set_list.get_dir_path(feature_set, RIG_DIR)
 
-            external_rigs, external_impl_rigs = get_rigs(base_dir, base_path, feature_set=feature_set)
+            external_rigs, external_impl_rigs = get_rigs(
+                base_dir, base_path, feature_set=feature_set
+            )
         except Exception:
-            print(f"Rigify Error: Could not load feature set '{feature_set}' rigs: exception occurred.\n")
+            print(
+                f"Rigforge Error: Could not load feature set '{feature_set}' rigs: exception occurred.\n"
+            )
             traceback.print_exc()
             print("")
             feature_set_list.mark_feature_set_exception(feature_set)

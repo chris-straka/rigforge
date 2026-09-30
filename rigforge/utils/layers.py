@@ -2,27 +2,35 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import random
 import re
 import zlib
-
 from collections import defaultdict
-from typing import TYPE_CHECKING, Sequence, Optional, Mapping, Iterable, Any
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
-from bpy.types import bpy_prop_collection  # noqa
-from bpy.types import Bone, UILayout, Object, PoseBone, Armature, BoneCollection, EditBone
+import bpy
+from bpy.app.translations import pgettext_rpt as rpt_
+from bpy.types import (
+    Armature,
+    Bone,
+    BoneCollection,
+    EditBone,
+    Object,
+    PoseBone,
+    UILayout,
+    bpy_prop_collection,
+)
 from idprop.types import IDPropertyGroup
 from rna_prop_ui import rna_idprop_value_to_python
-from bpy.app.translations import pgettext_rpt as rpt_
 
 from .errors import MetarigError
 from .misc import ArmatureObject
 from .naming import mirror_name_fuzzy
 
 if TYPE_CHECKING:
+    from .. import RigforgeBoneCollectionReference
     from ..base_rig import BaseRig
-    from .. import RigifyBoneCollectionReference
 
 
 ROOT_COLLECTION = "Root"
@@ -32,11 +40,13 @@ MCH_COLLECTION = "MCH"
 
 SPECIAL_COLLECTIONS = (ROOT_COLLECTION, DEF_COLLECTION, MCH_COLLECTION, ORG_COLLECTION)
 
-REFS_TOGGLE_SUFFIX = '_layers_extra'
+REFS_TOGGLE_SUFFIX = "_layers_extra"
 REFS_LIST_SUFFIX = "_coll_refs"
 
 
-def set_bone_layers(bone: Bone | EditBone, layers: Sequence[BoneCollection], *, combine=False):
+def set_bone_layers(
+    bone: Bone | EditBone, layers: Sequence[BoneCollection], *, combine=False
+):
     if not layers:
         return
 
@@ -48,12 +58,16 @@ def set_bone_layers(bone: Bone | EditBone, layers: Sequence[BoneCollection], *, 
         coll.assign(bone)
 
 
-def union_layer_lists(lists: Iterable[Iterable[BoneCollection | None] | None]) -> list[BoneCollection]:
+def union_layer_lists(
+    lists: Iterable[Iterable[BoneCollection | None] | None],
+) -> list[BoneCollection]:
     all_collections = dict()
 
     for lst in lists:
         if lst is not None:
-            all_collections.update({coll.name: coll for coll in lst if coll is not None})
+            all_collections.update(
+                {coll.name: coll for coll in lst if coll is not None}
+            )
 
     return list(all_collections.values())
 
@@ -68,20 +82,21 @@ def find_used_collections(obj: ArmatureObject) -> dict[str, BoneCollection]:
 
 
 def is_collection_ref_list_prop(param: Any) -> bool:
-    from .. import RigifyBoneCollectionReference
+    from .. import RigforgeBoneCollectionReference
 
-    return (isinstance(param, bpy_prop_collection) and
-            all(isinstance(item, RigifyBoneCollectionReference) for item in param))
+    return isinstance(param, bpy_prop_collection) and all(
+        isinstance(item, RigforgeBoneCollectionReference) for item in param
+    )
 
 
 def copy_ref_list(to_ref_list, from_ref_list, *, mirror=False):
-    """Copy collection references between two RigifyBoneCollectionReference lists."""
+    """Copy collection references between two RigforgeBoneCollectionReference lists."""
     to_ref_list.clear()
 
     for ref in from_ref_list:
         to_ref = to_ref_list.add()
-        to_ref['uid'] = ref['uid']
-        to_ref['name'] = ref['name']
+        to_ref["uid"] = ref["uid"]
+        to_ref["name"] = ref["name"]
 
         if mirror:
             to_ref.name = mirror_name_fuzzy(ref.name)
@@ -94,7 +109,7 @@ def ensure_collection_uid(bcoll: BoneCollection):
         return uid
 
     # Choose the initial uid value
-    max_uid = 0x7fffffff
+    max_uid = 0x7FFFFFFF
 
     if re.fullmatch(r"Bones(\.\d+)?", bcoll.name):
         # Use random numbers for collections with the default name
@@ -113,11 +128,12 @@ def ensure_collection_uid(bcoll: BoneCollection):
     return uid
 
 
-def resolve_collection_reference(obj: ArmatureObject, ref: Any, *,
-                                 update=False, raise_error=False) -> bpy.types.BoneCollection | None:
+def resolve_collection_reference(
+    obj: ArmatureObject, ref: Any, *, update=False, raise_error=False
+) -> bpy.types.BoneCollection | None:
     """
     Find the bone collection referenced by the given reference.
-    The reference should be RigifyBoneCollectionReference, either typed or as a raw idproperty.
+    The reference should be RigforgeBoneCollectionReference, either typed or as a raw idproperty.
     """
 
     uid = ref["uid"]
@@ -188,11 +204,13 @@ def validate_collection_references(obj: ArmatureObject):
                 if ref_coll:
                     refs[ref_coll.name].append(item)
                 else:
-                    stem = prop_name[:-len(REFS_LIST_SUFFIX)].replace("_", " ").title()
+                    stem = prop_name[: -len(REFS_LIST_SUFFIX)].replace("_", " ").title()
                     warnings.append(
-                        rpt_("Bone {:s} has a broken reference to {:s} collection '{:s}'").format(
-                            pose_bone.name, stem, name))
-                    print(f"RIGIFY: {warnings[-1]}")
+                        rpt_(
+                            "Bone {:s} has a broken reference to {:s} collection '{:s}'"
+                        ).format(pose_bone.name, stem, name)
+                    )
+                    print(f"RIGFORGE: {warnings[-1]}")
 
     # Ensure uids are unique
     known_uids = dict()
@@ -205,8 +223,12 @@ def validate_collection_references(obj: ArmatureObject):
         prev_use = known_uids.get(uid)
 
         if prev_use is not None:
-            warnings.append(rpt_("Collection {:s} has the same uid {:d} as {:s}").format(bcoll.name, uid, prev_use))
-            print(f"RIGIFY: {warnings[-1]}")
+            warnings.append(
+                rpt_("Collection {:s} has the same uid {:d} as {:s}").format(
+                    bcoll.name, uid, prev_use
+                )
+            )
+            print(f"RIGFORGE: {warnings[-1]}")
 
             # Replace the uid
             bcoll.rigforge_uid = -1
@@ -226,9 +248,13 @@ def validate_collection_references(obj: ArmatureObject):
 
 
 class ControlLayersOption:
-    def __init__(self, name: str,
-                 toggle_name: Optional[str] = None,
-                 toggle_default=True, description="Set of bone collections"):
+    def __init__(
+        self,
+        name: str,
+        toggle_name: str | None = None,
+        toggle_default=True,
+        description="Set of bone collections",
+    ):
         self.name = name
         self.toggle_default = toggle_default
         self.description = description
@@ -241,7 +267,7 @@ class ControlLayersOption:
         else:
             self.toggle_name = "Assign " + self.name.title() + " Collections"
 
-    def get(self, params) -> Optional[list[BoneCollection]]:
+    def get(self, params) -> list[BoneCollection] | None:
         if getattr(params, self.toggle_option):
             result = []
 
@@ -252,8 +278,14 @@ class ControlLayersOption:
                     result.append(coll)
 
             if not result:
-                bones = [pbone for pbone in params.id_data.pose.bones if pbone.rigforge_parameters == params]
-                print(f"RIGIFY: empty {self.name} layer list on bone {bones[0].name if bones else '?'}")
+                bones = [
+                    pbone
+                    for pbone in params.id_data.pose.bones
+                    if pbone.rigforge_parameters == params
+                ]
+                print(
+                    f"RIGFORGE: empty {self.name} layer list on bone {bones[0].name if bones else '?'}"
+                )
 
             return result
         else:
@@ -269,13 +301,17 @@ class ControlLayersOption:
             items = getattr(params, self.refs_option)
 
             for coll in layers:
-                item: RigifyBoneCollectionReference = items.add()
+                item: RigforgeBoneCollectionReference = items.add()
                 item.set_collection(coll)
 
-    def assign(self, params,
-               bone_set: Object | Mapping[str, Bone | PoseBone],
-               bone_list: Sequence[str], *,
-               combine=False):
+    def assign(
+        self,
+        params,
+        bone_set: Object | Mapping[str, Bone | PoseBone],
+        bone_list: Sequence[str],
+        *,
+        combine=False,
+    ):
         layers = self.get(params)
 
         if isinstance(bone_set, Object):
@@ -290,7 +326,9 @@ class ControlLayersOption:
 
                 set_bone_layers(bone, layers, combine=combine)
 
-    def assign_rig(self, rig: 'BaseRig', bone_list: Sequence[str], *, combine=False, priority=None):
+    def assign_rig(
+        self, rig: "BaseRig", bone_list: Sequence[str], *, combine=False, priority=None
+    ):
         layers = self.get(rig.params)
         bone_set = rig.obj.data.bones
 
@@ -302,18 +340,16 @@ class ControlLayersOption:
                     rig.generator.set_layer_group_priority(name, layers, priority)
 
     def add_parameters(self, params):
-        from .. import RigifyBoneCollectionReference
+        from .. import RigforgeBoneCollectionReference
 
         prop_toggle = bpy.props.BoolProperty(
-            name=self.toggle_name,
-            default=self.toggle_default,
-            description=""
+            name=self.toggle_name, default=self.toggle_default, description=""
         )
 
         setattr(params, self.toggle_option, prop_toggle)
 
         prop_coll_refs = bpy.props.CollectionProperty(
-            type=RigifyBoneCollectionReference,
+            type=RigforgeBoneCollectionReference,
             description=self.description,
         )
 
@@ -327,15 +363,19 @@ class ControlLayersOption:
 
         active = getattr(params, self.toggle_option)
 
-        from ..operators.copy_mirror_parameters import make_copy_parameter_button
         from ..base_rig import BaseRig
+        from ..operators.copy_mirror_parameters import make_copy_parameter_button
 
-        make_copy_parameter_button(row, self.refs_option, base_class=BaseRig, mirror_bone=True)
+        make_copy_parameter_button(
+            row, self.refs_option, base_class=BaseRig, mirror_bone=True
+        )
 
         if not active:
             return
 
-        props = row.operator(operator="pose.rigforge_collection_ref_add", text="", icon="ADD")
+        props = row.operator(
+            operator="pose.rigforge_collection_ref_add", text="", icon="ADD"
+        )
         props.prop_name = self.refs_option
 
         refs = getattr(params, self.refs_option)
@@ -349,48 +389,59 @@ class ControlLayersOption:
                 row.prop(ref, "name", text="")
                 row.alert = False
 
-                props = row.operator(operator="pose.rigforge_collection_ref_remove", text="", icon="REMOVE")
+                props = row.operator(
+                    operator="pose.rigforge_collection_ref_remove",
+                    text="",
+                    icon="REMOVE",
+                )
                 props.prop_name = self.refs_option
                 props.index = i
         else:
             box.label(text="Use the plus button to add list entries", icon="INFO")
 
     # Declarations for auto-completion
-    FK: 'ControlLayersOption'
-    TWEAK: 'ControlLayersOption'
-    EXTRA_IK: 'ControlLayersOption'
-    FACE_PRIMARY: 'ControlLayersOption'
-    FACE_SECONDARY: 'ControlLayersOption'
-    SKIN_PRIMARY: 'ControlLayersOption'
-    SKIN_SECONDARY: 'ControlLayersOption'
+    FK: "ControlLayersOption"
+    TWEAK: "ControlLayersOption"
+    EXTRA_IK: "ControlLayersOption"
+    FACE_PRIMARY: "ControlLayersOption"
+    FACE_SECONDARY: "ControlLayersOption"
+    SKIN_PRIMARY: "ControlLayersOption"
+    SKIN_SECONDARY: "ControlLayersOption"
 
 
 ControlLayersOption.FK = ControlLayersOption(
-    'fk', description="Layers for the FK controls to be on")
+    "fk", description="Layers for the FK controls to be on"
+)
 ControlLayersOption.TWEAK = ControlLayersOption(
-    'tweak', description="Layers for the tweak controls to be on")
+    "tweak", description="Layers for the tweak controls to be on"
+)
 
 ControlLayersOption.EXTRA_IK = ControlLayersOption(
-    'extra_ik', toggle_default=False,
+    "extra_ik",
+    toggle_default=False,
     toggle_name="Extra IK Layers",
     description="Layers for the optional IK controls to be on",
 )
 
 # Layer parameters used by the super_face rig.
 ControlLayersOption.FACE_PRIMARY = ControlLayersOption(
-    'primary', description="Layers for the primary controls to be on")
+    "primary", description="Layers for the primary controls to be on"
+)
 ControlLayersOption.FACE_SECONDARY = ControlLayersOption(
-    'secondary', description="Layers for the secondary controls to be on")
+    "secondary", description="Layers for the secondary controls to be on"
+)
 
 # Layer parameters used by the skin rigs
 ControlLayersOption.SKIN_PRIMARY = ControlLayersOption(
-    'skin_primary', toggle_default=False,
+    "skin_primary",
+    toggle_default=False,
     toggle_name="Primary Control Layers",
     description="Layers for the primary controls to be on",
 )
 
 ControlLayersOption.SKIN_SECONDARY = ControlLayersOption(
-    'skin_secondary', toggle_default=False,
+    "skin_secondary",
+    toggle_default=False,
     toggle_name="Secondary Control Layers",
     description="Layers for the secondary controls to be on",
 )

@@ -2,29 +2,25 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
-
 from collections import OrderedDict
-from typing import Union, Optional, Any
+from typing import Any, Optional, Union
 
-from .utils.animation import SCRIPT_REGISTER_BAKE, SCRIPT_UTILITIES_BAKE
-from .utils.mechanism import quote_property
-
-from . import base_generate
-
+import bpy
 from rna_prop_ui import rna_idprop_quote_path
 
+from . import base_generate
+from .utils.animation import SCRIPT_REGISTER_BAKE, SCRIPT_UTILITIES_BAKE
 
 UI_IMPORTS = [
-    'import bpy',
-    'import math',
-    'import json',
-    'import collections',
-    'import traceback',
-    'from math import pi',
-    'from bpy.props import StringProperty',
-    'from mathutils import Euler, Matrix, Quaternion, Vector',
-    'from rna_prop_ui import rna_idprop_quote_path',
+    "import bpy",
+    "import math",
+    "import json",
+    "import collections",
+    "import traceback",
+    "from math import pi",
+    "from bpy.props import StringProperty",
+    "from mathutils import Euler, Matrix, Quaternion, Vector",
+    "from rna_prop_ui import rna_idprop_quote_path",
 ]
 
 
@@ -105,7 +101,8 @@ def flatten_children(iterable):
 
 '''
 
-UTILITIES_FUNC_COMMON_IK_FK = ['''
+UTILITIES_FUNC_COMMON_IK_FK = [
+    '''
 #########################################
 ## "Visual Transform" helper functions ##
 #########################################
@@ -302,10 +299,12 @@ def parse_bone_names(names_string):
     else:
         return names_string
 
-''']
+'''
+]
 
 # noinspection SpellCheckingInspection
-UTILITIES_FUNC_OLD_ARM_FKIK = ['''
+UTILITIES_FUNC_OLD_ARM_FKIK = [
+    '''
 ######################
 ## IK Arm functions ##
 ######################
@@ -420,10 +419,12 @@ def ik2fk_arm(obj, fk, ik):
         correct_rotation(view_layer, uarmi, uarm.matrix)
 
     correct_scale(view_layer, uarmi, uarm.matrix)
-''']
+'''
+]
 
 # noinspection SpellCheckingInspection
-UTILITIES_FUNC_OLD_LEG_FKIK = ['''
+UTILITIES_FUNC_OLD_LEG_FKIK = [
+    '''
 ######################
 ## IK Leg functions ##
 ######################
@@ -563,10 +564,12 @@ def ik2fk_leg(obj, fk, ik):
         match_pole_target(view_layer, thighi, shini, pole, thigh.matrix, (thighi.length + shini.length))
 
     correct_scale(view_layer, thighi, thigh.matrix)
-''']
+'''
+]
 
 # noinspection SpellCheckingInspection
-UTILITIES_FUNC_OLD_POLE = ['''
+UTILITIES_FUNC_OLD_POLE = [
+    """
 ################################
 ## IK Rotation-Pole functions ##
 ################################
@@ -629,13 +632,15 @@ def rotPoleToggle(rig, limb_type, controls, ik_ctrl, fk_ctrl, parent, pole):
             func2(**kwargs2)
 
             bpy.ops.pose.select_all(action='DESELECT')
-''']
+"""
+]
 
 # noinspection SpellCheckingInspection
-REGISTER_OP_OLD_ARM_FKIK = ['Rigify_Arm_FK2IK', 'Rigify_Arm_IK2FK']
+REGISTER_OP_OLD_ARM_FKIK = ["Rigify_Arm_FK2IK", "Rigify_Arm_IK2FK"]
 
 # noinspection SpellCheckingInspection
-UTILITIES_OP_OLD_ARM_FKIK = ['''
+UTILITIES_OP_OLD_ARM_FKIK = [
+    '''
 ##################################
 ## IK/FK Arm snapping operators ##
 ##################################
@@ -691,13 +696,15 @@ class Rigify_Arm_IK2FK(bpy.types.Operator):
         ik2fk_arm(context.active_object, fk=[self.uarm_fk, self.farm_fk, self.hand_fk],
                   ik=[self.uarm_ik, self.farm_ik, self.hand_ik, self.pole, self.main_parent])
         return {'FINISHED'}
-''']
+'''
+]
 
 # noinspection SpellCheckingInspection
-REGISTER_OP_OLD_LEG_FKIK = ['Rigify_Leg_FK2IK', 'Rigify_Leg_IK2FK']
+REGISTER_OP_OLD_LEG_FKIK = ["Rigify_Leg_FK2IK", "Rigify_Leg_IK2FK"]
 
 # noinspection SpellCheckingInspection
-UTILITIES_OP_OLD_LEG_FKIK = ['''
+UTILITIES_OP_OLD_LEG_FKIK = [
+    '''
 ##################################
 ## IK/FK Leg snapping operators ##
 ##################################
@@ -760,11 +767,13 @@ class Rigify_Leg_IK2FK(bpy.types.Operator):
                   ik=[self.thigh_ik, self.shin_ik, self.foot_ik, self.footroll, self.pole,
                       self.mfoot_ik, self.main_parent])
         return {'FINISHED'}
-''']
+'''
+]
 
-REGISTER_OP_OLD_POLE = ['Rigify_Rot2PoleSwitch']
+REGISTER_OP_OLD_POLE = ["Rigify_Rot2PoleSwitch"]
 
-UTILITIES_OP_OLD_POLE = ['''
+UTILITIES_OP_OLD_POLE = [
+    """
 ###########################
 ## IK Rotation Pole Snap ##
 ###########################
@@ -792,7 +801,8 @@ class Rigify_Rot2PoleSwitch(bpy.types.Operator):
         rotPoleToggle(rig, self.limb_type, self.controls, self.ik_ctrl, self.fk_ctrl,
                       self.parent, self.pole)
         return {'FINISHED'}
-''']
+"""
+]
 
 REGISTER_RIG_OLD_ARM = REGISTER_OP_OLD_ARM_FKIK + REGISTER_OP_OLD_POLE
 
@@ -819,14 +829,13 @@ UTILITIES_RIG_OLD_LEG = [
 ############################
 
 UI_REGISTER = [
-    'RigUI',
-    'RigLayers',
+    "RigUI",
+    "RigLayers",
 ]
 
-UI_UTILITIES = [
-]
+UI_UTILITIES = []
 
-UI_SLIDERS = '''
+UI_SLIDERS = """
 ###################
 ## Rig UI Panels ##
 ###################
@@ -835,7 +844,7 @@ class RigUI(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Rig Main Properties"
-    bl_idname = "VIEW3D_PT_rig_ui_" + rig_id
+    bl_idname = "VIEW3D_PT_rigforge_rig_ui_" + rig_id
     bl_category = 'Item'
 
     @classmethod
@@ -870,16 +879,16 @@ class RigUI(bpy.types.Panel):
             if num_rig_separators[0] >= 0:
                 layout.separator()
             num_rig_separators[0] += 1
-'''
+"""
 
-UI_REGISTER_BAKE_SETTINGS = ['RigBakeSettings']
+UI_REGISTER_BAKE_SETTINGS = ["RigBakeSettings"]
 
-UI_BAKE_SETTINGS = '''
+UI_BAKE_SETTINGS = """
 class RigBakeSettings(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Rig Bake Settings"
-    bl_idname = "VIEW3D_PT_rig_bake_settings_" + rig_id
+    bl_idname = "VIEW3D_PT_rigforge_rig_bake_settings_" + rig_id
     bl_category = 'Item'
 
     @classmethod
@@ -887,16 +896,16 @@ class RigBakeSettings(bpy.types.Panel):
         return RigUI.poll(context) and find_action(context.active_object) is not None
 
     def draw(self, context):
-        RigifyBakeKeyframesMixin.draw_common_bake_ui(context, self.layout)
-'''
+        RigforgeBakeKeyframesMixin.draw_common_bake_ui(context, self.layout)
+"""
 
 
-UI_LAYERS_PANEL = '''
+UI_LAYERS_PANEL = """
 class RigLayers(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Rig Layers"
-    bl_idname = "VIEW3D_PT_rig_layers_" + rig_id
+    bl_idname = "VIEW3D_PT_rigforge_rig_layers_" + rig_id
     bl_category = 'Item'
 
     @classmethod
@@ -925,10 +934,10 @@ class RigLayers(bpy.types.Panel):
                     row2.prop(coll, 'is_visible', toggle=True, text=title, translate=False)
             else:
                 row.separator()
-'''
+"""
 
 
-class PanelExpression(object):
+class PanelExpression:
     """A runtime expression involving bone properties"""
 
     _rigforge_expr: str
@@ -940,76 +949,76 @@ class PanelExpression(object):
         return self._rigforge_expr
 
     def __add__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} + {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} + {other!r})")
 
     def __sub__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} - {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} - {other!r})")
 
     def __mul__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} * {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} * {other!r})")
 
     def __matmul__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} @ {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} @ {other!r})")
 
     def __truediv__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} / {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} / {other!r})")
 
     def __floordiv__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} // {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} // {other!r})")
 
     def __mod__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} % {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} % {other!r})")
 
     def __lshift__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} << {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} << {other!r})")
 
     def __rshift__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} >> {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} >> {other!r})")
 
     def __and__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} & {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} & {other!r})")
 
     def __xor__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} ^ {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} ^ {other!r})")
 
     def __or__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} | {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} | {other!r})")
 
     def __radd__(self, other):
-        return PanelExpression(f"({repr(other)} + {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} + {self._rigforge_expr})")
 
     def __rsub__(self, other):
-        return PanelExpression(f"({repr(other)} - {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} - {self._rigforge_expr})")
 
     def __rmul__(self, other):
-        return PanelExpression(f"({repr(other)} * {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} * {self._rigforge_expr})")
 
     def __rmatmul__(self, other):
-        return PanelExpression(f"({repr(other)} @ {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} @ {self._rigforge_expr})")
 
     def __rtruediv__(self, other):
-        return PanelExpression(f"({repr(other)} / {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} / {self._rigforge_expr})")
 
     def __rfloordiv__(self, other):
-        return PanelExpression(f"({repr(other)} // {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} // {self._rigforge_expr})")
 
     def __rmod__(self, other):
-        return PanelExpression(f"({repr(other)} % {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} % {self._rigforge_expr})")
 
     def __rlshift__(self, other):
-        return PanelExpression(f"({repr(other)} << {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} << {self._rigforge_expr})")
 
     def __rrshift__(self, other):
-        return PanelExpression(f"({repr(other)} >> {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} >> {self._rigforge_expr})")
 
     def __rand__(self, other):
-        return PanelExpression(f"({repr(other)} & {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} & {self._rigforge_expr})")
 
     def __rxor__(self, other):
-        return PanelExpression(f"({repr(other)} ^ {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} ^ {self._rigforge_expr})")
 
     def __ror__(self, other):
-        return PanelExpression(f"({repr(other)} | {self._rigforge_expr})")
+        return PanelExpression(f"({other!r} | {self._rigforge_expr})")
 
     def __neg__(self):
         return PanelExpression(f"-{self._rigforge_expr}")
@@ -1036,25 +1045,27 @@ class PanelExpression(object):
         return PanelExpression(f"ceil({self._rigforge_expr})")
 
     def __lt__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} < {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} < {other!r})")
 
     def __le__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} <= {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} <= {other!r})")
 
     def __eq__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} == {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} == {other!r})")
 
     def __ne__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} != {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} != {other!r})")
 
     def __gt__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} > {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} > {other!r})")
 
     def __ge__(self, other):
-        return PanelExpression(f"({self._rigforge_expr} >= {repr(other)})")
+        return PanelExpression(f"({self._rigforge_expr} >= {other!r})")
 
     def __bool__(self):
-        raise NotImplementedError("This object wraps an expression, not a value; casting to boolean is meaningless")
+        raise NotImplementedError(
+            "This object wraps an expression, not a value; casting to boolean is meaningless"
+        )
 
 
 class PanelReferenceExpression(PanelExpression):
@@ -1064,40 +1075,42 @@ class PanelReferenceExpression(PanelExpression):
     """
 
     def __getitem__(self, item):
-        return PanelReferenceExpression(f"{self._rigforge_expr}[{repr(item)}]")
+        return PanelReferenceExpression(f"{self._rigforge_expr}[{item!r}]")
 
     def __getattr__(self, item):
         return PanelReferenceExpression(f"{self._rigforge_expr}.{item}")
 
     def get(self, item, default=None):
-        return PanelReferenceExpression(f"{self._rigforge_expr}.get({repr(item)}, {repr(default)})")
+        return PanelReferenceExpression(
+            f"{self._rigforge_expr}.get({item!r}, {default!r})"
+        )
 
 
 def quote_parameters(positional: list[Any], named: dict[str, Any]):
     """Quote the given positional and named parameters as a code string."""
     positional_list = [repr(v) for v in positional]
     named_list = ["%s=%r" % (k, v) for k, v in named.items()]
-    return ', '.join(positional_list + named_list)
+    return ", ".join(positional_list + named_list)
 
 
 def indent_lines(lines: list[str], indent=4):
     if indent > 0:
-        prefix = ' ' * indent
+        prefix = " " * indent
         return [prefix + line for line in lines]
     else:
         return lines
 
 
-class PanelLayout(object):
+class PanelLayout:
     """Utility class that builds code for creating a layout."""
 
-    parent: Optional['PanelLayout']
-    script: 'ScriptGenerator'
+    parent: Optional["PanelLayout"]
+    script: "ScriptGenerator"
 
     header: list[str]
-    items: list[Union[str, 'PanelLayout']]
+    items: list[Union[str, "PanelLayout"]]
 
-    def __init__(self, parent: Union['PanelLayout', 'ScriptGenerator'], index=0):
+    def __init__(self, parent: Union["PanelLayout", "ScriptGenerator"], index=0):
         if isinstance(parent, PanelLayout):
             self.parent = parent
             self.script = parent.script
@@ -1114,7 +1127,7 @@ class PanelLayout(object):
 
     @staticmethod
     def _get_layout_var(index):
-        return 'layout' if index == 0 else 'group' + str(index)
+        return "layout" if index == 0 else "group" + str(index)
 
     def clear_empty(self):
         self.is_empty = False
@@ -1158,9 +1171,9 @@ class PanelLayout(object):
             "%s.prop(pose_bones[%r], %s)" % (self.layout, bone_name, param_str)
         )
 
-    def operator(self, operator_name: str, *,
-                 properties: Optional[dict[str, Any]] = None,
-                 **params):
+    def operator(
+        self, operator_name: str, *, properties: dict[str, Any] | None = None, **params
+    ):
         """Add an operator call button to the panel."""
         name = operator_name.format_map(self.script.format_args)
         param_str = quote_parameters([name], params)
@@ -1172,29 +1185,33 @@ class PanelLayout(object):
         else:
             self.add_line(call_str)
 
-    def add_nested_layout(self, method_name: str, params: dict[str, Any]) -> 'PanelLayout':
+    def add_nested_layout(
+        self, method_name: str, params: dict[str, Any]
+    ) -> "PanelLayout":
         param_str = quote_parameters([], params)
         sub_panel = PanelLayout(self, self.index + 1)
-        sub_panel.header.append(f'{sub_panel.layout} = {self.layout}.{method_name}({param_str})')
+        sub_panel.header.append(
+            f"{sub_panel.layout} = {self.layout}.{method_name}({param_str})"
+        )
         self.items.append(sub_panel)
         return sub_panel
 
     def row(self, **params):
         """Add a nested row layout to the panel."""
-        return self.add_nested_layout('row', params)
+        return self.add_nested_layout("row", params)
 
     def column(self, **params):
         """Add a nested column layout to the panel."""
-        return self.add_nested_layout('column', params)
+        return self.add_nested_layout("column", params)
 
     def split(self, **params):
         """Add a split layout to the panel."""
-        return self.add_nested_layout('split', params)
+        return self.add_nested_layout("split", params)
 
     @staticmethod
     def expr_bone(bone_name):
         """Returns an expression referencing the specified pose bone."""
-        return PanelReferenceExpression(f"pose_bones[%r]" % bone_name)
+        return PanelReferenceExpression("pose_bones[%r]" % bone_name)
 
     @staticmethod
     def expr_and(*expressions):
@@ -1209,12 +1226,14 @@ class PanelLayout(object):
     @staticmethod
     def expr_if_else(condition, true_expr, false_expr):
         """Returns a conditional expression."""
-        return PanelExpression(f"({repr(true_expr)} if {repr(condition)} else {repr(false_expr)})")
+        return PanelExpression(f"({true_expr!r} if {condition!r} else {false_expr!r})")
 
     @staticmethod
     def expr_call(func: str, *expressions):
         """Returns an expression calling the specified function with given parameters."""
-        return PanelExpression(func + "(" + ", ".join(repr(e) for e in expressions) + ")")
+        return PanelExpression(
+            func + "(" + ", ".join(repr(e) for e in expressions) + ")"
+        )
 
     def set_layout_property(self, prop_name: str, prop_value: Any):
         assert self.index > 0  # Don't change properties on the root layout
@@ -1226,7 +1245,7 @@ class PanelLayout(object):
 
     @active.setter
     def active(self, value):
-        self.set_layout_property('active', value)
+        self.set_layout_property("active", value)
 
     @property
     def enabled(self):
@@ -1234,15 +1253,15 @@ class PanelLayout(object):
 
     @enabled.setter
     def enabled(self, value):
-        self.set_layout_property('enabled', value)
+        self.set_layout_property("enabled", value)
 
 
 class BoneSetPanelLayout(PanelLayout):
     """Panel restricted to a certain set of bones."""
 
-    parent: 'RigPanelLayout'
+    parent: "RigPanelLayout"
 
-    def __init__(self, rig_panel: 'RigPanelLayout', bones: frozenset[str]):
+    def __init__(self, rig_panel: "RigPanelLayout", bones: frozenset[str]):
         assert isinstance(bones, frozenset)
         super().__init__(rig_panel)
         self.bones = bones
@@ -1271,7 +1290,7 @@ class BoneSetPanelLayout(PanelLayout):
 class RigPanelLayout(PanelLayout):
     """Panel owned by a certain rig."""
 
-    def __init__(self, script: 'ScriptGenerator', _rig):
+    def __init__(self, script: "ScriptGenerator", _rig):
         super().__init__(script)
         self.bones = set()
         self.sub_panels = OrderedDict()
@@ -1349,7 +1368,7 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
 
     def initialize(self):
         self.format_args = {
-            'rig_id': self.generator.rig_id,
+            "rig_id": self.generator.rig_id,
         }
 
     def finalize(self):
@@ -1387,7 +1406,7 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
         for panel in self.ui_rig_panels.values():
             lines = panel.get_lines()
             if len(lines) > 1:
-                script.write("\n        ".join([''] + lines) + "\n")
+                script.write("\n        ".join([""] + lines) + "\n")
 
         if self.use_bake_settings:
             self.ui_register = UI_REGISTER_BAKE_SETTINGS + self.ui_register
@@ -1432,11 +1451,12 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
         exec(script.as_string(), {})
 
         # Attach the script to the rig
-        self.obj['rig_ui'] = script
+        self.obj["rig_ui"] = script
 
     def _write_rna_prop_register_funcs(self, script: bpy.types.Text) -> None:
         """Inject the (un)register_use_time_properties functions into the script."""
         import inspect
+
         from . import register_usetime_properties, unregister_usetime_properties
 
         register_func_src = inspect.getsource(register_usetime_properties)

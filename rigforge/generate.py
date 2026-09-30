@@ -2,48 +2,49 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import re
 import time
+from typing import TYPE_CHECKING
 
-from typing import Optional, TYPE_CHECKING
+import bpy
 
-from .utils.errors import MetarigError
+from . import base_generate, rig_lists, rig_ui_template
+from .utils.action_layers import ActionLayerBuilder
 from .utils.bones import new_bone
+from .utils.collections import (
+    ensure_collection,
+    filter_layer_collections_by_object,
+    list_layer_collections,
+)
+from .utils.errors import MetarigError
 from .utils.layers import (
-    ORG_COLLECTION,
-    MCH_COLLECTION,
     DEF_COLLECTION,
+    MCH_COLLECTION,
+    ORG_COLLECTION,
     ROOT_COLLECTION,
     set_bone_layers,
     validate_collection_references,
 )
-from .utils.naming import (
-    ORG_PREFIX,
-    MCH_PREFIX,
-    DEF_PREFIX,
-    ROOT_NAME,
-    make_original_name,
-    change_name_side,
-    get_name_side,
-    Side,
-)
-from .utils.widgets import WGT_PREFIX, WGT_GROUP_PREFIX
-from .utils.widgets_special import create_root_widget
 from .utils.mechanism import refresh_all_drivers
 from .utils.misc import (
     ArmatureObject,
-    select_object,
-    verify_armature_obj,
     choose_next_uid,
     flatten_children,
     flatten_parents,
+    select_object,
+    verify_armature_obj,
 )
-from .utils.collections import (
-    ensure_collection,
-    list_layer_collections,
-    filter_layer_collections_by_object,
+from .utils.naming import (
+    DEF_PREFIX,
+    MCH_PREFIX,
+    ORG_PREFIX,
+    ROOT_NAME,
+    Side,
+    change_name_side,
+    get_name_side,
+    make_original_name,
 )
+from .utils.objects import ArtifactManager
 from .utils.rig import (
     get_rigforge_colors,
     get_rigforge_finalize_script,
@@ -53,15 +54,11 @@ from .utils.rig import (
     get_rigforge_target_rig,
     get_rigforge_type,
 )
-from .utils.action_layers import ActionLayerBuilder
-from .utils.objects import ArtifactManager
-
-from . import base_generate
-from . import rig_ui_template
-from . import rig_lists
+from .utils.widgets import WGT_GROUP_PREFIX, WGT_PREFIX
+from .utils.widgets_special import create_root_widget
 
 if TYPE_CHECKING:
-    from . import RigifyColorSet
+    from . import RigforgeColorSet
 
 
 RIG_MODULE = "rigs"
@@ -127,22 +124,24 @@ class Generator(base_generate.BaseGenerator):
 
             arm = bpy.data.armatures.new(rig_new_name)
             target_rig = verify_armature_obj(bpy.data.objects.new(rig_new_name, arm))
-            target_rig.display_type = 'WIRE'
+            target_rig.display_type = "WIRE"
 
         # If the object is already added to the scene, switch to its collection
         if target_rig in list(self.context.scene.collection.all_objects):
             self.__switch_to_usable_collection(target_rig)
         else:
             # Otherwise, add to the selected collection or the metarig collection if unusable
-            if (self.layer_collection not in self.usable_collections
-                    or self.layer_collection == self.view_layer.layer_collection):
+            if (
+                self.layer_collection not in self.usable_collections
+                or self.layer_collection == self.view_layer.layer_collection
+            ):
                 self.__switch_to_usable_collection(self.metarig, True)
 
             self.collection.objects.link(target_rig)
 
         # Configure and remember the object
         meta_data.rigforge_target_rig = target_rig
-        target_rig.data.pose_position = 'POSE'
+        target_rig.data.pose_position = "POSE"
 
         return found, target_rig
 
@@ -152,19 +151,21 @@ class Generator(base_generate.BaseGenerator):
         obj.hide_viewport = False
 
         if not obj.visible_get(view_layer=self.view_layer):
-            raise Exception('Could not generate: Target rig is not visible')
+            raise Exception("Could not generate: Target rig is not visible")
 
         obj.select_set(True, view_layer=self.view_layer)
 
         if not obj.select_get(view_layer=self.view_layer):
-            raise Exception('Could not generate: Cannot select target rig')
+            raise Exception("Could not generate: Cannot select target rig")
 
         if self.layer_collection not in self.usable_collections:
-            raise Exception('Could not generate: Could not find a usable collection.')
+            raise Exception("Could not generate: Could not find a usable collection.")
 
     def __save_rig_data(self, obj: ArmatureObject, obj_found: bool):
         if obj_found:
-            self.saved_visible_layers = {coll.name: coll.is_visible for coll in obj.data.collections_all}
+            self.saved_visible_layers = {
+                coll.name: coll.is_visible for coll in obj.data.collections_all
+            }
 
             self.artifacts.generate_init_existing(obj)
 
@@ -180,10 +181,13 @@ class Generator(base_generate.BaseGenerator):
 
         if not old_collection:
             # Update the old 'Widgets' collection
-            legacy_collection = bpy.data.collections.get('Widgets')
+            legacy_collection = bpy.data.collections.get("Widgets")
 
-            if legacy_collection and widgets_group_name in legacy_collection.objects\
-                    and not legacy_collection.library:
+            if (
+                legacy_collection
+                and widgets_group_name in legacy_collection.objects
+                and not legacy_collection.library
+            ):
                 legacy_collection.name = widgets_group_name
                 old_collection = legacy_collection
 
@@ -201,7 +205,8 @@ class Generator(base_generate.BaseGenerator):
         if not self.widget_collection:
             widgets_group_name = WGT_GROUP_PREFIX + self.obj.name.replace("RIG-", "")
             self.widget_collection = ensure_collection(
-                self.context, widgets_group_name, hidden=True)
+                self.context, widgets_group_name, hidden=True
+            )
 
         self.metarig.data.rigforge_widgets_collection = self.widget_collection
 
@@ -228,14 +233,17 @@ class Generator(base_generate.BaseGenerator):
             name_prefix = WGT_PREFIX + self.obj.name + "_"
 
             for bone_name, widget in self.old_widget_table.items():
-                old_data_name = change_name_side(widget.name, get_name_side(widget.data.name))
+                old_data_name = change_name_side(
+                    widget.name, get_name_side(widget.data.name)
+                )
 
                 widget.name = name_prefix + bone_name
 
                 # If the mesh name is the same as the object, rename it too
                 if widget.data.name == old_data_name:
                     widget.data.name = change_name_side(
-                        widget.name, get_name_side(widget.data.name))
+                        widget.name, get_name_side(widget.data.name)
+                    )
 
             # Find meshes for mirroring
             if self.use_mirror_widgets:
@@ -256,7 +264,9 @@ class Generator(base_generate.BaseGenerator):
             coll = self.metarig.data.collections.new(ROOT_COLLECTION)
 
         if coll.rigforge_ui_row <= 0:
-            coll.rigforge_ui_row = 2 + choose_next_uid(collections, 'rigforge_ui_row', min_value=1)
+            coll.rigforge_ui_row = 2 + choose_next_uid(
+                collections, "rigforge_ui_row", min_value=1
+            )
 
     def __duplicate_rig(self):
         obj = self.obj
@@ -264,10 +274,10 @@ class Generator(base_generate.BaseGenerator):
         context = self.context
 
         # Remove all bones from the generated rig armature.
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="EDIT")
         for bone in obj.data.edit_bones:
             obj.data.edit_bones.remove(bone)
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         # Remove all bone collections from the target armature.
         for coll in list(obj.data.collections_all):
@@ -314,9 +324,9 @@ class Generator(base_generate.BaseGenerator):
                 for var in d.driver.variables:
                     for tar in var.targets:
                         # If a custom property
-                        if var.type == 'SINGLE_PROP' \
-                                and re.match(r'^pose.bones\["[^"\]]*"]\["[^"\]]*"]$',
-                                             tar.data_path):
+                        if var.type == "SINGLE_PROP" and re.match(
+                            r'^pose.bones\["[^"\]]*"]\["[^"\]]*"]$', tar.data_path
+                        ):
                             tar.data_path = "RIGIFY-" + tar.data_path
 
     def __rename_org_bones(self, obj: ArmatureObject):
@@ -334,13 +344,15 @@ class Generator(base_generate.BaseGenerator):
             # Preserve the root bone as is if present
             if bone.name == ROOT_NAME:
                 if bone.parent:
-                    raise MetarigError('Root bone must have no parent')
-                if get_rigforge_type(bone) not in ('', 'basic.raw_copy'):
-                    raise MetarigError('Root bone must have no rig, or use basic.raw_copy')
+                    raise MetarigError("Root bone must have no parent")
+                if get_rigforge_type(bone) not in ("", "basic.raw_copy"):
+                    raise MetarigError(
+                        "Root bone must have no rig, or use basic.raw_copy"
+                    )
                 continue
 
             # This rig type is special in that it preserves the name of the bone.
-            if get_rigforge_type(bone) != 'basic.raw_copy':
+            if get_rigforge_type(bone) != "basic.raw_copy":
                 bone.name = make_original_name(original_bones[i])
                 original_bones[i] = bone.name
 
@@ -357,7 +369,7 @@ class Generator(base_generate.BaseGenerator):
             # Create the root bone.
             root_bone = new_bone(obj, ROOT_NAME)
             spread = get_xy_spread(metarig.data.bones) or metarig.data.bones[0].length
-            spread = float('%.3g' % spread)
+            spread = float("%.3g" % spread)
             scale = spread / 0.589
             obj.data.edit_bones[root_bone].head = (0, 0, 0)
             obj.data.edit_bones[root_bone].tail = (0, scale, 0)
@@ -443,13 +455,20 @@ class Generator(base_generate.BaseGenerator):
                     for tar in v.targets:
                         if tar.data_path.startswith("RIGIFY-"):
                             temp, bone, prop = tuple(
-                                [x.strip('"]') for x in tar.data_path.split('["')])
-                            if bone in obj.data.bones and prop in obj.pose.bones[bone].keys():
+                                [x.strip('"]') for x in tar.data_path.split('["')]
+                            )
+                            if (
+                                bone in obj.data.bones
+                                and prop in obj.pose.bones[bone].keys()
+                            ):
                                 tar.data_path = tar.data_path[7:]
                             else:
                                 org_name = make_original_name(bone)
                                 org_name = self.org_rename_table.get(org_name, org_name)
-                                tar.data_path = 'pose.bones["%s"]["%s"]' % (org_name, prop)
+                                tar.data_path = 'pose.bones["%s"]["%s"]' % (
+                                    org_name,
+                                    prop,
+                                )
 
     def __assign_widgets(self):
         obj_table = {obj.name: obj for obj in self.scene.objects}
@@ -463,17 +482,19 @@ class Generator(base_generate.BaseGenerator):
                 continue
 
             # Object names are limited to 63 characters... arg
-            wgt_name = (WGT_PREFIX + self.obj.name + '_' + bone.name)[:63]
+            wgt_name = (WGT_PREFIX + self.obj.name + "_" + bone.name)[:63]
 
             if wgt_name in obj_table:
                 bone.custom_shape = obj_table[wgt_name]
 
     def __compute_visible_layers(self):
-        has_ui_buttons = set().union(*[
-            {p.name for p in flatten_parents(coll)}
-            for coll in self.obj.data.collections_all
-            if coll.rigforge_ui_row > 0
-        ])
+        has_ui_buttons = set().union(
+            *[
+                {p.name for p in flatten_parents(coll)}
+                for coll in self.obj.data.collections_all
+                if coll.rigforge_ui_row > 0
+            ]
+        )
 
         # Hide all layers without UI buttons
         for coll in self.obj.data.collections_all:
@@ -487,9 +508,10 @@ class Generator(base_generate.BaseGenerator):
         t = Timer()
 
         self.usable_collections = list_layer_collections(
-            view_layer.layer_collection, selectable=True)
+            view_layer.layer_collection, selectable=True
+        )
 
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         ###########################################
         # Create/find the rig object and set it up
@@ -546,29 +568,29 @@ class Generator(base_generate.BaseGenerator):
         self.action_layers = ActionLayerBuilder(self)
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.instantiate_rig_tree()
 
         t.tick("Instantiate rigs: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.invoke_initialize()
 
         t.tick("Initialize rigs: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="EDIT")
 
         self.invoke_prepare_bones()
 
         t.tick("Prepare bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.mode_set(mode="EDIT")
 
         self.__create_root_bone()
 
@@ -577,8 +599,8 @@ class Generator(base_generate.BaseGenerator):
         t.tick("Generate bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.mode_set(mode="EDIT")
 
         self.invoke_parent_bones()
 
@@ -587,35 +609,35 @@ class Generator(base_generate.BaseGenerator):
         t.tick("Parent bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.invoke_configure_bones()
 
         t.tick("Configure bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.invoke_preapply_bones()
 
         t.tick("Preapply bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="EDIT")
 
         self.invoke_apply_bones()
 
         t.tick("Apply bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.invoke_rig_bones()
 
         t.tick("Rig bones: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.invoke_generate_widgets()
 
@@ -625,7 +647,7 @@ class Generator(base_generate.BaseGenerator):
         t.tick("Generate widgets: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.__lock_transforms()
         self.__assign_layers()
@@ -635,14 +657,14 @@ class Generator(base_generate.BaseGenerator):
         t.tick("Assign layers: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.invoke_finalize()
 
         t.tick("Finalize: ")
 
         ###########################################
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         self.__assign_widgets()
 
@@ -657,8 +679,8 @@ class Generator(base_generate.BaseGenerator):
         ###########################################
         # Restore state
 
-        bpy.ops.object.mode_set(mode='OBJECT')
-        obj.data.pose_position = 'POSE'
+        bpy.ops.object.mode_set(mode="OBJECT")
+        obj.data.pose_position = "POSE"
 
         # Restore parent to bones
         for child, sub_parent in child_parent_bones.items():
@@ -676,9 +698,9 @@ class Generator(base_generate.BaseGenerator):
         finalize_script = get_rigforge_finalize_script(metarig.data)
 
         if finalize_script:
-            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode="OBJECT")
             exec(finalize_script.as_string(), {})
-            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode="OBJECT")
 
         obj.data.collections.active_index = 0
 
@@ -690,12 +712,10 @@ class Generator(base_generate.BaseGenerator):
 
 
 def generate_rig(context, metarig):
-    """ Generates a rig from a metarig.
-
-    """
+    """Generates a rig from a metarig."""
     # Initial configuration
     rest_backup = metarig.data.pose_position
-    metarig.data.pose_position = 'REST'
+    metarig.data.pose_position = "REST"
 
     try:
         generator = Generator(context, metarig)
@@ -708,9 +728,9 @@ def generate_rig(context, metarig):
 
     except Exception as e:
         # Cleanup if something goes wrong
-        print("Rigify: failed to generate rig.")
+        print("Rigforge: failed to generate rig.")
 
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
         metarig.data.pose_position = rest_backup
 
         # Continue the exception
@@ -720,12 +740,14 @@ def generate_rig(context, metarig):
         base_generate.BaseGenerator.instance = None
 
 
-def create_selection_set_for_rig_layer(rig: ArmatureObject, set_name: str, coll: bpy.types.BoneCollection) -> None:
+def create_selection_set_for_rig_layer(
+    rig: ArmatureObject, set_name: str, coll: bpy.types.BoneCollection
+) -> None:
     """Create a single selection set on a rig.
 
     The set will contain all bones on the rig layer with the given index.
     """
-    sel_set = rig.selection_sets.add()  # noqa
+    sel_set = rig.selection_sets.add()
     sel_set.name = set_name
 
     for b in rig.pose.bones:
@@ -740,7 +762,7 @@ def create_selection_sets(obj: ArmatureObject, _metarig: ArmatureObject):
     """Create selection sets on the armature.
 
     Whether a selection set for a rig layer is created is controlled in the
-    Rigify Layer Names panel.
+    Rigforge Layer Names panel.
     """
 
     obj.selection_sets.clear()
@@ -752,14 +774,16 @@ def create_selection_sets(obj: ArmatureObject, _metarig: ArmatureObject):
         create_selection_set_for_rig_layer(obj, coll.name, coll)
 
 
-def apply_bone_colors(obj, metarig, priorities: Optional[dict[str, dict[str, float]]] = None):
-    bpy.ops.object.mode_set(mode='OBJECT')
+def apply_bone_colors(
+    obj, metarig, priorities: dict[str, dict[str, float]] | None = None
+):
+    bpy.ops.object.mode_set(mode="OBJECT")
     pb = obj.pose.bones
 
     color_sets = get_rigforge_colors(metarig.data)
     color_map = {i + 1: cset for i, cset in enumerate(color_sets)}
 
-    collection_table: dict[str, tuple[int, 'RigifyColorSet']] = {
+    collection_table: dict[str, tuple[int, RigforgeColorSet]] = {
         coll.name: (i, color_map[coll.rigforge_color_set_id])
         for i, coll in enumerate(flatten_children(obj.data.collections))
         if coll.rigforge_color_set_id in color_map
@@ -770,11 +794,13 @@ def apply_bone_colors(obj, metarig, priorities: Optional[dict[str, dict[str, flo
 
     for b in pb:
         bone_priorities = priorities.get(b.name, dummy)
-        cset_collections = [coll.name for coll in b.bone.collections if coll.name in collection_table]
+        cset_collections = [
+            coll.name for coll in b.bone.collections if coll.name in collection_table
+        ]
         if cset_collections:
             best_name = max(
                 cset_collections,
-                key=lambda n: (bone_priorities.get(n, 0), -collection_table[n][0])
+                key=lambda n: (bone_priorities.get(n, 0), -collection_table[n][0]),
             )
             _, cset = collection_table[best_name]
             cset.apply(b.bone.color)

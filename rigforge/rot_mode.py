@@ -51,18 +51,20 @@ from bpy.props import (
 from bpy.types import (
     ActionChannelbag,
 )
-
 from bpy_extras import anim_utils
 
 
 def add_keyframe_quat(
-        channelbag: ActionChannelbag,
-        quat: list[float],
-        frame: float,
-        bone_prefix: str,
-        group_name: str) -> None:
+    channelbag: ActionChannelbag,
+    quat: list[float],
+    frame: float,
+    bone_prefix: str,
+    group_name: str,
+) -> None:
     for i in range(len(quat)):
-        fc = channelbag.fcurves.ensure(bone_prefix + "rotation_quaternion", index=i, group_name=group_name)
+        fc = channelbag.fcurves.ensure(
+            bone_prefix + "rotation_quaternion", index=i, group_name=group_name
+        )
         pos = len(fc.keyframe_points)
         fc.keyframe_points.add(1)
         fc.keyframe_points[pos].co = [frame, quat[i]]
@@ -70,13 +72,16 @@ def add_keyframe_quat(
 
 
 def add_keyframe_euler(
-        channelbag: ActionChannelbag,
-        euler: list[float],
-        frame: float,
-        bone_prefix: str,
-        group_name: str) -> None:
+    channelbag: ActionChannelbag,
+    euler: list[float],
+    frame: float,
+    bone_prefix: str,
+    group_name: str,
+) -> None:
     for i in range(len(euler)):
-        fc = channelbag.fcurves.ensure(bone_prefix + "rotation_euler", index=i, group_name=group_name)
+        fc = channelbag.fcurves.ensure(
+            bone_prefix + "rotation_euler", index=i, group_name=group_name
+        )
         pos = len(fc.keyframe_points)
         fc.keyframe_points.add(1)
         fc.keyframe_points[pos].co = [frame, euler[i]]
@@ -129,29 +134,28 @@ def group_eq(obj, channelbag, bone, bone_prefix, order):
 def convert_curves_of_bone(obj, channelbag, bone, order):
     """Convert given bone's curves in given channelbag to given rotation order."""
     to_euler = False
-    bone_prefix = ''
+    bone_prefix = ""
 
     for fcurve in channelbag.fcurves:
         if fcurve.group and fcurve.group.name == bone.name:
-
             # If To-Euler conversion
-            if order != 'QUATERNION':
-                if fcurve.data_path.endswith('rotation_quaternion'):
+            if order != "QUATERNION":
+                if fcurve.data_path.endswith("rotation_quaternion"):
                     to_euler = True
-                    bone_prefix = fcurve.data_path[:-len('rotation_quaternion')]
+                    bone_prefix = fcurve.data_path[: -len("rotation_quaternion")]
                     break
 
             # If To-Quaternion conversion
             else:
-                if fcurve.data_path.endswith('rotation_euler'):
+                if fcurve.data_path.endswith("rotation_euler"):
                     to_euler = True
-                    bone_prefix = fcurve.data_path[:-len('rotation_euler')]
+                    bone_prefix = fcurve.data_path[: -len("rotation_euler")]
                     break
 
     fcurves_to_remove = []
 
     # If To-Euler conversion
-    if to_euler and order != 'QUATERNION':
+    if to_euler and order != "QUATERNION":
         # Converts the group/bone from Quaternion to Euler
         group_qe(obj, channelbag, bone, bone_prefix, order)
 
@@ -178,53 +182,58 @@ def convert_curves_of_bone(obj, channelbag, bone, order):
 
 
 # noinspection PyPep8Naming
-class POSE_OT_convert_rotation(bpy.types.Operator):
-    bl_label = 'Convert Rotation Modes'
-    bl_idname = 'pose.convert_rotation'
-    bl_description = 'Convert animation from any rotation mode to any other'
-    bl_options = {'REGISTER', 'UNDO'}
+class POSE_OT_rigforge_convert_rotation(bpy.types.Operator):
+    bl_label = "Convert Rotation Modes"
+    bl_idname = "pose.rigforge_convert_rotation"
+    bl_description = "Convert animation from any rotation mode to any other"
+    bl_options = {"REGISTER", "UNDO"}
 
     # Properties.
     target_rotation_mode: EnumProperty(
         items=[
-            ('QUATERNION', 'Quaternion', 'Quaternion'),
-            ('XYZ', 'XYZ', 'XYZ Euler'),
-            ('XZY', 'XZY', 'XZY Euler'),
-            ('YXZ', 'YXZ', 'YXZ Euler'),
-            ('YZX', 'YZX', 'YZX Euler'),
-            ('ZXY', 'ZXY', 'ZXY Euler'),
-            ('ZYX', 'ZYX', 'ZYX Euler')
+            ("QUATERNION", "Quaternion", "Quaternion"),
+            ("XYZ", "XYZ", "XYZ Euler"),
+            ("XZY", "XZY", "XZY Euler"),
+            ("YXZ", "YXZ", "YXZ Euler"),
+            ("YZX", "YZX", "YZX Euler"),
+            ("ZXY", "ZXY", "ZXY Euler"),
+            ("ZYX", "ZYX", "ZYX Euler"),
         ],
-        name='Convert To',
+        name="Convert To",
         description="The target rotation mode",
-        default='QUATERNION',
+        default="QUATERNION",
     )
     affected_bones: EnumProperty(
         name="Affected Bones",
         items=[
-            ('SELECT', 'Selected', 'Selected'),
-            ('ALL', 'All', 'All'),
+            ("SELECT", "Selected", "Selected"),
+            ("ALL", "All", "All"),
         ],
         description="Which bones to affect",
-        default='SELECT',
+        default="SELECT",
     )
     affected_actions: EnumProperty(
         name="Affected Actions",
         items=[
-            ('SINGLE', 'Single', 'Single'),
-            ('ALL', 'All', 'All'),
+            ("SINGLE", "Single", "Single"),
+            ("ALL", "All", "All"),
         ],
         description="Which Actions to affect",
-        default='SINGLE',
+        default="SINGLE",
     )
     selected_action: StringProperty(name="Action")
 
     def invoke(self, context, event):
         ob = context.object
-        if ob and ob.type == 'ARMATURE' and ob.animation_data and ob.animation_data.action:
+        if (
+            ob
+            and ob.type == "ARMATURE"
+            and ob.animation_data
+            and ob.animation_data.action
+        ):
             self.selected_action = context.object.animation_data.action.name
         else:
-            self.affected_actions = 'ALL'
+            self.affected_actions = "ALL"
 
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
@@ -234,11 +243,11 @@ class POSE_OT_convert_rotation(bpy.types.Operator):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        layout.row().prop(self, 'affected_bones', expand=True)
-        layout.row().prop(self, 'affected_actions', expand=True)
-        if self.affected_actions == 'SINGLE':
-            layout.prop_search(self, 'selected_action', bpy.data, 'actions')
-        layout.prop(self, 'target_rotation_mode')
+        layout.row().prop(self, "affected_bones", expand=True)
+        layout.row().prop(self, "affected_actions", expand=True)
+        if self.affected_actions == "SINGLE":
+            layout.prop_search(self, "selected_action", bpy.data, "actions")
+        layout.prop(self, "target_rotation_mode")
 
     def execute(self, context):
         obj = context.active_object
@@ -246,12 +255,12 @@ class POSE_OT_convert_rotation(bpy.types.Operator):
         assigned_action = obj.animation_data and obj.animation_data.action
         assigned_slot = obj.animation_data and obj.animation_data.action_slot
 
-        if self.affected_bones == 'ALL':
+        if self.affected_bones == "ALL":
             pose_bones = obj.pose.bones
         else:
             pose_bones = context.selected_pose_bones
 
-        if self.affected_actions == 'ALL':
+        if self.affected_actions == "ALL":
             actions = bpy.data.actions
         else:
             actions = [bpy.data.actions.get(self.selected_action)]
@@ -269,7 +278,9 @@ class POSE_OT_convert_rotation(bpy.types.Operator):
                 if assigned_slot.identifier in action.slots:
                     action_slot = action.slots[assigned_slot.identifier]
                 else:
-                    action_slot = anim_utils.action_get_first_suitable_slot(action, 'OBJECT')
+                    action_slot = anim_utils.action_get_first_suitable_slot(
+                        action, "OBJECT"
+                    )
 
             channelbag = anim_utils.action_get_channelbag_for_slot(action, action_slot)
             if not channelbag:
@@ -278,17 +289,15 @@ class POSE_OT_convert_rotation(bpy.types.Operator):
             for pb in pose_bones:
                 convert_curves_of_bone(obj, channelbag, pb, self.target_rotation_mode)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def draw_convert_rotation(self, _context):
     self.layout.separator()
-    self.layout.operator(POSE_OT_convert_rotation.bl_idname)
+    self.layout.operator(POSE_OT_rigforge_convert_rotation.bl_idname)
 
 
-classes = [
-    POSE_OT_convert_rotation
-]
+classes = [POSE_OT_rigforge_convert_rotation]
 
 
 def register():

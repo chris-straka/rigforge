@@ -3,24 +3,32 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import enum
-
 from functools import partial
 from typing import Optional
 
-from mathutils import Vector, Quaternion, Matrix
+from mathutils import Matrix, Quaternion, Vector
 
-from ...utils.layers import set_bone_layers
-from ...utils.misc import ArmatureObject
-from ...utils.naming import NameSides, make_derived_name, get_name_base_and_sides, change_name_side, Side, SideZ
 from ...utils.bones import BoneUtilityMixin, set_bone_widget_transform
-from ...utils.widgets_basic import create_cube_widget, create_sphere_widget
+from ...utils.layers import set_bone_layers
 from ...utils.mechanism import MechanismUtilityMixin
+from ...utils.misc import ArmatureObject
+from ...utils.naming import (
+    NameSides,
+    Side,
+    SideZ,
+    change_name_side,
+    get_name_base_and_sides,
+    make_derived_name,
+)
+from ...utils.node_merger import BaseMergeNode, MainMergeNode, QueryMergeNode
 from ...utils.rig import get_parent_rigs
-
-from ...utils.node_merger import MainMergeNode, QueryMergeNode, BaseMergeNode
-
-from .skin_parents import ControlBoneWeakParentLayer, ControlBoneParentMix, ControlBoneParentBase
-from .skin_rigs import BaseSkinRig, BaseSkinChainRig
+from ...utils.widgets_basic import create_cube_widget, create_sphere_widget
+from .skin_parents import (
+    ControlBoneParentBase,
+    ControlBoneParentMix,
+    ControlBoneWeakParentLayer,
+)
+from .skin_rigs import BaseSkinChainRig, BaseSkinRig
 
 
 class ControlNodeLayer(enum.IntEnum):
@@ -51,15 +59,15 @@ class BaseSkinNode(BaseMergeNode, MechanismUtilityMixin, BoneUtilityMixin):
     name: str
     point: Vector
 
-    merged_master: 'ControlBoneNode'
-    control_node: 'ControlBoneNode'
+    merged_master: "ControlBoneNode"
+    control_node: "ControlBoneNode"
 
     node_parent: ControlBoneParentBase
     node_parent_built = False
 
     def do_build_parent(self) -> ControlBoneParentBase:
         """Create and intern the parent mechanism generator."""
-        assert self.rig.generator.stage == 'initialize'
+        assert self.rig.generator.stage == "initialize"
 
         result = self.rig.build_own_control_node_parent(self)
         parents = self.rig.get_all_parent_skin_rigs()
@@ -110,23 +118,23 @@ class BaseSkinNode(BaseMergeNode, MechanismUtilityMixin, BoneUtilityMixin):
 class ControlBoneNode(MainMergeNode, BaseSkinNode):
     """Node representing controls of skin chain rigs."""
 
-    merge_domain = 'ControlNetNode'
+    merge_domain = "ControlNetNode"
 
     rig: BaseSkinChainRig
-    merged_master: 'ControlBoneNode'
+    merged_master: "ControlBoneNode"
 
     size: float
     name_split: NameSides
-    name_merged: Optional[str]
-    name_merged_split: Optional[NameSides]
-    rotation: Optional[Quaternion]
+    name_merged: str | None
+    name_merged_split: NameSides | None
+    rotation: Quaternion | None
 
     # For use by the owner rig: index in chain
-    index: Optional[int]
+    index: int | None
     # If this node is the end of a chain, points to the next one
-    chain_end_neighbor: Optional['ControlBoneNode']
+    chain_end_neighbor: Optional["ControlBoneNode"]
 
-    mirror_siblings: dict[NameSides, 'ControlBoneNode']
+    mirror_siblings: dict[NameSides, "ControlBoneNode"]
     mirror_sides_x: set[Side]
     mirror_sides_z: set[SideZ]
 
@@ -147,12 +155,19 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
     weak_parent_bone: str
 
     def __init__(
-        self, rig: BaseSkinChainRig, org: str, name: str, *,
-        point: Optional[Vector] = None, size: Optional[float] = None,
-        needs_parent=False, needs_reparent=False, allow_scale=False,
+        self,
+        rig: BaseSkinChainRig,
+        org: str,
+        name: str,
+        *,
+        point: Vector | None = None,
+        size: float | None = None,
+        needs_parent=False,
+        needs_reparent=False,
+        allow_scale=False,
         chain_end=ControlNodeEnd.MIDDLE,
         layer=ControlNodeLayer.FREE,
-        index: Optional[int] = None,
+        index: int | None = None,
         icon=ControlNodeIcon.TWEAK,
     ):
         """
@@ -201,53 +216,61 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
         self.chain_end_neighbor = None
 
     @property
-    def control_node(self) -> 'ControlBoneNode':
+    def control_node(self) -> "ControlBoneNode":
         return self
 
     @property
     def control_bone(self):
         return self.merged_master._control_bone
 
-    def get_merged_siblings(self) -> list['ControlBoneNode']:
+    def get_merged_siblings(self) -> list["ControlBoneNode"]:
         return super().get_merged_siblings()
 
-    def can_merge_into(self, other: 'ControlBoneNode'):
+    def can_merge_into(self, other: "ControlBoneNode"):
         # Only merge up the layers (towards more mechanism)
         delta_prio = self.rig.chain_priority - other.rig.chain_priority
         return (
-            delta_prio <= 0 and
-            (self.layer <= other.layer or delta_prio < 0) and
-            super().can_merge_into(other)
+            delta_prio <= 0
+            and (self.layer <= other.layer or delta_prio < 0)
+            and super().can_merge_into(other)
         )
 
-    def get_merge_priority(self, other: 'ControlBoneNode'):
+    def get_merge_priority(self, other: "ControlBoneNode"):
         # Prefer higher and closest layer
         if self.layer <= other.layer:
             return -abs(self.layer - other.layer)
         else:
             return -abs(self.layer - other.layer) - 100
 
-    def is_better_cluster(self, other: 'ControlBoneNode'):
+    def is_better_cluster(self, other: "ControlBoneNode"):
         """Check if the current bone is preferable as master when choosing of same sized groups."""
 
         # Prefer bones that have strictly more parents
         my_parents = list(reversed(get_parent_rigs(self.rig.rigforge_parent)))
         other_parents = list(reversed(get_parent_rigs(other.rig.rigforge_parent)))
 
-        if len(my_parents) > len(other_parents) and my_parents[0:len(other_parents)] == other_parents:
+        if (
+            len(my_parents) > len(other_parents)
+            and my_parents[0 : len(other_parents)] == other_parents
+        ):
             return True
-        if len(other_parents) > len(my_parents) and other_parents[0:len(other_parents)] == my_parents:
+        if (
+            len(other_parents) > len(my_parents)
+            and other_parents[0 : len(other_parents)] == my_parents
+        ):
             return False
 
         # Prefer side chains
         side_x_my, side_z_my = map(abs, self.name_split[1:])
         side_x_other, side_z_other = map(abs, other.name_split[1:])
 
-        if ((side_x_my < side_x_other and side_z_my <= side_z_other) or
-                (side_x_my <= side_x_other and side_z_my < side_z_other)):
+        if (side_x_my < side_x_other and side_z_my <= side_z_other) or (
+            side_x_my <= side_x_other and side_z_my < side_z_other
+        ):
             return False
-        if ((side_x_my > side_x_other and side_z_my >= side_z_other) or
-                (side_x_my >= side_x_other and side_z_my > side_z_other)):
+        if (side_x_my > side_x_other and side_z_my >= side_z_other) or (
+            side_x_my >= side_x_other and side_z_my > side_z_other
+        ):
             return True
 
         return False
@@ -280,25 +303,32 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
 
         # Remove sides that merged with a mirror from the name
         side_x = Side.MIDDLE if len(self.mirror_sides_x) > 1 else self.name_split.side
-        side_z = SideZ.MIDDLE if len(self.mirror_sides_z) > 1 else self.name_split.side_z
+        side_z = (
+            SideZ.MIDDLE if len(self.mirror_sides_z) > 1 else self.name_split.side_z
+        )
 
         self.name_merged = change_name_side(self.name, side=side_x, side_z=side_z)
         self.name_merged_split = NameSides(self.name_split.base, side_x, side_z)
 
-    def get_best_mirror(self) -> Optional['ControlBoneNode']:
+    def get_best_mirror(self) -> Optional["ControlBoneNode"]:
         """Find best mirror sibling for connecting via mirror."""
 
         base, side, side_z = self.name_split
 
-        for flip in [(base, -side, -side_z), (base, -side, side_z), (base, side, -side_z)]:
+        for flip in [
+            (base, -side, -side_z),
+            (base, -side, side_z),
+            (base, side, -side_z),
+        ]:
             mirror = self.mirror_siblings.get(flip, None)
             if mirror and mirror is not self:
                 return mirror
 
         return None
 
-    def intern_parent(self, node: BaseSkinNode, parent: ControlBoneParentBase
-                      ) -> ControlBoneParentBase:
+    def intern_parent(
+        self, node: BaseSkinNode, parent: ControlBoneParentBase
+    ) -> ControlBoneParentBase:
         """
         De-duplicate the parent layer chain within this merge group.
 
@@ -374,33 +404,41 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
             # Compute orientation
             self.rotation = sum(
                 (node.get_rotation() for node in mirror_sibling_list),
-                Quaternion((0, 0, 0, 0))
+                Quaternion((0, 0, 0, 0)),
             ).normalized()
 
             self.matrix = self.rotation.to_matrix().to_4x4()
             self.matrix.translation = self.point
 
             # Create parents and decide if mix would be needed
-            weak_parent_list = [node.build_parent(use=False) for node in mirror_sibling_list]
+            weak_parent_list = [
+                node.build_parent(use=False) for node in mirror_sibling_list
+            ]
 
             if all(parent == self.node_parent for parent in weak_parent_list):
                 weak_parent_list = [self.node_parent]
                 self.node_parent_weak = self.node_parent
             else:
-                self.node_parent_weak = ControlBoneParentMix(self.rig, self, weak_parent_list)
+                self.node_parent_weak = ControlBoneParentMix(
+                    self.rig, self, weak_parent_list
+                )
 
             # Prepare parenting without weak layers
-            parent_list = [ControlBoneWeakParentLayer.strip(p) for p in weak_parent_list]
+            parent_list = [
+                ControlBoneWeakParentLayer.strip(p) for p in weak_parent_list
+            ]
 
             self.use_weak_parent = False
-            self.has_weak_parent = any((p is not pw)
-                                       for p, pw in zip(weak_parent_list, parent_list))
+            self.has_weak_parent = any(
+                (p is not pw) for p, pw in zip(weak_parent_list, parent_list)
+            )
 
             if not self.has_weak_parent:
                 self.node_parent = self.node_parent_weak
             elif len(parent_list) > 1:
                 self.node_parent = ControlBoneParentMix(
-                    self.rig, self, parent_list, suffix='_mix_base')
+                    self.rig, self, parent_list, suffix="_mix_base"
+                )
             else:
                 self.node_parent = parent_list[0]
 
@@ -422,9 +460,14 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
 
             self.used_parents = None
 
-    def make_bone(self, name: str, scale: float, *,
-                  rig: Optional[BaseSkinRig] = None,
-                  orientation: Optional[Quaternion] = None) -> str:
+    def make_bone(
+        self,
+        name: str,
+        scale: float,
+        *,
+        rig: BaseSkinRig | None = None,
+        orientation: Quaternion | None = None,
+    ) -> str:
         """
         Creates a bone associated with this node, using the appropriate
         orientation, location and size.
@@ -449,27 +492,34 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
 
         return name
 
-    def find_master_name_node(self) -> 'ControlBoneNode':
+    def find_master_name_node(self) -> "ControlBoneNode":
         """Find which node to name the control bone from."""
 
         # Chain end nodes have sub-par names, so try to find another chain
         if self.chain_end == ControlNodeEnd.END:
             # Choose possible other nodes so that it doesn't lose mirror tags
             siblings = [
-                node for node in self.get_merged_siblings()
+                node
+                for node in self.get_merged_siblings()
                 if self.mirror_sides_x.issubset(node.mirror_sides_x)
                 and self.mirror_sides_z.issubset(node.mirror_sides_z)
             ]
 
             # Prefer chain start, then middle nodes
-            candidates = [node for node in siblings if node.chain_end == ControlNodeEnd.START]
+            candidates = [
+                node for node in siblings if node.chain_end == ControlNodeEnd.START
+            ]
 
             if not candidates:
-                candidates = [node for node in siblings if node.chain_end == ControlNodeEnd.MIDDLE]
+                candidates = [
+                    node for node in siblings if node.chain_end == ControlNodeEnd.MIDDLE
+                ]
 
             # Choose based on priority and name alphabetical order
             if candidates:
-                return min(candidates, key=lambda c: (-c.rig.chain_priority, c.name_merged))
+                return min(
+                    candidates, key=lambda c: (-c.rig.chain_priority, c.name_merged)
+                )
 
         return self
 
@@ -481,7 +531,8 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
             # Make weak parent bone
             if self.use_weak_parent:
                 self.weak_parent_bone = self.make_bone(
-                    make_derived_name(self._control_bone, 'mch', '_weak_parent'), 1 / 2)
+                    make_derived_name(self._control_bone, "mch", "_weak_parent"), 1 / 2
+                )
 
             # Make requested reparents
             self.reparent_bones = {id(self.node_parent): self._control_bone}
@@ -490,7 +541,9 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
             for parent in self.reparent_requests:
                 if id(parent) not in self.reparent_bones:
                     parent_name = self.parent_subrig_names[id(parent)]
-                    bone = self.make_bone(make_derived_name(parent_name, 'mch', '_reparent'), 1 / 3)
+                    bone = self.make_bone(
+                        make_derived_name(parent_name, "mch", "_reparent"), 1 / 3
+                    )
                     self.reparent_bones[id(parent)] = bone
 
     def make_master_bone(self) -> str:
@@ -499,23 +552,31 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
         name = choice.name_merged
 
         if self.hide_control:
-            name = make_derived_name(name, 'mch')
+            name = make_derived_name(name, "mch")
 
         return choice.make_bone(name, 1)
 
     def parent_bones(self):
         if self.is_master_node:
             self.set_bone_parent(
-                self._control_bone, self.node_parent.output_bone, inherit_scale='AVERAGE')
+                self._control_bone,
+                self.node_parent.output_bone,
+                inherit_scale="AVERAGE",
+            )
 
             if self.use_weak_parent:
                 self.set_bone_parent(
-                    self.weak_parent_bone, self.node_parent_weak.output_bone, inherit_scale='FULL')
+                    self.weak_parent_bone,
+                    self.node_parent_weak.output_bone,
+                    inherit_scale="FULL",
+                )
 
             for parent in self.reparent_requests:
                 bone = self.reparent_bones[id(parent)]
                 if bone not in self.reparent_bones_fake:
-                    self.set_bone_parent(bone, parent.output_bone, inherit_scale='AVERAGE')
+                    self.set_bone_parent(
+                        bone, parent.output_bone, inherit_scale="AVERAGE"
+                    )
 
     def configure_bones(self):
         if self.is_master_node:
@@ -539,15 +600,16 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
             if self.use_weak_parent:
                 reparent_source = self.weak_parent_bone
 
-                self.make_constraint(reparent_source, 'COPY_TRANSFORMS',
-                                     self.control_bone, space='LOCAL')
+                self.make_constraint(
+                    reparent_source, "COPY_TRANSFORMS", self.control_bone, space="LOCAL"
+                )
 
                 set_bone_widget_transform(self.obj, self.control_bone, reparent_source)
 
             for parent in self.reparent_requests:
                 bone = self.reparent_bones[id(parent)]
                 if bone not in self.reparent_bones_fake:
-                    self.make_constraint(bone, 'COPY_TRANSFORMS', reparent_source)
+                    self.make_constraint(bone, "COPY_TRANSFORMS", reparent_source)
 
     def generate_widgets(self):
         if self.is_master_node:
@@ -564,14 +626,19 @@ class ControlBoneNode(MainMergeNode, BaseSkinNode):
 class ControlQueryNode(QueryMergeNode, BaseSkinNode):
     """Node representing controls of skin chain rigs."""
 
-    merge_domain = 'ControlNetNode'
+    merge_domain = "ControlNetNode"
 
-    matched_nodes: list['ControlBoneNode']
+    matched_nodes: list["ControlBoneNode"]
 
-    def __init__(self, rig: BaseSkinRig, org: str, *,
-                 name: Optional[str] = None,
-                 point: Optional[Vector] = None,
-                 find_highest_layer=False):
+    def __init__(
+        self,
+        rig: BaseSkinRig,
+        org: str,
+        *,
+        name: str | None = None,
+        point: Vector | None = None,
+        find_highest_layer=False,
+    ):
         """
         Create a skin query node.
 

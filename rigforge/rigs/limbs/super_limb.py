@@ -5,13 +5,10 @@
 import bpy
 
 from ...base_generate import SubstitutionRig
-
+from . import arm, leg, paw
 from .limb_rigs import BaseLimbRig
 
-from . import arm, leg, paw
-
-
-RIGS = {'arm': arm.Rig, 'leg': leg.Rig, 'paw': paw.Rig}
+RIGS = {"arm": arm.Rig, "leg": leg.Rig, "paw": paw.Rig}
 
 
 class Rig(SubstitutionRig):
@@ -20,16 +17,10 @@ class Rig(SubstitutionRig):
 
 
 def add_parameters(params):
-    items = [
-        ('arm', 'Arm', ''),
-        ('leg', 'Leg', ''),
-        ('paw', 'Paw', '')
-    ]
+    items = [("arm", "Arm", ""), ("leg", "Leg", ""), ("paw", "Paw", "")]
 
     params.limb_type = bpy.props.EnumProperty(
-        items=items,
-        name="Limb Type",
-        default='arm'
+        items=items, name="Limb Type", default="arm"
     )
 
     BaseLimbRig.add_parameters(params)

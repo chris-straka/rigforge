@@ -2,33 +2,37 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import math
+
+import bpy
 import mathutils
-
-from typing import Optional
-
-from bpy.types import PoseBone
 from bpy.app.translations import pgettext_iface as iface_
-from mathutils import Vector, Matrix
+from bpy.types import PoseBone
+from mathutils import Matrix, Vector
 
+from ...base_rig import RigComponent, stage
 from ...rig_ui_template import PanelLayout
+from ...utils.bones import TypedBoneDict, align_bone_z_axis, put_bone
 from ...utils.layers import set_bone_layers, union_layer_lists
-from ...utils.naming import make_derived_name, mirror_name, change_name_side, Side, SideZ
-from ...utils.bones import align_bone_z_axis, put_bone, TypedBoneDict
-from ...utils.widgets import (widget_generator, generate_circle_geometry,
-                              generate_circle_hull_geometry)
-from ...utils.widgets_basic import create_circle_widget
+from ...utils.misc import LazyRef, matrix_from_axis_pair
+from ...utils.naming import (
+    Side,
+    SideZ,
+    change_name_side,
+    make_derived_name,
+    mirror_name,
+)
 from ...utils.switch_parent import SwitchParentBuilder
-from ...utils.misc import matrix_from_axis_pair, LazyRef
-
-from ...base_rig import stage, RigComponent
-
-from ..skin.skin_nodes import ControlBoneNode, BaseSkinNode
-from ..skin.skin_parents import ControlBoneParentOffset, ControlBoneParentBase
-from ..skin.skin_rigs import BaseSkinRig
-
+from ...utils.widgets import (
+    generate_circle_geometry,
+    generate_circle_hull_geometry,
+    widget_generator,
+)
+from ...utils.widgets_basic import create_circle_widget
 from ..skin.basic_chain import Rig as BasicChainRig
+from ..skin.skin_nodes import BaseSkinNode, ControlBoneNode
+from ..skin.skin_parents import ControlBoneParentBase, ControlBoneParentOffset
+from ..skin.skin_rigs import BaseSkinRig
 
 
 class Rig(BaseSkinRig):
@@ -46,7 +50,7 @@ class Rig(BaseSkinRig):
     axis: Vector
 
     eye_corner_nodes: list[ControlBoneNode]
-    eye_corner_matrix: Optional[Matrix]
+    eye_corner_matrix: Matrix | None
     eye_corner_range: tuple[float, float]
 
     child_chains: list[BasicChainRig]
@@ -88,23 +92,30 @@ class Rig(BaseSkinRig):
             return
 
         if len(self.eye_corner_nodes) != 2:
-            self.raise_error('Expected 2 eye corners, but found {}', len(self.eye_corner_nodes))
+            self.raise_error(
+                "Expected 2 eye corners, but found {}", len(self.eye_corner_nodes)
+            )
 
         # Build a coordinate space with XY plane based on eye axis and two corners
         corner_axis = self.eye_corner_nodes[1].point - self.eye_corner_nodes[0].point
 
-        matrix = matrix_from_axis_pair(self.axis, corner_axis, 'x').to_4x4()
+        matrix = matrix_from_axis_pair(self.axis, corner_axis, "x").to_4x4()
         matrix.translation = self.center
         self.eye_corner_matrix = matrix.inverted()
 
         # Compute signed angles from space_axis to the eye corners
-        angle_min, angle_max = sorted(map(self.get_eye_corner_angle, self.eye_corner_nodes))
+        angle_min, angle_max = sorted(
+            map(self.get_eye_corner_angle, self.eye_corner_nodes)
+        )
 
         self.eye_corner_range = (angle_min, angle_max)
 
         if not (angle_min <= 0 <= angle_max):
-            self.raise_error('Bad relative angles of eye corners: {}..{}',
-                             math.degrees(angle_min), math.degrees(angle_max))
+            self.raise_error(
+                "Bad relative angles of eye corners: {}..{}",
+                math.degrees(angle_min),
+                math.degrees(angle_max),
+            )
 
     def get_eye_corner_angle(self, node: ControlBoneNode) -> float:
         """Compute a signed Z rotation angle from the eye axis to the node."""
@@ -142,30 +153,29 @@ class Rig(BaseSkinRig):
     # BONES
 
     class CtrlBones(BaseSkinRig.CtrlBones):
-        master: str                    # Parent control for moving the whole eye.
-        target: str                    # Individual target this eye aims for.
+        master: str  # Parent control for moving the whole eye.
+        target: str  # Individual target this eye aims for.
 
     class MchBones(BaseSkinRig.MchBones):
-        master: str                    # Bone that rotates to track ctrl.target.
-        track: str                     # Bone that translates to follow mch.master tail.
+        master: str  # Bone that rotates to track ctrl.target.
+        track: str  # Bone that translates to follow mch.master tail.
 
     class DeformBones(TypedBoneDict):
-        master: str                    # Deform mirror of ctrl.master.
-        eye: str                       # Deform bone that rotates with mch.master.
-        iris: str                      # Iris deform bone at master tail that scales with ctrl.target
+        master: str  # Deform mirror of ctrl.master.
+        eye: str  # Deform bone that rotates with mch.master.
+        iris: str  # Iris deform bone at master tail that scales with ctrl.target
 
     bones: BaseSkinRig.ToplevelBones[
-        str,
-        'Rig.CtrlBones',
-        'Rig.MchBones',
-        'Rig.DeformBones'
+        str, "Rig.CtrlBones", "Rig.MchBones", "Rig.DeformBones"
     ]
 
     ####################################################
     # CHILD CHAINS
 
     def init_child_chains(self):
-        self.child_chains = [rig for rig in self.rigforge_children if isinstance(rig, BasicChainRig)]
+        self.child_chains = [
+            rig for rig in self.rigforge_children if isinstance(rig, BasicChainRig)
+        ]
 
         # Inject a component twisting handles to the eye radius
         for child in self.child_chains:
@@ -192,13 +202,15 @@ class Rig(BaseSkinRig):
 
         return parent
 
-    def extend_mid_node_parent(self, parent: ControlBoneParentBase, node: ControlBoneNode):
+    def extend_mid_node_parent(
+        self, parent: ControlBoneParentBase, node: ControlBoneNode
+    ):
         parent = ControlBoneParentOffset(self, node, parent)
 
         # Add movement of the eye to the eyelid controls
         parent.add_copy_local_location(
-            LazyRef(self.bones.mch, 'track'),
-            influence=LazyRef(self.get_lid_follow_influence, node)
+            LazyRef(self.bones.mch, "track"),
+            influence=LazyRef(self.get_lid_follow_influence, node),
         )
 
         # If Limit Distance on the control can be disabled, add another one to the mch
@@ -206,9 +218,12 @@ class Rig(BaseSkinRig):
             parent.add_limit_distance(
                 self.bones.org,
                 distance=(node.point - self.center).length,
-                limit_mode='LIMITDIST_ONSURFACE', use_transform_limit=True,
+                limit_mode="LIMITDIST_ONSURFACE",
+                use_transform_limit=True,
                 # Use custom space to accommodate scaling
-                space='CUSTOM', space_object=self.obj, space_subtarget=self.bones.org,
+                space="CUSTOM",
+                space_object=self.obj,
+                space_subtarget=self.bones.org,
                 # Don't allow reordering this limit and subsequent offsets
                 ensure_order=True,
             )
@@ -219,16 +234,22 @@ class Rig(BaseSkinRig):
         if self.is_eye_control_node(node):
             # Add Limit Distance to enforce following the surface of the eye to the control
             con = self.make_constraint(
-                node.control_bone, 'LIMIT_DISTANCE', self.bones.org,
+                node.control_bone,
+                "LIMIT_DISTANCE",
+                self.bones.org,
                 distance=(node.point - self.center).length,
-                limit_mode='LIMITDIST_ONSURFACE', use_transform_limit=True,
+                limit_mode="LIMITDIST_ONSURFACE",
+                use_transform_limit=True,
                 # Use custom space to accommodate scaling
-                space='CUSTOM', space_object=self.obj, space_subtarget=self.bones.org,
+                space="CUSTOM",
+                space_object=self.obj,
+                space_subtarget=self.bones.org,
             )
 
             if self.params.eyelid_detach_option:
-                self.make_driver(con, 'influence',
-                                 variables=[(self.bones.ctrl.target, 'lid_attach')])
+                self.make_driver(
+                    con, "influence", variables=[(self.bones.ctrl.target, "lid_attach")]
+                )
 
     ####################################################
     # SCRIPT
@@ -237,7 +258,9 @@ class Rig(BaseSkinRig):
     def configure_script_panels(self):
         ctrl = self.bones.ctrl
 
-        controls = sum((chain.get_all_controls() for chain in self.child_chains), ctrl.flatten())
+        controls = sum(
+            (chain.get_all_controls() for chain in self.child_chains), ctrl.flatten()
+        )
         panel = self.script.panel_with_selected_check(self, controls)
 
         self.add_custom_properties()
@@ -248,33 +271,48 @@ class Rig(BaseSkinRig):
 
         if self.params.eyelid_follow_split:
             self.make_property(
-                target, 'lid_follow', list(self.params.eyelid_follow_default),
-                description='Eyelids follow eye movement (X and Z)'
+                target,
+                "lid_follow",
+                list(self.params.eyelid_follow_default),
+                description="Eyelids follow eye movement (X and Z)",
             )
         else:
-            self.make_property(target, 'lid_follow', 1.0,
-                               description='Eyelids follow eye movement')
+            self.make_property(
+                target, "lid_follow", 1.0, description="Eyelids follow eye movement"
+            )
 
         if self.params.eyelid_detach_option:
-            self.make_property(target, 'lid_attach', 1.0,
-                               description='Eyelids follow eye surface')
+            self.make_property(
+                target, "lid_attach", 1.0, description="Eyelids follow eye surface"
+            )
 
     def add_ui_sliders(self, panel: PanelLayout, *, add_name=False):
         target = self.bones.ctrl.target
 
-        name_tail = f' ({target})' if add_name else ''
+        name_tail = f" ({target})" if add_name else ""
         follow_text = iface_("Eyelids Follow{}").format(name_tail)
 
         if self.params.eyelid_follow_split:
             row = panel.split(factor=0.66, align=True)
-            row.custom_prop(target, 'lid_follow', index=0, text=follow_text, translate=False, slider=True)
-            row.custom_prop(target, 'lid_follow', index=1, text='', slider=True)
+            row.custom_prop(
+                target,
+                "lid_follow",
+                index=0,
+                text=follow_text,
+                translate=False,
+                slider=True,
+            )
+            row.custom_prop(target, "lid_follow", index=1, text="", slider=True)
         else:
-            panel.custom_prop(target, 'lid_follow', text=follow_text, translate=False, slider=True)
+            panel.custom_prop(
+                target, "lid_follow", text=follow_text, translate=False, slider=True
+            )
 
         if self.params.eyelid_detach_option:
             text = iface_("Eyelids Attached{}").format(name_tail)
-            panel.custom_prop(target, 'lid_attach', text=text, translate=False, slider=True)
+            panel.custom_prop(
+                target, "lid_attach", text=text, translate=False, slider=True
+            )
 
     ####################################################
     # Master control
@@ -282,7 +320,9 @@ class Rig(BaseSkinRig):
     @stage.generate_bones
     def make_master_control(self):
         org = self.bones.org
-        name = self.copy_bone(org, make_derived_name(org, 'ctrl', '_master'), parent=True)
+        name = self.copy_bone(
+            org, make_derived_name(org, "ctrl", "_master"), parent=True
+        )
         put_bone(self.obj, name, self.get_master_control_position())
         self.bones.ctrl.master = name
 
@@ -303,8 +343,10 @@ class Rig(BaseSkinRig):
         org = self.bones.org
         mch = self.bones.mch
 
-        mch.master = self.copy_bone(org, make_derived_name(org, 'mch'))
-        mch.track = self.copy_bone(org, make_derived_name(org, 'mch', '_track'), scale=1 / 4)
+        mch.master = self.copy_bone(org, make_derived_name(org, "mch"))
+        mch.track = self.copy_bone(
+            org, make_derived_name(org, "mch", "_track"), scale=1 / 4
+        )
 
         put_bone(self.obj, mch.track, self.get_bone(org).tail)
 
@@ -321,37 +363,57 @@ class Rig(BaseSkinRig):
         ctrl = self.bones.ctrl
 
         # Rotationally track the target bone in mch.master
-        self.make_constraint(mch.master, 'DAMPED_TRACK', ctrl.target)
+        self.make_constraint(mch.master, "DAMPED_TRACK", ctrl.target)
 
         # Translate to track the tail of mch.master in mch.track. Its local
         # location is then copied to the control nodes.
         # Two constraints are used to provide different X and Z influence values.
         con_x = self.make_constraint(
-            mch.track, 'COPY_LOCATION', mch.master, head_tail=1, name='lid_follow_x',
+            mch.track,
+            "COPY_LOCATION",
+            mch.master,
+            head_tail=1,
+            name="lid_follow_x",
             use_xyz=(True, False, False),
-            space='CUSTOM', space_object=self.obj, space_subtarget=self.bones.org,
+            space="CUSTOM",
+            space_object=self.obj,
+            space_subtarget=self.bones.org,
         )
 
         con_z = self.make_constraint(
-            mch.track, 'COPY_LOCATION', mch.master, head_tail=1, name='lid_follow_z',
+            mch.track,
+            "COPY_LOCATION",
+            mch.master,
+            head_tail=1,
+            name="lid_follow_z",
             use_xyz=(False, False, True),
-            space='CUSTOM', space_object=self.obj, space_subtarget=self.bones.org,
+            space="CUSTOM",
+            space_object=self.obj,
+            space_subtarget=self.bones.org,
         )
 
         # Apply follow slider influence(s)
         if self.params.eyelid_follow_split:
-            self.make_driver(con_x, 'influence', variables=[(ctrl.target, 'lid_follow', 0)])
-            self.make_driver(con_z, 'influence', variables=[(ctrl.target, 'lid_follow', 1)])
+            self.make_driver(
+                con_x, "influence", variables=[(ctrl.target, "lid_follow", 0)]
+            )
+            self.make_driver(
+                con_z, "influence", variables=[(ctrl.target, "lid_follow", 1)]
+            )
         else:
             factor = self.params.eyelid_follow_default
 
             self.make_driver(
-                con_x, 'influence', expression=f'var*{factor[0]}',
-                variables=[(ctrl.target, 'lid_follow')]
+                con_x,
+                "influence",
+                expression=f"var*{factor[0]}",
+                variables=[(ctrl.target, "lid_follow")],
             )
             self.make_driver(
-                con_z, 'influence', expression=f'var*{factor[1]}',
-                variables=[(ctrl.target, 'lid_follow')]
+                con_z,
+                "influence",
+                expression=f"var*{factor[1]}",
+                variables=[(ctrl.target, "lid_follow")],
             )
 
     ####################################################
@@ -359,7 +421,9 @@ class Rig(BaseSkinRig):
 
     @stage.parent_bones
     def parent_org_chain(self):
-        self.set_bone_parent(self.bones.org, self.bones.ctrl.master, inherit_scale='FULL')
+        self.set_bone_parent(
+            self.bones.org, self.bones.ctrl.master, inherit_scale="FULL"
+        )
 
     ####################################################
     # Deform bones
@@ -368,11 +432,15 @@ class Rig(BaseSkinRig):
     def make_deform_bone(self):
         org = self.bones.org
         deform = self.bones.deform
-        deform.master = self.copy_bone(org, make_derived_name(org, 'def', '_master'), scale=3 / 2)
+        deform.master = self.copy_bone(
+            org, make_derived_name(org, "def", "_master"), scale=3 / 2
+        )
 
         if self.params.make_deform:
-            deform.eye = self.copy_bone(org, make_derived_name(org, 'def'))
-            deform.iris = self.copy_bone(org, make_derived_name(org, 'def', '_iris'), scale=1 / 2)
+            deform.eye = self.copy_bone(org, make_derived_name(org, "def"))
+            deform.iris = self.copy_bone(
+                org, make_derived_name(org, "def", "_iris"), scale=1 / 2
+            )
             put_bone(self.obj, deform.iris, self.get_bone(org).tail)
 
     @stage.parent_bones
@@ -389,8 +457,12 @@ class Rig(BaseSkinRig):
         if self.params.make_deform:
             # Copy XZ local scale from the eye target control
             self.make_constraint(
-                self.bones.deform.iris, 'COPY_SCALE', self.bones.ctrl.target,
-                owner_space='LOCAL', target_space='LOCAL_OWNER_ORIENT', use_y=False,
+                self.bones.deform.iris,
+                "COPY_SCALE",
+                self.bones.ctrl.target,
+                owner_space="LOCAL",
+                target_space="LOCAL_OWNER_ORIENT",
+                use_y=False,
             )
 
     ####################################################
@@ -399,27 +471,27 @@ class Rig(BaseSkinRig):
     @classmethod
     def add_parameters(cls, params):
         params.make_deform = bpy.props.BoolProperty(
-            name="Deform",
-            default=True,
-            description="Create a deform bone for the copy"
+            name="Deform", default=True, description="Create a deform bone for the copy"
         )
 
         params.eyelid_detach_option = bpy.props.BoolProperty(
             name="Eyelid Detach Option",
             default=False,
-            description="Create an option to detach eyelids from the eye surface"
+            description="Create an option to detach eyelids from the eye surface",
         )
 
         params.eyelid_follow_split = bpy.props.BoolProperty(
             name="Split Eyelid Follow Slider",
             default=False,
-            description="Create separate eyelid follow influence sliders for X and Z"
+            description="Create separate eyelid follow influence sliders for X and Z",
         )
 
         params.eyelid_follow_default = bpy.props.FloatVectorProperty(
             size=2,
             name="Eyelids Follow Default",
-            default=(0.2, 0.7), min=0, max=1,
+            default=(0.2, 0.7),
+            min=0,
+            max=1,
             description="Default setting for the Eyelids Follow sliders (X and Z)",
         )
 
@@ -465,11 +537,19 @@ class EyelidChainPatch(RigComponent):
 
     def rig_bones(self):
         if self.owner.use_bbones:
-            for pre, node in zip(self.owner.bones.mch.handles_pre, self.owner.control_nodes):
-                self.make_constraint(pre, 'COPY_LOCATION', node.control_bone, name='locate_cur')
+            for pre, node in zip(
+                self.owner.bones.mch.handles_pre, self.owner.control_nodes
+            ):
                 self.make_constraint(
-                    pre, 'LOCKED_TRACK', self.eye.bones.org, name='track_center',
-                    track_axis='TRACK_Z', lock_axis='LOCK_Y',
+                    pre, "COPY_LOCATION", node.control_bone, name="locate_cur"
+                )
+                self.make_constraint(
+                    pre,
+                    "LOCKED_TRACK",
+                    self.eye.bones.org,
+                    name="track_center",
+                    track_axis="TRACK_Z",
+                    lock_axis="LOCK_Y",
                 )
 
 
@@ -482,8 +562,8 @@ class EyeClusterControl(RigComponent):
     rig_count: int
 
     size: float
-    matrix: Matrix           # Cluster plane matrix
-    inv_matrix: Matrix       # World to cluster plane
+    matrix: Matrix  # Cluster plane matrix
+    inv_matrix: Matrix  # World to cluster plane
 
     rig_points: dict[Rig, Vector]  # Eye projections in cluster plane space
 
@@ -534,7 +614,7 @@ class EyeClusterControl(RigComponent):
         length /= self.rig_count
 
         # Create the matrix from the average Y and world Z
-        matrix = matrix_from_axis_pair((0, 0, 1), axis, 'z').to_4x4()
+        matrix = matrix_from_axis_pair((0, 0, 1), axis, "z").to_4x4()
         matrix.translation = center + axis * length * 5
 
         self.size = length * 3 / 4
@@ -569,11 +649,20 @@ class EyeClusterControl(RigComponent):
 
     def get_master_control_layers(self):
         """Combine layers of all eyes for the cluster control."""
-        return union_layer_lists(list(self.get_bone(rig.base_bone).collections) for rig in self.rig_list)
+        return union_layer_lists(
+            list(self.get_bone(rig.base_bone).collections) for rig in self.rig_list
+        )
 
     def get_all_rig_control_bones(self):
         """Make a list of all control bones of all clustered eyes."""
-        return list(set(sum((rig.bones.ctrl.flatten() for rig in self.rig_list), [self.master_bone])))
+        return list(
+            set(
+                sum(
+                    (rig.bones.ctrl.flatten() for rig in self.rig_list),
+                    [self.master_bone],
+                )
+            )
+        )
 
     ####################################################
     # STAGES
@@ -598,7 +687,9 @@ class EyeClusterControl(RigComponent):
         self.build_parent_switch()
 
     def make_master_control(self):
-        name = self.new_bone(make_derived_name(self.get_common_rig_name(), 'ctrl', '_common'))
+        name = self.new_bone(
+            make_derived_name(self.get_common_rig_name(), "ctrl", "_common")
+        )
         bone = self.get_bone(name)
         bone.matrix = self.matrix
         bone.length = self.size
@@ -607,7 +698,8 @@ class EyeClusterControl(RigComponent):
 
     def make_child_control(self, rig: Rig):
         name = rig.copy_bone(
-            rig.base_bone, make_derived_name(rig.base_bone, 'ctrl'), length=self.size)
+            rig.base_bone, make_derived_name(rig.base_bone, "ctrl"), length=self.size
+        )
         self.get_bone(name).matrix = self.get_rig_control_matrix(rig)
         return name
 
@@ -618,10 +710,12 @@ class EyeClusterControl(RigComponent):
         parents = [org_parent] if org_parent else []
 
         pbuilder.build_child(
-            self.owner, self.master_bone,
-            prop_name=f'Parent ({self.master_bone})',
-            extra_parents=parents, select_parent=org_parent,
-            controls=self.get_all_rig_control_bones
+            self.owner,
+            self.master_bone,
+            prop_name=f"Parent ({self.master_bone})",
+            extra_parents=parents,
+            select_parent=org_parent,
+            controls=self.get_all_rig_control_bones,
         )
 
     def parent_bones(self):
@@ -639,7 +733,9 @@ class EyeClusterControl(RigComponent):
 
         # When the cluster master control is selected, show sliders for all eyes
         if self.rig_count > 1:
-            panel = self.owner.script.panel_with_selected_check(self.owner, [self.master_bone])
+            panel = self.owner.script.panel_with_selected_check(
+                self.owner, [self.master_bone]
+            )
 
             for rig in self.rig_list:
                 rig.add_ui_sliders(panel, add_name=True)
@@ -668,89 +764,89 @@ def create_eye_cluster_widget(geom, *, size=1, points):
 
 def create_sample(obj):
     # generated by rigforge.utils.write_metarig
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     arm = obj.data
 
     bones = {}
 
-    bone = arm.edit_bones.new('eye.L')
+    bone = arm.edit_bones.new("eye.L")
     bone.head = 0.0000, 0.0000, 0.0000
     bone.tail = 0.0000, -0.0125, 0.0000
     bone.roll = 0.0000
     bone.use_connect = False
-    bones['eye.L'] = bone.name
-    bone = arm.edit_bones.new('lid1.T.L')
+    bones["eye.L"] = bone.name
+    bone = arm.edit_bones.new("lid1.T.L")
     bone.head = 0.0155, -0.0006, -0.0003
     bone.tail = 0.0114, -0.0099, 0.0029
     bone.roll = 2.9453
     bone.use_connect = False
-    bone.parent = arm.edit_bones[bones['eye.L']]
-    bones['lid1.T.L'] = bone.name
-    bone = arm.edit_bones.new('lid1.B.L')
+    bone.parent = arm.edit_bones[bones["eye.L"]]
+    bones["lid1.T.L"] = bone.name
+    bone = arm.edit_bones.new("lid1.B.L")
     bone.head = 0.0155, -0.0006, -0.0003
     bone.tail = 0.0112, -0.0095, -0.0039
     bone.roll = -0.0621
     bone.use_connect = False
-    bone.parent = arm.edit_bones[bones['eye.L']]
-    bones['lid1.B.L'] = bone.name
-    bone = arm.edit_bones.new('lid2.T.L')
+    bone.parent = arm.edit_bones[bones["eye.L"]]
+    bones["lid1.B.L"] = bone.name
+    bone = arm.edit_bones.new("lid2.T.L")
     bone.head = 0.0114, -0.0099, 0.0029
     bone.tail = 0.0034, -0.0149, 0.0040
     bone.roll = 2.1070
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['lid1.T.L']]
-    bones['lid2.T.L'] = bone.name
-    bone = arm.edit_bones.new('lid2.B.L')
+    bone.parent = arm.edit_bones[bones["lid1.T.L"]]
+    bones["lid2.T.L"] = bone.name
+    bone = arm.edit_bones.new("lid2.B.L")
     bone.head = 0.0112, -0.0095, -0.0039
     bone.tail = 0.0029, -0.0140, -0.0057
     bone.roll = 0.8337
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['lid1.B.L']]
-    bones['lid2.B.L'] = bone.name
-    bone = arm.edit_bones.new('lid3.T.L')
+    bone.parent = arm.edit_bones[bones["lid1.B.L"]]
+    bones["lid2.B.L"] = bone.name
+    bone = arm.edit_bones.new("lid3.T.L")
     bone.head = 0.0034, -0.0149, 0.0040
     bone.tail = -0.0046, -0.0157, 0.0026
     bone.roll = 1.7002
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['lid2.T.L']]
-    bones['lid3.T.L'] = bone.name
-    bone = arm.edit_bones.new('lid3.B.L')
+    bone.parent = arm.edit_bones[bones["lid2.T.L"]]
+    bones["lid3.T.L"] = bone.name
+    bone = arm.edit_bones.new("lid3.B.L")
     bone.head = 0.0029, -0.0140, -0.0057
     bone.tail = -0.0041, -0.0145, -0.0057
     bone.roll = 1.0671
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['lid2.B.L']]
-    bones['lid3.B.L'] = bone.name
-    bone = arm.edit_bones.new('lid4.T.L')
+    bone.parent = arm.edit_bones[bones["lid2.B.L"]]
+    bones["lid3.B.L"] = bone.name
+    bone = arm.edit_bones.new("lid4.T.L")
     bone.head = -0.0046, -0.0157, 0.0026
     bone.tail = -0.0123, -0.0140, -0.0049
     bone.roll = 1.0850
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['lid3.T.L']]
-    bones['lid4.T.L'] = bone.name
-    bone = arm.edit_bones.new('lid4.B.L')
+    bone.parent = arm.edit_bones[bones["lid3.T.L"]]
+    bones["lid4.T.L"] = bone.name
+    bone = arm.edit_bones.new("lid4.B.L")
     bone.head = -0.0041, -0.0145, -0.0057
     bone.tail = -0.0123, -0.0140, -0.0049
     bone.roll = 1.1667
     bone.use_connect = True
-    bone.parent = arm.edit_bones[bones['lid3.B.L']]
-    bones['lid4.B.L'] = bone.name
+    bone.parent = arm.edit_bones[bones["lid3.B.L"]]
+    bones["lid4.B.L"] = bone.name
 
-    bpy.ops.object.mode_set(mode='OBJECT')
-    pbone = obj.pose.bones[bones['eye.L']]
-    pbone.rigforge_type = 'face.skin_eye'
+    bpy.ops.object.mode_set(mode="OBJECT")
+    pbone = obj.pose.bones[bones["eye.L"]]
+    pbone.rigforge_type = "face.skin_eye"
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['lid1.T.L']]
-    pbone.rigforge_type = 'skin.stretchy_chain'
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["lid1.T.L"]]
+    pbone.rigforge_type = "skin.stretchy_chain"
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
     try:
         pbone.rigforge_parameters.skin_chain_pivot_pos = 2
     except AttributeError:
@@ -763,13 +859,13 @@ def create_sample(obj):
         pbone.rigforge_parameters.skin_chain_connect_mirror = [False, False]
     except AttributeError:
         pass
-    pbone = obj.pose.bones[bones['lid1.B.L']]
-    pbone.rigforge_type = 'skin.stretchy_chain'
+    pbone = obj.pose.bones[bones["lid1.B.L"]]
+    pbone.rigforge_type = "skin.stretchy_chain"
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
     try:
         pbone.rigforge_parameters.skin_chain_pivot_pos = 2
     except AttributeError:
@@ -782,50 +878,50 @@ def create_sample(obj):
         pbone.rigforge_parameters.skin_chain_connect_mirror = [False, False]
     except AttributeError:
         pass
-    pbone = obj.pose.bones[bones['lid2.T.L']]
-    pbone.rigforge_type = ''
+    pbone = obj.pose.bones[bones["lid2.T.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['lid2.B.L']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["lid2.B.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['lid3.T.L']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["lid3.T.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['lid3.B.L']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["lid3.B.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['lid4.T.L']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["lid4.T.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
-    pbone = obj.pose.bones[bones['lid4.B.L']]
-    pbone.rigforge_type = ''
+    pbone.rotation_mode = "QUATERNION"
+    pbone = obj.pose.bones[bones["lid4.B.L"]]
+    pbone.rigforge_type = ""
     pbone.lock_location = (False, False, False)
     pbone.lock_rotation = (False, False, False)
     pbone.lock_rotation_w = False
     pbone.lock_scale = (False, False, False)
-    pbone.rotation_mode = 'QUATERNION'
+    pbone.rotation_mode = "QUATERNION"
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in arm.edit_bones:
         bone.select = False
         bone.select_head = False

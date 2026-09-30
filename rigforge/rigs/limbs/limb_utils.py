@@ -2,14 +2,20 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 import re
 
+import bpy
 from mathutils import Vector
-from ...utils import org, strip_org, make_mechanism_name, make_deformer_name
-from ...utils import MetarigError
 
-bilateral_suffixes = ['.L', '.R']
+from ...utils import (
+    MetarigError,
+    make_deformer_name,
+    make_mechanism_name,
+    org,
+    strip_org,
+)
+
+bilateral_suffixes = [".L", ".R"]
 
 
 def orient_bone(cls, eb, axis, scale=1.0, reverse=False):
@@ -29,13 +35,13 @@ def orient_bone(cls, eb, axis, scale=1.0, reverse=False):
 
 
 def make_constraint(cls, bone, constraint):
-    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
     pb = cls.obj.pose.bones
 
     owner_pb = pb[bone]
-    const = owner_pb.constraints.new(constraint['constraint'])
+    const = owner_pb.constraints.new(constraint["constraint"])
 
-    constraint['target'] = cls.obj
+    constraint["target"] = cls.obj
 
     # filter constraint props to those that actually exist in the current
     # type of constraint, then assign values to each
@@ -44,24 +50,24 @@ def make_constraint(cls, bone, constraint):
             setattr(const, p, constraint[p])
         else:
             raise MetarigError(
-                "RIGIFY ERROR: property %s does not exist in %s constraint" % (
-                    p, constraint['constraint']
-                ))
+                "RIGFORGE ERROR: property %s does not exist in %s constraint"
+                % (p, constraint["constraint"])
+            )
 
 
-def get_bone_name(name, btype, suffix=''):
+def get_bone_name(name, btype, suffix=""):
     # RE pattern match right or left parts
     # match the letter "L" (or "R"), followed by an optional dot (".")
     # and 0 or more digits at the end of the string
-    pattern = r'^(\S+)(\.\S+)$'
+    pattern = r"^(\S+)(\.\S+)$"
 
     name = strip_org(name)
 
     types = {
-        'mch': make_mechanism_name(name),
-        'org': org(name),
-        'def': make_deformer_name(name),
-        'ctrl': name
+        "mch": make_mechanism_name(name),
+        "org": org(name),
+        "def": make_deformer_name(name),
+        "ctrl": name,
     }
 
     name = types[btype]
