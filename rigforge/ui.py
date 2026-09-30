@@ -175,6 +175,23 @@ class DATA_PT_rigforge(bpy.types.Panel):
 
 
 # noinspection PyPep8Naming
+class DATA_PT_rigforge_game_export(bpy.types.Panel):
+    bl_label = "Rigforge Game Export"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return bool(obj and obj.type == 'ARMATURE' and 'rig_id' in obj.data)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("wm.rigforge_game_export", text="Export Game GLB", icon='EXPORT')
+
+
+# noinspection PyPep8Naming
 class DATA_PT_rigforge_advanced(bpy.types.Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -1770,6 +1787,7 @@ classes = (
     DATA_UL_rigforge_color_sets,
     DATA_MT_rigforge_color_sets_context_menu,
     DATA_PT_rigforge,
+    DATA_PT_rigforge_game_export,
     DATA_PT_rigforge_advanced,
     DATA_PT_rigforge_color_sets,
     DATA_UL_rigforge_bone_collections,

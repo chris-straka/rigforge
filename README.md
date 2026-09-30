@@ -15,6 +15,16 @@ Layout: `rigforge/` is the addon. Zip that folder for Install-from-Disk.
 Smoke test:
 
 ```sh
-/Applications/Blender.app/Contents/MacOS/Blender --background \
+rsync -a --delete rigforge/ /tmp/rf_scripts/addons/rigforge/
+BLENDER_USER_SCRIPTS=/tmp/rf_scripts \
+  /Applications/Blender.app/Contents/MacOS/Blender --background \
   --factory-startup --python /tmp/rigforge_smoke.py
 ```
+
+Headless tests (`tests/`, same overlay + Blender invocation, e.g.
+`--python tests/test_game_export.py`).
+
+Game export: with a generated rig active, Armature properties >
+Rigforge Game Export > Export Game GLB — writes a deform-bones-only
+GLB (Godot-friendly settings) with all meshes bound via Armature
+modifiers. Headless: `bpy.ops.wm.rigforge_game_export(filepath=...)`.
