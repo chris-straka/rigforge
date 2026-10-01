@@ -2,7 +2,8 @@
 
 Date: 2026-10-01. Status: research + Phase 1 prototype
 (`tools/detect_landmarks.py`) + Phase 2 fitter (`tools/fit_metarig.py`,
-see Section 7); validation gate (Phase 3) still pending.
+see Section 7) + Phase 3 validation gate (`tools/validate_fit.py`,
+hardened against eyeball findings — see Section 8).
 
 ## 1. The gap (what "zero-touch" means here)
 
@@ -177,8 +178,9 @@ prove insufficient on real HLL meshes — try deterministic first.
       reusing `make_hll_presets` machinery; fitted preset must generate.
       DONE (Section 7): Andras fit-delta closed to 0.0 cm on all driver
       joints, fitted metarig generates headless (706 rig / 160 DEF bones).
-- [ ] Phase 3: validation gate + `tests/test_auto_placement.py` (fit,
-      generate, export, fit-delta numbers); re-run bake-off comparison.
+- [x] Phase 3: validation gate + `tests/test_auto_placement.py` (fit,
+      generate, export, fit-delta numbers); hardened per Section 8.
+      Re-run bake-off comparison still open.
 - [ ] Optional: `wm.rigforge_auto_place` operator + panel button (needs
       the same code headless-first; UI is a thin wrapper).
 - [ ] Optional: hybrid landmark source (Section 4.5) if deterministic
@@ -289,3 +291,88 @@ Verified: headless smoke (`RIGFORGE_SMOKE_OK`) and
 `tests/test_presets.py` green; `ruff check` + `ruff format --check`
 clean on the new file. Fitted module (159 bones, write_metarig format)
 and session blend are build artifacts under `/tmp`, not committed.
+
+## 8. Phase 3 gate hardening: four eyeball findings (this change)
+
+Fitted-Andras overlay eyeballing (`gate_*.png`) caught four placements
+the gate missed or mis-reported. All fixes live in
+`tools/validate_fit.py` + `tests/test_auto_placement.py`; the gate
+stays warn-only for placement (hard fails are still closure /
+inside+margin / symmetry only).
+
+1. FINGERS (fan offset laterally, thumb out): the gate measured chain
+   angle only. Added fingertip containment (any of the four tips
+   outside the envelope warns) with per-finger lateral-vs-axis vectors
+   naming the nudge. Andras now warns `angle + outside:all four`
+   (pinky 46.2 deg, laterals 3.2-4.3 cm, all tips 0-vote outside)
+   vs synthetic ok (tips inside, pinky 38.4 deg = the preset's natural
+   fan). Two calibration notes: (a) the old sub-wrist vert set caught
+   266 boot-sole verts at z~0, corrupting the reference — finger
+   analysis now uses a hand slab (wrist down to fingertip floor);
+   the old "pinky 32 deg fine" reading is obsolete, superseded by the
+   decontaminated 46 deg on that same bone. (b) No lateral threshold
+   exists: healthy synthetic reads 4.9 cm (fat hand box, same medial
+   fitter bias as Andras's 4.3 cm), so laterals stay diagnostic.
+   Thumb: included in the angle check (Andras 25.5 deg, synthetic
+   22.6 deg — it tracks the fan; the old "points sideways" rationale
+   was wrong for this metarig). Thumb tip grazes 6 mm off the surface
+   (knuckle exits at 0.2 mm depth): real but mm-scale, reported
+   ungated; the cm-scale fan offset is the finding.
+2. FACE (bones riding into forehead/hair): the gate checked head-top
+   only. Added a warn-only face heuristic: face-bone centroid must sit
+   between a chin floor (lowest single-blob band above the neck) and
+   the skullcap, face bottom above the chin floor; brow clearance,
+   face frac, and per-part ring containment reported, never gated.
+   Honest limit: calibration forbids a riding-high threshold —
+   healthy synthetic reads -0.3 cm brow clearance vs Andras's +2.1 cm
+   (hair inflates the skullcap reference the wrong way), so the gate
+   trips only on gross misplacement. Andras passes the tripwire while
+   the eyeball finding stands (eyes 1.6 cm above the widest ring, brow
+   in the narrowing hair-spike bands): the real fix is fitter-side, a
+   hair-robust head-top target (skullcap instead of zmax). Slices
+   cannot see mesh features (eyes/nose/mouth) and cannot separate hair
+   from skull — that stays out of scope.
+3. TOES (wrong direction + short of foot end): the gate checked
+   tip-inside + overshoot only. Added toe-axis yaw vs mesh foot
+   direction (front/back-half split; warns past 45 deg, same pattern
+   as fingers). Andras yaw reads 2.7 deg — direction is fine; the
+   sideways stubs the eyeball read as toes are the heel.02
+   reverse-foot pivots, correct by design. The genuine toe issues are
+   shortfall (tip 3.3 cm short of the foot front, reported, ungated —
+   healthy synthetic reads 6.7 cm on its crude foot box) and the hard
+   margin fail (7.2/8.5 mm < 1 cm, eyeballed a real breach).
+4. MYSTERY STICK (red tube between the legs): the labeled close-up
+   (`--closeup PNG` + `_labels.json` pixel coords; text overlaid with
+   e.g. `magick render.png -font /System/Library/Fonts/Supplemental/Arial.ttf
+   -pointsize 20 -fill white -undercolor '#000000A0' -annotate
+   '0x0+X+Y' 'bone' ... labeled.png`) names it `Bone`: the
+   `armature_add` default bone (0,0,0)-(0,0,1), which `create()` never
+   removes. Verdict: real stray bone, not a render ghost — but an
+   artifact of the gate's rebuild helper, invisible to every check
+   (parentless, non-driver, unmirrored) and absent from the fitted
+   metarig itself. Fixed by clearing edit bones before `create()` in
+   `build_metarig_from_module`; regression test asserts the rebuilt
+   set equals the fitted set (159 bones, no `Bone`).
+
+Threshold justifications, tied to verdicts: `FINGER_WARN_DEG` 45 kept
+(above the 38 deg natural fan; corrected Andras pinky 46.2 deg fires
+correctly); `MARGIN_DEFAULT` 1 cm kept (7.2 mm toe breach deemed
+real); `HEAD_WARN` 3 cm kept (Andras -1.3 mm; hair-inclusive by
+fitter contract); `TOE_WARN` 2 mm kept (no overshoot observed);
+`TOE_DIR_WARN` 45 new (same-pattern yaw; Andras 2.7 deg, synthetic
+0.0 deg, twisted-toe red test 90.0 deg). No lateral / shortfall /
+brow thresholds — each was attempted and killed by calibration (see
+above), not by preference.
+
+Fitter follow-ups out of gate scope: rigid preset toe (length never
+fit — needs a toe landmark), hair-robust head-top target, finger-fan
+orientation (knuckles on the mesh column, tips diving medially —
+rigid follow keeps the wrong fan angle).
+
+Verified: `tests/test_auto_placement.py` green incl. per-check
+red-on-known-bad coverage (shifted fan, floated face, twisted toe —
+and the old angle check proven blind to pure translation on the same
+bad fit); smoke (`RIGFORGE_SMOKE_OK`) and `tests/test_presets.py`
+green; `ruff check` + `ruff format --check` clean on both touched
+files. Andras final: hard FAIL on toe margin (unchanged), fingers
+warn, toes/face warn-quiet with diagnostics, head ok.

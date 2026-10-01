@@ -203,6 +203,94 @@ head = gate["warns"]["head"]
 check(head["status"] == "ok", f"head warn on synthetic: {head}")
 print(f"  head top {head['head_top']} vs skullcap {head['skullcap_z']}")
 
+# 5b. New warn checks, good side: quiet on the healthy synthetic fit.
+for side in ("L", "R"):
+    finger = gate["warns"]["fingers"][side]
+    check(
+        finger["angles_deg"]["thumb"] < rv.FINGER_WARN_DEG,
+        f"thumb angle warn on synthetic: {finger['angles_deg']}",
+    )
+    toe = gate["warns"]["toes"][side]
+    check(toe["yaw_deg"] < rv.TOE_DIR_WARN, f"toe dir warn: {toe}")
+    print(
+        f"  {side}: finger pos {finger['worst_pos_m']} m, "
+        f"thumb {finger['angles_deg']['thumb']} deg, "
+        f"toe yaw {toe['yaw_deg']} deg, shortfall {toe['shortfall']}"
+    )
+face = gate["warns"]["face"]
+check(face["status"] == "ok", f"face warn on synthetic: {face}")
+print(f"  face brow clearance {face['brow_clearance']}, frac {face['face_frac']}")
+
+
+# 5c. Red side: each new check fires on a known-bad metarig copy (only
+# the warns are read; closure/symmetry/margin may fail on the copies).
+def dup_meta(name):
+    dup = meta.copy()
+    dup.data = meta.data.copy()
+    dup.name = name
+    bpy.context.collection.objects.link(dup)
+    bpy.context.view_layer.objects.active = dup
+    bpy.ops.object.mode_set(mode="EDIT")
+    return dup
+
+
+shifted = dup_meta("ap_bad_fingers")
+moved = 0
+for stem in ("f_index", "f_middle", "f_ring", "f_pinky"):
+    for mid in ("01", "02", "03"):
+        b = shifted.data.edit_bones.get(f"{stem}.{mid}.L")
+        check(b is not None, f"missing {stem}.{mid}.L for perturbation")
+        b.head.x -= 0.03  # medial, out of the hand box (the Andras bias)
+        b.tail.x -= 0.03
+        moved += 1
+check(moved == 12, f"shifted {moved} finger bones, expected 12")
+bad_fingers = rv.run_gate(env, shifted, landmarks, signature, open_allow=OPEN)
+bad_l = bad_fingers["warns"]["fingers"]["L"]
+check(bad_l["status"] == "warn", f"shifted fan not caught: {bad_l}")
+check("outside" in (bad_l["warn_cause"] or ""), f"wrong cause: {bad_l}")
+check(
+    bad_fingers["warns"]["fingers"]["R"]["status"] == "ok",
+    "unshifted side warned",
+)
+check(
+    all(a < rv.FINGER_WARN_DEG for a in bad_l["angles_deg"].values()),
+    "angle check should be blind to pure translation (the old hole)",
+)
+print(f"  bad fingers: L {bad_l['warn_cause']} {bad_l['worst_pos_m']} m, R ok")
+
+floated = dup_meta("ap_bad_face")
+fb = rv.face_bones(floated.data.edit_bones)
+check(fb, "face subtree missing for perturbation")
+for b in fb:
+    b.head.z += 0.08  # gross lift: centroid leaves the head blob
+    b.tail.z += 0.08
+bad_face = rv.run_gate(env, floated, landmarks, signature, open_allow=OPEN)["warns"][
+    "face"
+]
+check(bad_face["status"] == "warn", f"floated face not caught: {bad_face}")
+check("outside" in (bad_face["warn_cause"] or ""), f"wrong cause: {bad_face}")
+print(f"  bad face: {bad_face['warn_cause']} centroid {bad_face['centroid']}")
+
+twisted = dup_meta("ap_bad_toe")
+tb = twisted.data.edit_bones.get("toe.L")
+check(tb is not None, "toe.L missing for perturbation")
+dx, dy, dz = tb.tail.x - tb.head.x, tb.tail.y - tb.head.y, tb.tail.z - tb.head.z
+tb.tail = (tb.head.x - dy, tb.head.y + dx, tb.head.z + dz)  # yaw +90 deg
+bad_toe = rv.run_gate(env, twisted, landmarks, signature, open_allow=OPEN)["warns"][
+    "toes"
+]["L"]
+check(bad_toe["status"] == "warn", f"twisted toe not caught: {bad_toe}")
+check("direction" in (bad_toe["warn_cause"] or ""), f"wrong cause: {bad_toe}")
+print(f"  bad toe: {bad_toe['warn_cause']} yaw {bad_toe['yaw_deg']} deg")
+
+# 5d. Mystery-stick regression: the rebuilt metarig must carry no stray.
+rebuilt = rv.build_metarig_from_module(FITTED)
+rebuilt_names = {b.name for b in rebuilt.data.bones}
+meta_names = {b.name for b in meta.data.bones}
+check("Bone" not in rebuilt_names, "stray default bone in rebuilt metarig")
+check(rebuilt_names == meta_names, "rebuilt bone set differs from fitted")
+print(f"  rebuild: {len(rebuilt_names)} bones, no stray")
+
 # 6. CLI gate on the rebuilt module (round-trip incl. %.4f rounding).
 cli_report = os.path.join(TMP, "cli_report.json")
 overlay_dir = os.path.join(TMP, "overlay")

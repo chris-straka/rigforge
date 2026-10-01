@@ -8,6 +8,11 @@ Headless (from the repo root; the preset fallback needs the addon overlay):
       --factory-startup --python tools/validate_fit.py -- \\
       MESH FITTED_METARIG.py LANDMARKS.json [--margin M] [--render DIR]
       [--no-render] [--on-fail stop|preset] [--open bone,...] [--report PATH]
+      [--closeup PNG]
+
+`--closeup PNG` skips the gate and renders a labeled-points toe-region
+close-up (PNG + a sibling _labels.json with pixel coords for text
+overlay); it exists to eyeball foot bones and catch strays.
 
 A fitted metarig must pass this gate before it is allowed near `generate`
 (docs/auto_placement.md Section 4.4). Hard gates (failures stop the
@@ -26,14 +31,34 @@ pipeline, naming bones and what to fix):
 
 Warn-only placement reports (never fail the gate):
 
-- fingers: each four-finger chain direction vs the mesh finger direction
-  (centroid split of sub-wrist verts); warns past 45 deg, i.e. the bone
-  points more sideways than along the mesh fingers (the preset's natural
-  fan reads ~38 deg on the outer fingers). Thumb excluded (it points
-  sideways by anatomy).
-- toes: toe-tip overshoot past the mesh foot front in the facing axis.
+- fingers: per-finger chain direction vs the mesh finger direction
+  (centroid split of hand-slab verts: below the wrist but above the
+  slice fingertip floor, so boot soles at z~0 never enter); warns past
+  45 deg. PLUS a positional check the angle misses: fingertip
+  containment — any fingertip outside the envelope warns, with
+  per-finger lateral-vs-axis vectors naming the nudge (reported, never
+  gated: healthy and bad fits share the same medial bias magnitude).
+  Thumb included in the angle check: it measures ~26 deg on Andras,
+  i.e. it tracks the fan in this metarig — the old "points sideways"
+  rationale did not match the rig (its tip distance stays reported
+  separately, ungated: the thumb grazes the surface by anatomy).
+- toes: toe-tip overshoot past the mesh foot front in the facing axis,
+  PLUS toe-axis yaw vs the mesh foot direction (front/back-half split
+  of sub-ankle verts; warns past 45 deg, same pattern as fingers).
+  Tip shortfall is reported, never gated (healthy and bad fits share
+  it: rigid preset toe, no toe landmark yet). (The sideways red stubs
+  at the feet are the heel.02 reverse-foot pivots, correct by
+  design — not toes.)
 - head: head-top vs a skullcap estimate (widest head-blob ring + its
   radius), NOT mesh zmax — hair spikes must not count.
+- face: face-bone centroid must sit inside the head blob between a chin
+  floor (lowest single-blob band above the neck) and the skullcap, and
+  the face bottom must clear the chin floor (gross-misplacement
+  tripwires only). Brow clearance, face frac, and per-part geometry are
+  reported, never gated — calibration forbids a threshold (healthy
+  synthetic reads -0.3 cm brow clearance vs Andras's +2.1 cm: hair
+  inflates the cap reference). Heuristic only: slices cannot see mesh
+  features (eyes/nose/mouth) and cannot separate hair from skull.
 
 The fit report carries per-driver-bone surface-distance stats (head / mid
 / tail depths, min, mean) plus overlay render paths (front/side PNGs and
@@ -64,8 +89,31 @@ CLOSE_EPS = 1e-4  # same epsilon as reconnect_from
 SYMMETRY_TOL = 0.01  # Section 4.4: L/R mirror error must be < 1 cm
 MARGIN_DEFAULT = 0.01  # inside-mesh margin: silhouette rule, not just inside
 FINGER_WARN_DEG = 45.0  # finger chain vs mesh finger direction
+# Kept at 45: the preset's natural fan reads 38 deg on the outer fingers
+# (clean synthetic mesh), so the threshold stays above accepted anatomy
+# with headroom. (The old "pinky 32 deg fine" Andras reading is obsolete:
+# it was measured against a sole-contaminated reference; the corrected
+# reference reads 46 deg on that same pinky, consistent with its 4.3 cm
+# offset and outside-mesh parity.)
+# No lateral threshold: the healthy synthetic fit reads 4.9 cm of fan-vs-
+# axis lateral (fat hand box, same medial bias as Andras's 4.3 cm), so no
+# lateral line separates healthy from bad. The gate warns on tip
+# containment (binary, anatomical); lateral vectors stay as diagnostics.
 TOE_WARN = 0.002  # toe-tip overshoot past the mesh foot front
+TOE_DIR_WARN = 45.0  # toe-axis yaw vs mesh foot direction
+# No shortfall threshold: the healthy synthetic fit reads 6.7 cm short
+# (crude 22 cm foot box, rigid preset toe) against Andras's 3.3 cm, so
+# no shortfall line separates healthy from bad. Shortfall stays a
+# reported diagnostic; the hard margin gate already fails a toe riding
+# the surface (Andras toe.L 7.2 mm, eyeballed a real breach).
 HEAD_WARN = 0.03  # head-top vs skullcap estimate
+# No brow-clearance threshold: the healthy synthetic fit reads -0.3 cm
+# (cap noise underestimates the ball top) against Andras's +2.1 cm, so
+# the ordering inverts — hair inflates the skullcap reference in exactly
+# the wrong direction. Brow clearance, face frac, and per-part geometry
+# stay reported diagnostics; the gate trips only on gross misplacement
+# (centroid outside the head blob, face sunk past the chin floor).
+SLAB_BELOW_TIP = 0.02  # hand-slab floor below the slice fingertip floor
 INSIDE_VOTES = 5  # parity rays (of 6) that must read inside
 RAY_EPS = 1e-4
 RAY_MAX_HITS = 8
@@ -134,6 +182,14 @@ def build_metarig_from_module(path):
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.armature_add(enter_editmode=False, location=(0, 0, 0))
     obj = bpy.context.view_layer.objects.active
+    # create() only adds bones, so clear the armature_add default first:
+    # the leftover 1 m "Bone" at the origin rendered as a mystery tube
+    # between the legs in every gate overlay until this line existed.
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    for eb in list(obj.data.edit_bones):
+        obj.data.edit_bones.remove(eb)
+    bpy.ops.object.mode_set(mode="OBJECT")
     ns["create"](obj)
     bpy.ops.object.mode_set(mode="OBJECT")
     return obj
@@ -252,74 +308,175 @@ def check_symmetry(meta):
     return {"worst": worst, "pair": worst_pair}
 
 
-def mesh_finger_dir(env, lm, side):
-    """Mesh finger direction: centroid split of sub-wrist verts, else None."""
+def centroid(vs):
+    n = len(vs)
+    return Vector(
+        (
+            sum(v.x for v in vs) / n,
+            sum(v.y for v in vs) / n,
+            sum(v.z for v in vs) / n,
+        )
+    )
+
+
+def finger_slab(env, lm, side):
+    """Hand-slab verts: below the wrist but above the fingertip floor.
+
+    The old unbounded sub-wrist set caught boot soles at z~0 (Andras:
+    266 of 853 verts), dragging the finger reference toward the floor.
+    """
     sx = lm["wrist_x"] if side == "L" else -lm["wrist_x"]
-    verts = [
+    floor = lm["hand_tip_z"] - SLAB_BELOW_TIP
+    return [
         v.co
         for v in env.data.vertices
-        if v.co.z < lm["wrist_z"] and abs(v.co.x - sx) < 0.08
+        if floor < v.co.z < lm["wrist_z"] and abs(v.co.x - sx) < 0.08
     ]
+
+
+def finger_axis(env, lm, side):
+    """Mesh finger axis: (finger-centroid, direction) or (None, reason)."""
+    verts = finger_slab(env, lm, side)
     if len(verts) < 50:
-        return None
+        return None, "too few hand-slab verts"
     zs = sorted(v.z for v in verts)
     cut = zs[len(zs) // 2]
     up = [v for v in verts if v.z >= cut]
     lo = [v for v in verts if v.z < cut]
     if not up or not lo:
-        return None
-
-    def centroid(vs):
-        n = len(vs)
-        return Vector(
-            (
-                sum(v.x for v in vs) / n,
-                sum(v.y for v in vs) / n,
-                sum(v.z for v in vs) / n,
-            )
-        )
-
+        return None, "empty hand-slab half"
     vec = centroid(lo) - centroid(up)
-    return vec.normalized() if vec.length > 1e-9 else None
+    if vec.length < 1e-9 or abs(vec.normalized().z) < 1e-6:
+        return None, "degenerate finger axis"
+    return (centroid(lo), vec.normalized()), None
 
 
-def report_fingers(meta, env, lm):
-    """Warn-only: finger-chain orientation vs mesh finger direction."""
+def mesh_finger_dir(env, lm, side):
+    """Mesh finger direction: centroid split of hand-slab verts, else None."""
+    axis, _ = finger_axis(env, lm, side)
+    return axis[1] if axis else None
+
+
+def chain_angle(mesh_dir, head_b, tail_b):
+    vec = tail_b.tail - head_b.head
+    if vec.length < 1e-9:
+        return None
+    return math.degrees(mesh_dir.angle(vec.normalized()))
+
+
+def report_fingers(meta, env, eval_env, lm):
+    """Warn-only: finger-chain angles + fingertip containment.
+
+    Angles catch wrong-direction chains; containment catches a fan
+    sitting sideways of the mesh fingers (eyeballed on Andras: old
+    angle-only gate green while fingertips floated outside the mesh).
+    Per-finger lateral-vs-axis vectors name the nudge but never gate:
+    they cannot separate a healthy fit from a bad one (see note above).
+    """
     bones = meta.data.edit_bones
+    mat = meta.matrix_world
     out = {}
     for side in SIDES:
-        mesh_dir = mesh_finger_dir(env, lm, side)
-        if mesh_dir is None:
-            out[side] = {"status": "no-data", "reason": "too few sub-wrist verts"}
+        axis, reason = finger_axis(env, lm, side)
+        if axis is None:
+            out[side] = {"status": "no-data", "reason": reason}
             continue
+        loc, mesh_dir = axis
         worst, worst_finger, angles = 0.0, None, {}
-        for finger in FINGERS:
+        for finger in (*FINGERS, "thumb"):
             head_b = bones.get(f"{finger}.01.{side}")
             tail_b = bones.get(f"{finger}.03.{side}")
             if head_b is None or tail_b is None:
                 continue
-            vec = tail_b.tail - head_b.head
-            if vec.length < 1e-9:
+            deg = chain_angle(mesh_dir, head_b, tail_b)
+            if deg is None:
                 continue
-            deg = math.degrees(mesh_dir.angle(vec.normalized()))
             angles[finger] = round(deg, 1)
             if deg > worst:
                 worst, worst_finger = deg, finger
         if worst_finger is None:
             out[side] = {"status": "no-data", "reason": "finger bones missing"}
             continue
+        lateral, worst_pos, worst_off = {}, 0.0, None
+        for finger in FINGERS:
+            tail_b = bones.get(f"{finger}.03.{side}")
+            if tail_b is None:
+                continue
+            tip = mat @ tail_b.tail
+            # Mesh-axis point at the tip's height, then the offset vector
+            # (diagnostic: its x/y names the nudge).
+            anchor = loc + mesh_dir * ((tip.z - loc.z) / mesh_dir.z)
+            off = tip - anchor
+            lat = math.hypot(off.x, off.y)
+            held = point_depth(eval_env, tip)
+            lateral[finger] = {
+                "tip": [round(v, 4) for v in tip],
+                "off": [round(v, 4) for v in off],
+                "lateral": round(lat, 4),
+                "inside": held["inside"],
+                "votes": held["votes"],
+                "depth": round(held["depth"], 4),
+            }
+            if lat > worst_pos:
+                worst_pos, worst_off = lat, finger
+        slab = finger_slab(env, lm, side)
+        thumb_b = bones.get(f"thumb.03.{side}")
+        thumb_near = (
+            round(min((v - (mat @ thumb_b.tail)).length for v in slab), 4)
+            if thumb_b is not None
+            else None
+        )
+        outsiders = [f for f in FINGERS if not lateral.get(f, {}).get("inside", True)]
+        angle_bad = worst > FINGER_WARN_DEG
+        status = "warn" if (angle_bad or outsiders) else "ok"
         out[side] = {
-            "status": "warn" if worst > FINGER_WARN_DEG else "ok",
+            "status": status,
             "mesh_dir": [round(v, 3) for v in mesh_dir],
             "angles_deg": angles,
             "worst": worst_finger,
             "worst_deg": round(worst, 1),
+            "lateral": lateral,
+            "worst_pos": worst_off,
+            "worst_pos_m": round(worst_pos, 4),
+            "thumb_near": thumb_near,
+            "warn_cause": (
+                ("angle " if angle_bad else "")
+                + ("outside:" + ",".join(outsiders) if outsiders else "")
+            ).strip()
+            or None,
         }
     return out
 
 
+def foot_dir(foot, lm):
+    """Mesh foot direction: front-half centroid minus back-half centroid."""
+    ys = sorted(v.y for v in foot)
+    med = ys[len(ys) // 2]
+    if lm["facing"] == "-Y":
+        fore = [v for v in foot if v.y <= med]
+        back = [v for v in foot if v.y > med]
+    else:
+        fore = [v for v in foot if v.y >= med]
+        back = [v for v in foot if v.y < med]
+    if len(fore) < 10 or len(back) < 10:
+        return None
+    vec = centroid(fore) - centroid(back)
+    return vec.normalized() if vec.length > 1e-9 else None
+
+
+def yaw_deg(a, b):
+    """Angle between the horizontal (x/y) components of two vectors."""
+    ax, ay = a.x, a.y
+    bx, by = b.x, b.y
+    na, nb = math.hypot(ax, ay), math.hypot(bx, by)
+    if na < 1e-9 or nb < 1e-9:
+        return None
+    cos = (ax * bx + ay * by) / (na * nb)
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+
+
 def report_toes(meta, env, eval_env, lm):
-    """Warn-only: toe-tip overshoot past the mesh foot front."""
+    """Warn-only: overshoot + toe-axis yaw vs foot dir + tip shortfall."""
     bones = meta.data.edit_bones
     mat = meta.matrix_world
     if lm["facing"] not in ("-Y", "+Y"):
@@ -328,7 +485,11 @@ def report_toes(meta, env, eval_env, lm):
     if not foot:
         return {"status": "no-data", "reason": "no sub-ankle verts"}
     front = min(v.y for v in foot) if lm["facing"] == "-Y" else max(v.y for v in foot)
-    out = {"foot_front": round(front, 4)}
+    mesh_dir = foot_dir(foot, lm)
+    out = {
+        "foot_front": round(front, 4),
+        "mesh_dir": [round(v, 3) for v in mesh_dir] if mesh_dir else None,
+    }
     for side in SIDES:
         b = bones.get(f"toe.{side}")
         if b is None:
@@ -337,20 +498,41 @@ def report_toes(meta, env, eval_env, lm):
         tip = mat @ b.tail
         over = front - tip.y if lm["facing"] == "-Y" else tip.y - front
         tip_pt = point_depth(eval_env, tip)
+        axis = (b.tail - b.head).normalized()
+        yaw = yaw_deg(axis, mesh_dir) if mesh_dir else None
+        deg3 = (
+            math.degrees(mesh_dir.angle(axis))
+            if mesh_dir and axis.length > 1e-9
+            else None
+        )
+        short = -over  # positive: tip falls short of the mesh foot front
+        over_bad = over > TOE_WARN
+        dir_bad = yaw is not None and yaw > TOE_DIR_WARN
+        cause = ("overshoot " if over_bad else "") + ("direction" if dir_bad else "")
+        status = "warn" if (over_bad or dir_bad) else "ok"
         out[side] = {
-            "status": "warn" if over > TOE_WARN else "ok",
+            "status": status,
             "tip": [round(v, 4) for v in tip],
             "overshoot": round(over, 4),
             "tip_inside": tip_pt["inside"],
+            "yaw_deg": round(yaw, 1) if yaw is not None else None,
+            "dir3_deg": round(deg3, 1) if deg3 is not None else None,
+            "shortfall": round(short, 4),
+            "warn_cause": cause.strip() or None,
         }
     return out
 
 
-def skullcap_z(signature, lm):
-    """Skullcap from head-blob width: widest ring above the neck dip + r."""
+def head_bands(signature, lm):
+    """Top-down (index, band) of single-blob slices above the neck."""
     top_down = list(reversed(signature))
     bands = [(i, s) for i, s in enumerate(top_down) if len(s["blobs"]) == 1]
-    bands = [(i, s) for i, s in bands if s["z"] > lm["neck_z"]]
+    return [(i, s) for i, s in bands if s["z"] > lm["neck_z"]]
+
+
+def skullcap_z(signature, lm):
+    """Skullcap from head-blob width: widest ring above the neck dip + r."""
+    bands = head_bands(signature, lm)
     if len(bands) < 6:
         return None, "fewer than 6 count==1 bands above the neck"
     radii = [s["blobs"][0]["r"] for _, s in bands]
@@ -386,6 +568,88 @@ def report_head(meta, signature, lm):
         "skullcap_z": cap,
         "delta": delta,
         "zmax_spike": round(lm["zmax"] - cap, 4),
+    }
+
+
+FACE_PARTS = ("lid.T.L", "brow.T.L", "nose", "chin", "jaw", "ear.L")
+
+
+def face_bones(bones):
+    """Edit bones under the face root, or None if the rig has no face."""
+    root = bones.get("face")
+    if root is None:
+        return None
+    found = []
+
+    def walk(bone):
+        for child in bone.children:
+            found.append(child)
+            walk(child)
+
+    walk(root)
+    return found
+
+
+def report_face(meta, signature, lm):
+    """Warn-only heuristic: face bones placed within the head blob.
+
+    The centroid must sit between a chin floor (lowest single-blob band
+    above the neck: the jaw/neck junction, a floor rather than a chin
+    landmark) and the skullcap, and the face bottom must clear the chin
+    floor; anything else is a gross misplacement. Brow clearance, face
+    frac, and per-part containment are reported, never gated (see the
+    threshold note above): slices cannot see mesh features and cannot
+    separate hair from skull.
+    """
+    bones = meta.data.edit_bones
+    found = face_bones(bones)
+    if not found:
+        return {"status": "no-data", "reason": "face bones missing"}
+    mat = meta.matrix_world
+    mids = [mat @ ((b.head + b.tail) / 2) for b in found]
+    top = max((mat @ b.head).z for b in found)
+    top = max(top, max((mat @ b.tail).z for b in found))
+    bot = min((mat @ b.head).z for b in found)
+    bot = min(bot, min((mat @ b.tail).z for b in found))
+    face_c = centroid(mids)
+    cap, reason = skullcap_z(signature, lm)
+    if cap is None:
+        return {"status": "no-data", "reason": reason}
+    bands = head_bands(signature, lm)
+    chin_floor = round(min(s["z"] for _, s in bands), 4)
+    brow = round(cap - top, 4)
+    span = cap - lm["neck_z"]
+    frac = round((face_c.z - lm["neck_z"]) / span, 3) if span > 0 else None
+    outside = not (chin_floor < face_c.z < cap)
+    sunk = bot < chin_floor
+    cause = ("outside " if outside else "") + ("sunk" if sunk else "")
+    status = "warn" if (outside or sunk) else "ok"
+    parts = {}
+    for name in FACE_PARTS:
+        b = bones.get(name)
+        if b is None:
+            continue
+        mid = mat @ ((b.head + b.tail) / 2)
+        ring = min(bands, key=lambda pair: abs(pair[1]["z"] - mid.z))[1]
+        blob = ring["blobs"][0]
+        radial = math.hypot(mid.x - blob["cx"], mid.y - blob["cy"])
+        parts[name] = {
+            "z": round(mid.z, 4),
+            "ring_z": round(ring["z"], 4),
+            "ring_r": round(blob["r"], 4),
+            "radial": round(radial, 4),
+        }
+    return {
+        "status": status,
+        "centroid": [round(v, 4) for v in face_c],
+        "face_top": round(top, 4),
+        "face_bottom": round(bot, 4),
+        "chin_floor": chin_floor,
+        "skullcap_z": cap,
+        "brow_clearance": brow,
+        "face_frac": frac,
+        "parts": parts,
+        "warn_cause": cause.strip() or None,
     }
 
 
@@ -468,9 +732,10 @@ def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
             "ok": sym_ok,
         },
         "warns": {
-            "fingers": report_fingers(meta, env, lm),
+            "fingers": report_fingers(meta, env, eval_env, lm),
             "toes": report_toes(meta, env, eval_env, lm),
             "head": report_head(meta, signature, lm),
+            "face": report_face(meta, signature, lm),
         },
         "overlay": None,
         "verdict": "pass" if not failures else "fail",
@@ -559,6 +824,134 @@ def render_overlays(env, meta, lm, out_dir):
     return {"front": paths["front"], "side": paths["side"], "joints": joints_path}
 
 
+CLOSEUP_BONES = ("thigh", "shin", "foot", "toe", "heel.02")
+
+
+def render_closeup(mesh, env, meta, lm, out_path, size=640):
+    """Toe-region close-up PNG + projected bone-midpoint labels JSON.
+
+    Armatures never reach final renders, so bones become red tubes
+    (beveled curves) drawn in front of the opaque workbench mesh;
+    labels cover the leg/foot/toe bones of both legs plus any other
+    bone projecting into the frame (that is how strays get caught).
+    Text is overlaid outside Blender (headless Blender has no font
+    rasterizer); the JSON carries pixel coords, see
+    docs/auto_placement.md for the command.
+    """
+    bpy.context.view_layer.objects.active = meta
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.context.view_layer.update()
+    scene = bpy.context.scene
+    render = scene.render
+    prev = (
+        render.engine,
+        render.resolution_x,
+        render.resolution_y,
+        render.film_transparent,
+        render.filepath,
+    )
+    prev_shading = (scene.display.shading.light, scene.display.shading.color_type)
+    scene.display.shading.light = "STUDIO"
+    scene.display.shading.color_type = "MATERIAL"
+    render.engine = "BLENDER_WORKBENCH"
+    render.resolution_x = render.resolution_y = size
+    render.film_transparent = False
+    render.filepath = out_path
+
+    toes = []
+    for side in SIDES:
+        b = meta.data.bones.get(f"toe.{side}")
+        if b is not None:
+            toes.append(meta.matrix_world @ ((b.head_local + b.tail_local) / 2))
+    if not toes:
+        fail("close-up needs the toe bones")
+    center = sum(toes, Vector()) / len(toes) + Vector((0.0, 0.0, 0.09))
+
+    cam_data = bpy.data.cameras.new("rigforge_closeup_cam")
+    cam = bpy.data.objects.new("rigforge_closeup_cam", cam_data)
+    scene.collection.objects.link(cam)
+    front = (
+        Vector((0.0, -1.0, 0.0)) if lm["facing"] == "-Y" else Vector((0.0, 1.0, 0.0))
+    )
+    dist = (0.50 / 2) / math.tan(cam_data.angle / 2)
+    cam.location = center + front * dist
+    track = (center - cam.location).to_track_quat("-Z", "Y")
+    cam.matrix_world = Matrix.Translation(cam.location) @ track.to_matrix().to_4x4()
+    scene.camera = cam
+    bpy.context.view_layer.update()
+
+    tube_mat = bpy.data.materials.new("rigforge_closeup_tube")
+    tube_mat.diffuse_color = (1.0, 0.03, 0.03, 1.0)
+    tubes = []
+    mat = meta.matrix_world
+    for b in meta.data.bones:
+        curve = bpy.data.curves.new(f"rf_closeup_{b.name}", "CURVE")
+        curve.dimensions = "3D"
+        curve.bevel_depth = 0.0045
+        curve.bevel_resolution = 1
+        spline = curve.splines.new("POLY")
+        spline.points.add(1)
+        head = mat @ b.head_local
+        tail = mat @ b.tail_local
+        spline.points[0].co = (head.x, head.y, head.z, 1.0)
+        spline.points[1].co = (tail.x, tail.y, tail.z, 1.0)
+        obj = bpy.data.objects.new(f"rf_closeup_{b.name}", curve)
+        obj.data.materials.append(tube_mat)
+        obj.show_in_front = True
+        scene.collection.objects.link(obj)
+        tubes.append(obj)
+
+    mesh.hide_render = True
+    meta.hide_render = True
+    bpy.context.view_layer.update()
+    bpy.ops.render.render(write_still=True)
+
+    labels = []
+    mat = meta.matrix_world
+    wanted = [f"{stem}.{side}" for stem in CLOSEUP_BONES for side in SIDES]
+    ordered = [n for n in wanted if n in meta.data.bones]
+    ordered += [b.name for b in meta.data.bones if b.name not in ordered]
+
+    def project(point):
+        co = world_to_camera_view(scene, cam, point)
+        if 0.02 < co.x < 0.98 and 0.02 < co.y < 0.98:
+            return [round(co.x * size), round((1.0 - co.y) * size)]
+        return None
+
+    for name in ordered:
+        b = meta.data.bones[name]
+        head = mat @ b.head_local
+        tail = mat @ b.tail_local
+        for at, point in (("mid", (head + tail) / 2), ("head", head), ("tail", tail)):
+            px = project(point)
+            if px is not None:
+                labels.append({"bone": name, "at": at, "x": px[0], "y": px[1]})
+                break
+    stem, _ = os.path.splitext(out_path)
+    labels_path = stem + "_labels.json"
+    with open(labels_path, "w", encoding="utf-8") as f:
+        json.dump({"png": out_path, "size": size, "labels": labels}, f, indent=2)
+
+    for obj in tubes:
+        curve = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.curves.remove(curve)
+    bpy.data.materials.remove(tube_mat)
+    mesh.hide_render = False
+    meta.hide_render = False
+    bpy.data.objects.remove(cam, do_unlink=True)
+    bpy.data.cameras.remove(cam_data)
+    (
+        render.engine,
+        render.resolution_x,
+        render.resolution_y,
+        render.film_transparent,
+        render.filepath,
+    ) = prev
+    scene.display.shading.light, scene.display.shading.color_type = prev_shading
+    return {"png": out_path, "labels": labels_path, "size": size}
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     if len(args) < 3 or args[0].startswith("-"):
@@ -589,7 +982,16 @@ def main():
 
     with open(lm_path, encoding="utf-8") as f:
         lm = json.load(f)
-    for key in ("facing", "height", "zmax", "neck_z", "wrist_z", "wrist_x", "ankle_z"):
+    for key in (
+        "facing",
+        "height",
+        "zmax",
+        "neck_z",
+        "wrist_z",
+        "wrist_x",
+        "hand_tip_z",
+        "ankle_z",
+    ):
         if lm.get(key) is None:
             fail(f"landmark JSON missing {key}")
 
@@ -603,6 +1005,13 @@ def main():
     env = dl.envelope_copy(mesh)
     signature, _, _ = dl.slice_signature(env, 120)
     meta = build_metarig_from_module(meta_path)
+    if "--closeup" in args:
+        arg = args[args.index("--closeup") + 1]
+        closeup = render_closeup(mesh, env, meta, lm, arg)
+        print("RIGFORGE_CLOSEUP_BEGIN")
+        print(json.dumps(closeup, indent=2))
+        print("RIGFORGE_CLOSEUP_OK")
+        return
     report = run_gate(env, meta, lm, signature, margin, open_allow)
     report["subject"] = mesh_path
     report["metarig"] = meta_path
