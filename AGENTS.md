@@ -16,8 +16,10 @@ beat upstream on auto-placement, skinning, presets, and export.
 - Blender binary: `/Applications/Blender.app/Contents/MacOS/Blender`.
   Headless only unless the user approves a GUI launch.
 - Remote: `github.com/chris-straka/rigforge`, verified PRIVATE
-  (2026-09-30) — keep it private. Commit locally when asked; push
-  only when asked.
+  (2026-09-30) — keep it private. Commit and push to `origin/main` on
+  your own after each completed chunk of work; don't wait for approval
+  (standing authorization from the owner, 2026-10-01). Never
+  force-push or rewrite published history.
 - Lint gate: `ruff check .` and `ruff format --check .` must be clean
   on files you touch (config: `ruff.toml`). The tree carries
   pre-existing lint debt (see TODO); don't bulk-fix outside your
@@ -28,9 +30,11 @@ beat upstream on auto-placement, skinning, presets, and export.
 - `~/SWE/retopoforge` — mesh stage (MIT engine + GPL extension).
   Strategy hub: `retopoforge/docs/rigging-strategy.md`. Read it first.
 - `~/SWE/unirig-mac` — ML rigger port (MIT except vendored GPL
-  michelangelo subtree; never call it MIT-clean). Toolbox sibling, not a
-  rival: this repo does heroes/control rigs, that one does creature
-  volume/auto-placement. No contest, both stay.
+  michelangelo subtree; never call it MIT-clean). Optional: the
+  bake-off (docs/bakeoff/final.md) went to rigforge on hero and
+  creature quality, and this repo's own auto-placement covers
+  unirig's zero-touch win. unirig survives only as an optional
+  joint-hints source (coordinates in, never code).
 - `~/Games/hll` — the game (Godot 4.7 + C#). Its chars are the test
   subjects; never commit game assets outside that repo.
 - NOTE (2026-09-30): other agent sessions are active in this area

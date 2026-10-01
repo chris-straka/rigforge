@@ -8,7 +8,7 @@ quadruped pipeline and unirig-hints ingestion (see Section 10).
 
 ## 1. The gap (what "zero-touch" means here)
 
-The bake-off ([bakeoff_final.md](/Users/c/Downloads/bakeoff/bakeoff_final.md))
+The bake-off ([bakeoff/final.md](bakeoff/final.md))
 split the verdict three ways:
 
 | | rigforge | unirig-mac | Mixamo |

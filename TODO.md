@@ -9,9 +9,17 @@
       (hll_hero + hll_stalker, built by tools/make_hll_presets.py,
       covered by tests/test_presets.py; baked-anim export in
       tests/test_game_export.py)
-- [ ] Bake-off vs ../unirig-mac on one hero + one creature (joints,
-      weights, tweak time, Godot import)
-- [ ] Auto-placement research (winner of the bake-off decides the base)
+- [x] Bake-off vs ../unirig-mac on one hero + one creature (joints,
+      weights, tweak time, Godot import). Done 2026-09-30, results in
+      docs/bakeoff/final.md: rigforge won hero and creature quality,
+      unirig won only zero-touch time; Mixamo added as baseline.
+- [x] Auto-placement research: deterministic landmark detector +
+      metarig fitter + validation gate for hero and quadruped, unirig
+      joints as optional hints (docs/auto_placement.md, phases 1-4.5).
+- [ ] `wm.rigforge_auto_place` operator + panel button (thin UI over
+      the headless fitter; docs/auto_placement.md section 5)
+- [ ] Re-run the bake-off comparison with the fitter in the loop
+      (fit-delta should now be ~0 vs unirig's zero-touch time)
 
 ## Refactor / codebase health backlog
 
