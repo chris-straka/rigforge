@@ -48,6 +48,20 @@ OPEN = (
     "upper_arm.L",
     "upper_arm.R",
 )
+# Same for the hll_stalker stock preset (neck socket, shoulder/pelvis
+# sockets, tail root, leg sockets) — mirrors auto_rig.STALKER_OPEN.
+Q_OPEN = (
+    "neck.001",
+    "pelvis.L",
+    "pelvis.R",
+    "shoulder.L",
+    "shoulder.R",
+    "tail.001",
+    "thigh.L",
+    "thigh.R",
+    "upper_arm.L",
+    "upper_arm.R",
+)
 
 
 def fail(msg):
@@ -465,6 +479,278 @@ for tag, mesh_path in SUBJECTS:
     print(
         f"subject {tag}: PASS (min {s_gate['inside']['min_depth']} "
         f"worst {s_gate['inside']['worst_bone']} def {s_gen['def_bones']})"
+    )
+
+# 10. Quadruped pipeline (stalker-class, docs Section 10): synthetic
+# blockout end to end (landmarks, fit + generate, in-session + CLI gate,
+# export), the HLL stalker mesh (skip-if-absent), and unirig-hints
+# arbitration (skip-if-absent sample).
+Q_TMP = os.path.join(TMP, "quad")
+os.makedirs(Q_TMP, exist_ok=True)
+Q_MESH = os.path.join(Q_TMP, "qsynth.glb")
+Q_LM = os.path.join(Q_TMP, "qlm.json")
+Q_FITTED = os.path.join(Q_TMP, "qfitted.py")
+
+# 10a. Synthetic quadruped -> GLB file.
+qsynth, qspec = dl.build_synthetic_quadruped()
+bpy.ops.object.mode_set(mode="OBJECT")
+bpy.ops.object.select_all(action="DESELECT")
+qsynth.select_set(True)
+bpy.context.view_layer.objects.active = qsynth
+bpy.ops.export_scene.gltf(filepath=Q_MESH, export_format="GLB", use_selection=True)
+check(os.path.exists(Q_MESH), "synthetic quad GLB export failed")
+print(f"synthetic quad: {Q_MESH} ({os.path.getsize(Q_MESH)} bytes)")
+
+# 10b. Landmarks via the CLI quadruped path.
+qm_out, qm_code = run_tool("detect_landmarks.py", [Q_MESH, "--kind", "quadruped"])
+check(qm_code is None, f"quad landmarks exited {qm_code!r}")
+q_landmarks = parse_report(qm_out, "RIGFORGE_LANDMARKS_BEGIN", "RIGFORGE_LANDMARKS_OK")
+with open(Q_LM, "w", encoding="utf-8") as f:
+    json.dump(q_landmarks, f, indent=2)
+check(q_landmarks["kind"] == "quadruped", "quad landmarks kind wrong")
+check(q_landmarks["facing"] == "+Y", f"quad facing {q_landmarks['facing']}")
+check(
+    set(q_landmarks["legs"]) == {"FL", "FR", "BL", "BR"},
+    f"quad legs {sorted(q_landmarks['legs'])}",
+)
+check(
+    not q_landmarks["tail_base_fallback"],
+    "synthetic tail geometry not measured",
+)
+q_bad = dl.check_quad(qspec, q_landmarks)
+check(not q_bad, f"synthetic quad check failed: {q_bad}")
+print(
+    f"quad landmarks: head={q_landmarks['head']} "
+    f"legs={len(q_landmarks['legs'])} tail=measured"
+)
+
+# 10c. Fit (includes headless generate) and prove the fit-delta numbers.
+qf_out, qf_code = run_tool(
+    "fit_metarig.py",
+    [Q_MESH, Q_LM, "--out", Q_FITTED, "--preset", "hll_stalker"],
+)
+check(qf_code is None, f"quad fit exited {qf_code!r}")
+check("RIGFORGE_FIT_OK" in qf_out, "quad fit missing RIGFORGE_FIT_OK")
+q_fit = parse_report(qf_out, "RIGFORGE_FIT_BEGIN", "RIGFORGE_FIT_OK")
+for joint, numbers in sorted(q_fit["joints"].items()):
+    check(numbers["after_d"] < 1e-3, f"quad {joint} not closed")
+check(
+    q_fit["joints"]["rear_foot"]["before_d"] > 0.05,
+    "rear foot started within 5 cm: fit would prove nothing",
+)
+q_gen = q_fit["generate"]
+check(q_gen and q_gen["def_bones"] > 30, f"quad generate weak: {q_gen}")
+print(f"quad generate: rig bones={q_gen['rig_bones']} def={q_gen['def_bones']}")
+
+# 10d. In-session gate: strict pass with the tail hard-gated (the
+# synthetic blockout HAS tail geometry, proving the conditional tail
+# drivers bite where geometry exists).
+q_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+q_meta = next(
+    (o for o in bpy.data.objects if o.type == "ARMATURE" and "rig_id" not in o.data),
+    None,
+)
+check(q_meshes and q_meta is not None, "quad session lost mesh/metarig")
+q_mesh = max(q_meshes, key=lambda o: len(o.data.vertices))
+q_env = dl.envelope_copy(q_mesh)
+q_sig, _, _ = dl.slice_signature(q_env, 120)
+q_gate = rv.run_gate(q_env, q_meta, q_landmarks, q_sig, open_allow=Q_OPEN)
+check(q_gate["verdict"] == "pass", f"quad gate failed: {q_gate['failures']}")
+check(q_gate["tail_gated"], "synthetic tail should be hard-gated")
+check(q_gate["inside"]["min_depth"] >= 0.01, "quad driver in margin band")
+check(
+    set(q_gate["warns"]) == {"quad_head", "quad_tail", "quad_toes", "quad_hooves"},
+    f"quad warns shape {sorted(q_gate['warns'])}",
+)
+check(
+    q_gate["warns"]["quad_tail"]["status"] == "ok",
+    f"synthetic tail warn: {q_gate['warns']['quad_tail']}",
+)
+print(
+    f"quad gate: {q_gate['inside']['checked']} drivers, "
+    f"min {q_gate['inside']['min_depth']} worst {q_gate['inside']['worst_bone']}, "
+    f"hooves {q_gate['warns']['quad_hooves']['dz']}"
+)
+
+# 10e. Red side: a floated head chain trips the warn-only head check
+# (closure/margin may fail on the copy; only the warn is read).
+q_dup = q_meta.copy()
+q_dup.data = q_meta.data.copy()
+q_dup.name = "ap_bad_quad_head"
+bpy.context.collection.objects.link(q_dup)
+bpy.context.view_layer.objects.active = q_dup
+bpy.ops.object.mode_set(mode="EDIT")
+for name in ("neck.001", "neck.002", "neck.003", "neck.004", "head", "skull"):
+    b = q_dup.data.edit_bones.get(name)
+    check(b is not None, f"missing {name} for perturbation")
+    b.head.z += 0.40  # gross lift: head midpoint leaves the mesh
+    b.tail.z += 0.40
+q_bad_head = rv.run_gate(q_env, q_dup, q_landmarks, q_sig, open_allow=Q_OPEN)["warns"][
+    "quad_head"
+]
+check(q_bad_head["status"] == "warn", f"floated head not caught: {q_bad_head}")
+check(q_bad_head["warn_cause"] == "head-mid-outside", f"wrong cause: {q_bad_head}")
+print(f"  bad quad head: {q_bad_head['warn_cause']}")
+
+# 10f. Rebuild round-trip + DEF-only export + CLI gate (CLI last: it
+# wipes the session on import, like the hero §6 ordering).
+q_rebuilt = rv.build_metarig_from_module(Q_FITTED)
+q_names = {b.name for b in q_rebuilt.data.bones}
+check("Bone" not in q_names, "stray default bone in rebuilt quad metarig")
+check(q_names == {b.name for b in q_meta.data.bones}, "rebuilt quad set differs")
+q_rig = next(
+    (o for o in bpy.data.objects if o.type == "ARMATURE" and "rig_id" in o.data),
+    None,
+)
+check(q_rig is not None, "no generated quad rig in session after fit")
+bpy.ops.object.mode_set(mode="OBJECT")
+bpy.ops.object.select_all(action="DESELECT")
+q_rig.select_set(True)
+bpy.context.view_layer.objects.active = q_rig
+q_skel = os.path.join(Q_TMP, "qskel.glb")
+bpy.ops.wm.rigforge_game_export(filepath=q_skel)
+q_joints = glb_joints(q_skel)
+q_bad_j = [j for j in q_joints if not (j or "").startswith("DEF-")]
+check(q_joints, "quad export has no joints")
+check(not q_bad_j, f"quad non-DEF joints: {q_bad_j[:5]}")
+check(
+    len(q_joints) == q_gen["def_bones"],
+    f"quad GLB joints {len(q_joints)} != DEF {q_gen['def_bones']}",
+)
+print(f"quad export OK ({len(q_joints)} joints, all DEF-)")
+q_cli_out, q_cli_code = run_tool(
+    "validate_fit.py",
+    [Q_MESH, Q_FITTED, Q_LM, "--open", ",".join(Q_OPEN), "--no-render"],
+)
+check(q_cli_code is None, f"quad CLI gate exited {q_cli_code!r}")
+check("RIGFORGE_VALIDATE_OK" in q_cli_out, "quad CLI gate not VALIDATE_OK")
+print("quad CLI gate: full_auto")
+
+# 10g. HLL stalker mesh (read-only, skip-if-absent): the reference
+# subject runs landmarks -> fit -> strict gate with every driver
+# joint closed; the tail stays honestly unverified (no geometry).
+STALKER_MESH = "/Users/c/Games/hll/enemies/stalker/models/glb/stalker.glb"
+s_landmarks = None
+if not os.path.exists(STALKER_MESH):
+    print(f"subject stalker: SKIP (missing {STALKER_MESH})")
+else:
+    s_tmp = os.path.join(Q_TMP, "stalker")
+    os.makedirs(s_tmp, exist_ok=True)
+    s_lm_path = os.path.join(s_tmp, "lm.json")
+    s_fitted = os.path.join(s_tmp, "fitted.py")
+    lm_out, lm_code = run_tool(
+        "detect_landmarks.py", [STALKER_MESH, "--kind", "quadruped"]
+    )
+    check(lm_code is None, f"stalker: landmarks exited {lm_code!r}")
+    s_landmarks = parse_report(
+        lm_out, "RIGFORGE_LANDMARKS_BEGIN", "RIGFORGE_LANDMARKS_OK"
+    )
+    with open(s_lm_path, "w", encoding="utf-8") as f:
+        json.dump(s_landmarks, f, indent=2)
+    check(s_landmarks["facing"] == "+Y", "stalker should face +Y")
+    check(
+        s_landmarks["tail_base_fallback"],
+        "stalker blockout has no tail geometry; fallback must fire",
+    )
+    fit_out, fit_code = run_tool(
+        "fit_metarig.py",
+        [STALKER_MESH, s_lm_path, "--out", s_fitted, "--preset", "hll_stalker"],
+    )
+    check(fit_code is None, f"stalker: fit exited {fit_code!r}")
+    s_fit = parse_report(fit_out, "RIGFORGE_FIT_BEGIN", "RIGFORGE_FIT_OK")
+    for joint, numbers in s_fit["joints"].items():
+        check(numbers["after_d"] < 1e-3, f"stalker: {joint} not closed")
+    s_gen = s_fit["generate"]
+    check(s_gen and s_gen["def_bones"] > 30, f"stalker: generate weak: {s_gen}")
+    s_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    s_meta = next(
+        (
+            o
+            for o in bpy.data.objects
+            if o.type == "ARMATURE" and "rig_id" not in o.data
+        ),
+        None,
+    )
+    check(s_meshes and s_meta is not None, "stalker: session lost mesh/metarig")
+    s_env = dl.envelope_copy(max(s_meshes, key=lambda o: len(o.data.vertices)))
+    s_sig = dl.slice_signature(s_env, 120)
+    s_gate = rv.run_gate(s_env, s_meta, s_landmarks, s_sig[0], open_allow=Q_OPEN)
+    check(s_gate["verdict"] == "pass", f"stalker: gate failed: {s_gate['failures']}")
+    check(s_gate["inside"]["min_depth"] >= 0.01, "stalker: driver in margin band")
+    check(not s_gate["tail_gated"], "stalker tail must stay ungated (no geometry)")
+    check(
+        s_gate["warns"]["quad_tail"]["status"] == "unverified",
+        "stalker tail warn must say unverified",
+    )
+    print(
+        f"subject stalker: PASS (min {s_gate['inside']['min_depth']} "
+        f"worst {s_gate['inside']['worst_bone']} def {s_gen['def_bones']})"
+    )
+
+# 10h. Unirig-hints arbitration (read-only sample, skip-if-absent):
+# structural properties — every joint classified, trusted deltas
+# within tol, divergences recorded with numbers, trusted keys land on
+# fitter targets. Against the stalker landmarks the observed split is
+# 1 trusted + 1 supporting + 8 measurement-wins (locked below only
+# when the stalker landmarks are in hand).
+uh = load_tool("ap_unirig_hints", "unirig_hints.py")
+HINTS_SAMPLE = os.path.expanduser(
+    "~/SWE/unirig-mac/tools/joints_samples/stalker_seed42.json"
+)
+if not os.path.exists(HINTS_SAMPLE):
+    print(f"hints: SKIP (missing {HINTS_SAMPLE})")
+else:
+    h_lm = s_landmarks if s_landmarks is not None else q_landmarks
+    h_doc = uh.load_hints(HINTS_SAMPLE)
+    h_rep = uh.arbitrate(h_doc, h_lm)
+    total = len(h_rep["agreed"]) + len(h_rep["diverged"]) + len(h_rep["unmapped"])
+    check(total == h_rep["joints"] == 10, f"hints classified {total}/10")
+    for e in h_rep["agreed"]:
+        check(e["delta"] <= h_rep["tol"], f"trusted {e['hint']} past tol")
+    for e in h_rep["diverged"]:
+        check(e["delta"] > h_rep["tol"], f"diverged {e['hint']} within tol")
+        check(e["measured_pos"] != e["hint_pos"], "divergence needs both sides")
+    for target in h_rep["trusted"]:
+        check(target in uh.ROLE_TO_TARGET.values(), f"bad target {target}")
+    if s_landmarks is not None:
+        check(
+            set(h_rep["trusted"]) == {"rear_top"},
+            f"stalker trusted {sorted(h_rep['trusted'])}",
+        )
+        check(
+            set(h_rep["supporting"]) == {"BR.top"},
+            f"stalker supporting {sorted(h_rep['supporting'])}",
+        )
+        check(len(h_rep["diverged"]) == 8, "stalker divergences != 8")
+        # A hinted fit trusts rear_top and still gates strict.
+        h_fit_path = os.path.join(Q_TMP, "stalker", "hinted.py")
+        hf_out, hf_code = run_tool(
+            "fit_metarig.py",
+            [
+                STALKER_MESH,
+                os.path.join(Q_TMP, "stalker", "lm.json"),
+                "--out",
+                h_fit_path,
+                "--preset",
+                "hll_stalker",
+                "--hints",
+                HINTS_SAMPLE,
+            ],
+        )
+        check(hf_code is None, f"hinted fit exited {hf_code!r}")
+        h_fit = parse_report(hf_out, "RIGFORGE_FIT_BEGIN", "RIGFORGE_FIT_OK")
+        check(
+            h_fit["joints"]["rear_top"]["target"] == h_rep["trusted"]["rear_top"],
+            "hinted fit did not trust rear_top",
+        )
+        check(
+            h_fit["joints"]["rear_top"]["after_d"] < 1e-3,
+            "hinted rear_top not closed",
+        )
+    print(
+        f"hints: {len(h_rep['trusted'])} trusted, "
+        f"{len(h_rep['supporting'])} supporting, "
+        f"{len(h_rep['diverged'])} measurement-wins"
     )
 
 print("RIGFORGE_AUTOPLACE_OK")

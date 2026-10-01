@@ -3,7 +3,8 @@
 Date: 2026-10-01. Status: research + Phase 1 prototype
 (`tools/detect_landmarks.py`) + Phase 2 fitter (`tools/fit_metarig.py`,
 see Section 7) + Phase 3 validation gate (`tools/validate_fit.py`,
-hardened against eyeball findings — see Section 8).
+hardened against eyeball findings — see Section 8) + Phase 4
+quadruped pipeline and unirig-hints ingestion (see Section 10).
 
 ## 1. The gap (what "zero-touch" means here)
 
@@ -172,8 +173,9 @@ prove insufficient on real HLL meshes — try deterministic first.
 - [x] Phase 1: landmark detector prototype (`tools/detect_landmarks.py`):
       slice/blob analysis, JSON landmarks, headless, synthetic-mesh test.
 - [x] Phase 1b (hero): detector run on the Andras hero mesh
-      (`rigforge_andras.glb`, read-only); see Section 6. Stalker
-      blockout still pending (needs the quadruped signature variant).
+      (`rigforge_andras.glb`, read-only); see Section 6.
+- [x] Phase 1b (stalker): quadruped detector variant (longitudinal
+      spine analysis + legs from below); see Section 10.
 - [x] Phase 2: fitter (`tools/fit_metarig.py`): correspondence + solve,
       reusing `make_hll_presets` machinery; fitted preset must generate.
       DONE (Section 7): Andras fit-delta closed to 0.0 cm on all driver
@@ -181,10 +183,14 @@ prove insufficient on real HLL meshes — try deterministic first.
 - [x] Phase 3: validation gate + `tests/test_auto_placement.py` (fit,
       generate, export, fit-delta numbers); hardened per Section 8.
       Re-run bake-off comparison still open.
+- [x] Phase 4: quadruped fitter + gate + `auto_rig.py --preset
+      hll_stalker` route; stalker blockout runs end to end, strict
+      PASS (see Section 10).
+- [x] Phase 4.5: unirig-joints/1 hints as soft priors with
+      agree-vs-measure arbitration (`tools/unirig_hints.py`,
+      `--hints` on the fitter and `auto_rig.py`); see Section 10.
 - [ ] Optional: `wm.rigforge_auto_place` operator + panel button (needs
       the same code headless-first; UI is a thin wrapper).
-- [ ] Optional: hybrid landmark source (Section 4.5) if deterministic
-      landmarks stall on some subject class.
 
 ## 6. Prototype status (this change)
 
@@ -455,3 +461,176 @@ subjects (skip-if-absent) plus the synthetic contract unchanged;
 `auto_rig.py` strict exits 0 with GLBs out on all three, each
 `rfcheck`-clean (160 joints); smoke, presets, game-export, rename
 suites green; ruff clean on both touched files.
+
+## 10. Quadruped pipeline + unirig hints (this change)
+
+The stalker-class path: longitudinal landmark detection, a connected-
+chain fitter for the `hll_stalker` preset, a structural gate driver
+set, the `auto_rig.py --preset hll_stalker` route, and unirig-joints/1
+hints as arbitrated soft priors. The biped path is untouched in
+behavior (same functions, same thresholds, same expectations — §1-9
+of the suite pass unmodified).
+
+### 10.1 Detector: longitudinal slices + legs from below
+
+`slice_signature` generalized to `slice_signature_axis(obj, slices,
+axis)` (axis="z" reproduces the biped path exactly; new keys only).
+`detect_quadruped` runs the Section 4.2 quadruped note: planes
+perpendicular to the spine (Y) read the body column (central,
+wide, high-crossing blobs — legs are off-center, spikes/eyes are
+small-n), the central-width profile splits into torso / neck-gap /
+head runs, and the head end is the higher-topped end. Legs track
+upward from the lowest 4-blob transverse band (the stalker shows 48
+clean 4-blobs bands) until the body merge. Output
+(`--kind quadruped`, `kind: "quadruped"`): facing, spine_axis,
+length/height/bounds, spine_front/rear, neck_base, head, skull,
+per-leg top/mid/foot/toe + stance, tail_base (+tail_tip, null when
+absent) with a loud `tail_base_fallback` flag.
+
+Stalker landmarks (read-only
+`enemies/stalker/models/glb/stalker.glb`, 17 parts joined the same
+way the biped path joins meshes): facing +Y, length 2.2195, head
+(0, 1.006, 1.596) against the head sphere center (0, 1.0, 1.6),
+spine (0,-0.695,0.999)-(0,0.692,1.130), feet (±0.31/±0.29,
+±0.63, 0.008) with the legs' 11-deg slant tracked (tops 14 cm
+behind the feet), tail fallback fired (no tail geometry — the
+dorsal spike cones are correctly excluded by the above-spine
+test). A synthetic quadruped blockout
+(`build_synthetic_quadruped`: torso, neck/head balls, four leg
+cylinders, a down-back tail cone) with `--check` spec guards the
+detector; calibration notes: head picks the widest (not
+most-crossings) head slice, leg tops sit at the body merge, and
+the tail tip test excludes only above-spine blobs.
+
+### 10.2 Fitter: connected chains onto measured 3D targets
+
+`fit_metarig.py --preset hll_stalker` (defaulted from the landmarks
+kind, must match): coarse scale from the spine length, then
+root-outward connected-chain solves — spine.001..006 along the
+measured line, neck.001..head as ONE connected rigid chain through
+a neck_base via (the head rig requires it: neck.001.head plants on
+the chest top, joints closed, never detached per-bone), per-leg
+top/mid/foot/toe chains with toe/hoof aimed back at the foot
+center (blockout feet have no toe sub-structure for the
+horse-length chain to stand on), tail solved base->tip when
+measured else rigid follow, .L mirrored to .R, stock connect flags
+restored. All 14 stalker joints close to 0.0 (largest before-delta:
+rear foot 0.56 m); closure gap 0.0, symmetry 0.0001; generate
+proof 454 rig / 80 DEF.
+
+Two verify-then-correct marches (Section 9 pattern: raycast with
+the gate's own `point_depth`, bounded, logged, re-verified,
+passing fits untouched): spine endpoints inset until 15 mm deep
+(end-slice centroids sit on the skin; the chest top belongs in
+the ribcage), and the chest top additionally marches until the
+*prospective neck.001 midpoint* clears the margin — the endpoint's
+own depth does not predict it where the chain bends out of the
+chest (synthetic throatlatch read 4.8 mm after a 1 cm endpoint
+inset; the midpoint-verified 2 cm march lands 13.9 mm). Stalker
+cautions: front inset 1 cm, rear 2 cm, tail fallback.
+
+### 10.3 Gate: structural drivers + quadruped warns
+
+`drivers_for()` picks the driver set structurally (tail.001 =
+stalker) cross-checked against the landmarks kind; closure /
+inside+1 cm / symmetry gates are unchanged mechanics. Stalker
+drivers: spine/neck/head, shoulder/pelvis + upper/forearm,
+forefoot/hind-foot chains. Three principled non-gatings (each the
+established unmeasurable -> warn-only rule, each still reported):
+skull/face bits rigid-follow the head (hero-face parallel);
+f_toe/f_hoof/r_toe/r_hoof are warn-only (`quad_toes`
+containment) — the toe landmark is a surface feature, and
+calibration flips them on 8 mm of leg radius (stalker passes at
+15.7 mm, synthetic r 0.09 flips outside); the tail hard-gates
+only with measured geometry, else `quad_tail: unverified` (the
+synthetic proves the gated side: 5 tail drivers pass). Warns:
+quad_head (chain containment), quad_tail, quad_toes, quad_hooves
+(stance: hoof-tip dz, warns past 5 cm).
+
+Stalker gate: strict PASS, 27 drivers, min depth 17.6 mm
+(hind_foot.L), symmetry 0.0002, tail honestly unverified.
+Synthetic gate: PASS, 32 drivers (tail gated), min 13.9 mm
+(neck.001). Red coverage: a +0.40-lifted head chain trips
+`head-mid-outside`.
+
+### 10.4 auto_rig route + end-to-end verdicts
+
+`auto_rig.py --preset hll_stalker` routes `--kind quadruped`,
+`--preset` passthrough, and `STALKER_OPEN` (neck.001, pelvis,
+shoulder, tail.001, thigh, upper_arm — the stock preset's floated
+sockets). Orientation: the Y-up test additionally requires ymin
+at the ground for quadrupeds, so a Z-up stalker's 2.23 m body
+length no longer reads as height (biped test byte-identical).
+
+Per-stage stalker verdicts (strict, no `--no-validate`):
+landmarks OK (facing +Y, 4 legs x 48 bands, tail fallback);
+fit OK (14/14 joints 0.0, closure 0.0, symmetry 0.0001);
+validate OK (27 drivers, min 17.6 mm); generate OK (80 DEF);
+bind OK via the envelope-transfer rung (direct heat finds no
+solution on the 17-island join — the documented ladder working
+as designed, 0 gap-fills); export OK
+(`RIGFORGE_AUTO_RIG_OK`, 80/80 DEF joints). No fail-stops remain
+on the reference subject.
+
+### 10.5 Hints: worth vs measured (with numbers)
+
+`tools/unirig_hints.py` (pure Python, no bpy) consumes
+unirig-joints/1: semantic mixamo/vroid names map onto quadruped
+roles (~20 entries: arms->front legs, legs->rear legs,
+Hips/Neck/Head->spine chain; shoulders/mid-spine/fingers
+deliberately unmapped), generic `bone_N` names (what the
+creature class emits) take nearest-landmark auto-roles. Frame:
+hint `normalized` coords through the subject normalizer (exact
+when proportions match, robust to scale drift), with
+`--hints-rotated` for Y-up-normalized subjects. Arbitration:
+delta <= 0.05 m trusts the hint (L-side targets; R-side is
+supporting evidence since .R mirrors .L), else the measurement
+wins and the divergence is reported with both positions.
+
+Seed42 sample (10 joints) vs measured stalker landmarks: 1
+trusted (bone_8 -> BL.top, delta 0.035, moves rear_top 3.5 cm),
+1 supporting (bone_7 -> BR.top, 0.042), 8 measurement-wins
+(0.124-0.330: spine hints sit mid-segment not on the measured
+joints, front-leg hints ride at shoulder height 0.32+ off,
+head-side hints 0.18+ off, bone_9 lands between the rear legs
+0.333 off). The hinted fit still gates strict PASS. Tolerance
+calibration: 0.15 trusted a 12 cm-off spine hint and broke a
+passing fit (neck.001 margin 6.0 mm) — observed, then tightened
+to the 5 cm same-point band (slice pitch ~2 cm + headroom).
+Honest summary: on this blockout the deterministic landmarks
+out-resolve the ML priors almost everywhere; the hints'
+value is confirmation on 2/10 joints plus a divergence table
+that says exactly where the skeleton model disagrees.
+
+### 10.6 What works, what doesn't, what's next
+
+Works: stalker-class zero-touch rigging end to end (mesh in,
+rigged game GLB out, strict gate); synthetic-quadruped fixture
+proving the tail-gated side; hints ingestion with calibrated
+arbitration; biped behavior unchanged (all prior suites green).
+
+Known limits (warn-level, documented): stub feet fold the
+toe/hoof chains back into the foot (no toe sub-structure to
+stand on — `quad_toes`/`quad_hooves` report it); skull tip
+rides outside the head sphere (face-bone parallel, warn-only);
+tail unverified whenever tail geometry is absent (the stalker
+case); X-spine quadrupeds fail loud (Y only in v1); envelope-
+transfer bind is expected on multi-island joins (direct heat
+finds no solution).
+
+Next items: curved-neck chain bending (the chest-top march
+covers blockouts; sculpted throats may want a mid-chain via);
+ground-planted hoof chains for real feet (needs a toe-joint
+measurement that stub slices cannot provide); semantic-name
+hint samples for creatures (all observed creature output is
+`bone_N`, so the name map is currently exercised only by
+structure, not by data).
+
+Verified: `tests/test_auto_placement.py` §10 green (synthetic
+quad end to end + strict gate with tail drivers, red head
+check, stalker strict PASS, hints structural + trusted-target
+test) with §1-9 unchanged-green; `auto_rig.py --preset
+hll_stalker` strict exits 0 (80/80 DEF); hinted run strict
+exits 0; smoke (`RIGFORGE_SMOKE_OK`), presets, game-export,
+rename suites green; hero `auto_rig` regression green; `ruff
+check` + `ruff format --check` clean on all touched files.

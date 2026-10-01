@@ -215,34 +215,41 @@ def envelope_copy(obj):
     return dup
 
 
-def slice_signature(obj, slices=120):
-    """True cross-sections: intersect mesh faces with horizontal planes.
+def slice_signature_axis(obj, slices=120, axis="z"):
+    """True cross-sections: intersect mesh faces with planes ⊥ to `axis`.
 
     Blobs are connected components of the intersection graph: crossings
     that share a face are unioned, so contours stay whole no matter how
-    coarse the tessellation. Returns (bands bottom-first, zmin, zmax).
-    Each band: {"z", "blobs"}; blob: {"n", "cx", "cy", "r"} with r = mean
-    radius in the slice plane.
+    coarse the tessellation. Returns (bands low-first, lo, hi).
+    Each band: {"pos", axis-named position key, "blobs"}; blob: {"n",
+    "r", "c<u>", "c<v>", "<u>min/max", "<v>min/max"} over the two plane
+    axes (u, v), with r = mean radius in the slice plane.
     """
+    if axis not in ("x", "y", "z"):
+        raise SystemExit(f"slice axis must be x/y/z, got {axis!r}")
+    ax_idx = "xyz".index(axis)
+    plane = [a for a in "xyz" if a != axis]
+    u_idx, v_idx = ("xyz".index(a) for a in plane)
+    u_name, v_name = plane
     mesh = obj.data
     coords = [(v.co.x, v.co.y, v.co.z) for v in mesh.vertices]
-    zmin = min(c[2] for c in coords)
-    zmax = max(c[2] for c in coords)
-    height = zmax - zmin
-    planes = [zmin + (s + 0.5) / slices * height for s in range(slices)]
+    lo = min(c[ax_idx] for c in coords)
+    hi = max(c[ax_idx] for c in coords)
+    span = hi - lo
+    planes = [lo + (s + 0.5) / slices * span for s in range(slices)]
     buckets = [[] for _ in range(slices)]
     for poly in mesh.polygons:
         vs = poly.vertices
-        lo = min(coords[i][2] for i in vs)
-        hi = max(coords[i][2] for i in vs)
-        if lo == hi:
+        plo = min(coords[i][ax_idx] for i in vs)
+        phi = max(coords[i][ax_idx] for i in vs)
+        if plo == phi:
             continue
-        s0 = max(0, min(slices - 1, int((lo - zmin) / height * slices)))
-        s1 = max(0, min(slices - 1, int((hi - zmin) / height * slices)))
+        s0 = max(0, min(slices - 1, int((plo - lo) / span * slices)))
+        s1 = max(0, min(slices - 1, int((phi - lo) / span * slices)))
         for s in range(s0, s1 + 1):
             buckets[s].append(tuple(vs))
     signature = []
-    for s, z in enumerate(planes):
+    for s, at in enumerate(planes):
         points = []
         index_of = {}
         face_groups = []
@@ -251,14 +258,18 @@ def slice_signature(obj, slices=120):
             nv = len(vs)
             for k in range(nv):
                 a, b = vs[k], vs[(k + 1) % nv]
-                ax, ay, az = coords[a]
-                bx, by, bz = coords[b]
-                if (az - z) * (bz - z) < 0:
+                ca, cb = coords[a], coords[b]
+                if (ca[ax_idx] - at) * (cb[ax_idx] - at) < 0:
                     key = (a, b) if a < b else (b, a)
                     if key not in index_of:
-                        t = (z - az) / (bz - az)
+                        t = (at - ca[ax_idx]) / (cb[ax_idx] - ca[ax_idx])
                         index_of[key] = len(points)
-                        points.append((ax + (bx - ax) * t, ay + (by - ay) * t))
+                        points.append(
+                            (
+                                ca[u_idx] + (cb[u_idx] - ca[u_idx]) * t,
+                                ca[v_idx] + (cb[v_idx] - ca[v_idx]) * t,
+                            )
+                        )
                     ring.append(index_of[key])
             if len(ring) >= 2:
                 face_groups.append(ring)
@@ -273,25 +284,36 @@ def slice_signature(obj, slices=120):
         for idxs in groups.values():
             if len(idxs) < 3:
                 continue
-            cx = sum(points[i][0] for i in idxs) / len(idxs)
-            cy = sum(points[i][1] for i in idxs) / len(idxs)
+            cu = sum(points[i][0] for i in idxs) / len(idxs)
+            cv = sum(points[i][1] for i in idxs) / len(idxs)
             r = sum(
-                ((points[i][0] - cx) ** 2 + (points[i][1] - cy) ** 2) ** 0.5
+                ((points[i][0] - cu) ** 2 + (points[i][1] - cv) ** 2) ** 0.5
                 for i in idxs
             ) / len(idxs)
             blobs.append(
                 {
                     "n": len(idxs),
-                    "cx": cx,
-                    "cy": cy,
+                    f"c{u_name}": cu,
+                    f"c{v_name}": cv,
                     "r": r,
-                    "ymin": min(points[i][1] for i in idxs),
-                    "ymax": max(points[i][1] for i in idxs),
+                    f"{u_name}min": min(points[i][0] for i in idxs),
+                    f"{u_name}max": max(points[i][0] for i in idxs),
+                    f"{v_name}min": min(points[i][1] for i in idxs),
+                    f"{v_name}max": max(points[i][1] for i in idxs),
                 }
             )
         blobs.sort(key=lambda d: -d["n"])
-        signature.append({"z": z, "blobs": blobs})
-    return signature, zmin, zmax
+        signature.append({"pos": at, axis: at, "blobs": blobs})
+    return signature, lo, hi
+
+
+def slice_signature(obj, slices=120):
+    """True cross-sections: intersect mesh faces with horizontal planes.
+
+    Biped path (axis="z"); see slice_signature_axis for the general form.
+    Returns (bands bottom-first, zmin, zmax).
+    """
+    return slice_signature_axis(obj, slices, "z")
 
 
 def smooth(values):
@@ -467,43 +489,401 @@ def detect_biped(signature, zmin, zmax, facing):
     }
 
 
+QUAD_SYNTHETIC_SPEC = {
+    # Calibrated against actual detector output; keep anatomically sane.
+    "length": 2.30,
+    "spine_rear": [0.0, -0.70, 1.00],
+    "spine_front": [0.0, 0.70, 1.00],
+    "neck_base": [0.0, 0.80, 1.30],
+    "head": [0.0, 1.05, 1.55],
+    "skull": [0.0, 1.20, 1.55],
+    "leg_top_z": 0.74,
+    "leg_mid_z": 0.37,
+    "leg_foot_z": 0.02,
+    "leg_x": 0.30,
+    "leg_front_y": 0.55,
+    "leg_rear_y": -0.55,
+    "tail_base": [0.0, -0.71, 0.98],
+    "tail_tip": [0.0, -1.01, 0.80],
+}
+QUAD_CHECK_TOL = 0.09
+
+
+def add_cylinder(co, radius, depth):
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=16, radius=radius, depth=depth, location=co
+    )
+    return bpy.context.view_layer.objects.active
+
+
+def add_cone(co, r1, r2, depth):
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=16, radius1=r1, radius2=r2, depth=depth, location=co
+    )
+    return bpy.context.view_layer.objects.active
+
+
+def build_synthetic_quadruped():
+    """Single connected quadruped blockout (stalker-class); returns (obj, spec).
+
+    Z-up, head toward +Y: torso box, neck + head balls, four straight
+    leg cylinders, a tapering tail cone. Same boolean-union + voxel
+    cleanup as the biped builder so the envelope path matches.
+    """
+    clean_scene()
+    torso = add_box((0, 0, 1.00), 1.0, (0.50, 1.40, 0.50))
+    parts = [
+        add_ball((0, 0.80, 1.30), 0.16),  # neck
+        add_ball((0, 1.05, 1.55), 0.20),  # head
+    ]
+    for sx in (1.0, -1.0):
+        for sy in (1.0, -1.0):
+            parts.append(add_cylinder((0.30 * sx, 0.55 * sy, 0.50), 0.09, 1.00))
+    tail = add_cone((0, -0.85, 0.90), 0.09, 0.02, 0.40)
+    tail.rotation_euler = (2.2, 0.0, 0.0)  # tip down-back, base in the rump
+    bpy.context.view_layer.objects.active = tail
+    bpy.ops.object.transform_apply(rotation=True)
+    parts.append(tail)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for part in parts:
+        mod = torso.modifiers.new("union", "BOOLEAN")
+        mod.operation = "UNION"
+        mod.object = part
+        bpy.context.view_layer.objects.active = torso
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        bpy.data.objects.remove(part, do_unlink=True)
+    return cleanup_union(torso), dict(QUAD_SYNTHETIC_SPEC)
+
+
+def central_blob(blobs, x_frac=0.15, x_span=1.0, min_n=12):
+    """Widest near-center blob (torso/neck/head), or None.
+
+    Legs sit off-center (|cx| ~ stance) and ornaments (spine spikes,
+    eyes) read as small-n blobs; the body column is central and big.
+    """
+    cands = [b for b in blobs if abs(b["cx"]) <= x_frac * x_span and b["n"] >= min_n]
+    if not cands:
+        return None
+    return max(cands, key=lambda b: b["xmax"] - b["xmin"])
+
+
+def detect_quadruped(long_sig, trans_sig, bounds, facing_hint="+Y"):
+    """Quadruped landmarks: longitudinal spine analysis + legs from below.
+
+    long_sig: planes ⊥ the spine axis (Y); trans_sig: horizontal planes.
+    bounds: (xmin, xmax, ymin, ymax, zmin, zmax) of the envelope.
+    Returns the quadruped landmark dict (kind="quadruped"). Leg ids are
+    F/B (front/back of the torso center) x L/R (+X is L).
+    """
+    xmin, xmax, ymin, ymax, zmin, zmax = bounds
+    x_span, y_span, z_span = xmax - xmin, ymax - ymin, zmax - zmin
+    if not (y_span > x_span and y_span > z_span * 0.9):
+        raise SystemExit(
+            f"no quadruped signature: spans x={x_span:.3f} y={y_span:.3f} "
+            f"z={z_span:.3f} (spine axis must be the longest horizontal)"
+        )
+    # Head end: the end whose top runs higher (head+neck vs rump/tail).
+    # Compare vert tops over the outer 12% of the length at each end.
+    head_hi = facing_hint == "+Y"
+    # Central-column width profile along Y (low y first).
+    widths, centers = [], []
+    for s in long_sig:
+        c = central_blob(s["blobs"], x_span=x_span)
+        widths.append(0.0 if c is None else (c["xmax"] - c["xmin"]))
+        centers.append(c)
+    wide = [w for w in widths if w > 0]
+    if not wide:
+        raise SystemExit("no central body column in longitudinal slices")
+    body_w = sorted(wide)[len(wide) // 2]
+    is_wide = [w >= 0.6 * body_w for w in widths]
+    # Wide runs: torso (longest) + head (wide run past a narrow neck gap
+    # on the head side). Narrow gaps = neck, tail, or slice noise.
+    runs, cur = [], []
+    for i, w in enumerate(is_wide):
+        if w:
+            cur.append(i)
+        elif cur:
+            runs.append(cur)
+            cur = []
+    if cur:
+        runs.append(cur)
+    runs = [r for r in runs if len(r) >= 3]
+    if not runs:
+        raise SystemExit("no torso run in longitudinal slices")
+    torso = max(runs, key=len)
+    torso_c = sum(long_sig[i]["pos"] for i in torso) / len(torso)
+    # Head side from the tops: compare zmax of the outer slices.
+    end = max(3, len(long_sig) // 12)
+    top_lo = max(
+        (b["zmax"] for i in range(end) for b in long_sig[i]["blobs"]), default=zmin
+    )
+    top_hi = max(
+        (
+            b["zmax"]
+            for i in range(len(long_sig) - end, len(long_sig))
+            for b in long_sig[i]["blobs"]
+        ),
+        default=zmin,
+    )
+    head_hi = top_hi >= top_lo
+    facing = "+Y" if head_hi else "-Y"
+    if head_hi:
+        rear_i, front_i = min(torso), max(torso)
+    else:
+        rear_i, front_i = max(torso), min(torso)
+    spine_rear_c = centers[rear_i]
+    spine_front_c = centers[front_i]
+    if spine_rear_c is None or spine_front_c is None:
+        raise SystemExit("torso run ends lost the body column")
+    spine_rear = [spine_rear_c["cx"], long_sig[rear_i]["pos"], spine_rear_c["cz"]]
+    spine_front = [spine_front_c["cx"], long_sig[front_i]["pos"], spine_front_c["cz"]]
+
+    # Head run: wide runs past the torso on the head side (neck gap
+    # between); neck_base = central centroid mid-gap.
+    if head_hi:
+        beyond = [r for r in runs if min(r) > front_i]
+        gap = [i for i in range(front_i + 1, min(beyond[0]) if beyond else front_i + 1)]
+    else:
+        beyond = [r for r in runs if max(r) < rear_i]
+        gap = [i for i in range((max(beyond[0]) + 1) if beyond else rear_i, rear_i)]
+    head_run = max(beyond, key=len) if beyond else []
+    neck_base = None
+    for i in sorted(gap, key=lambda k: abs(k - sum(gap) / len(gap)) if gap else 0):
+        if centers[i] is not None:
+            neck_base = [centers[i]["cx"], long_sig[i]["pos"], centers[i]["cz"]]
+            break
+    if neck_base is None:  # neck fused with the torso: take the torso end top
+        neck_base = [spine_front[0], spine_front[1], spine_front[2] + 0.15 * z_span]
+    if head_run:
+        # Widest slice, not most crossings: neck+head union perimeters
+        # peak off-equator while the ball's width peaks at its equator.
+        hpick = max(
+            head_run,
+            key=lambda i: centers[i]["xmax"] - centers[i]["xmin"] if centers[i] else -1,
+        )
+        hc = centers[hpick]
+        head = [hc["cx"], long_sig[hpick]["pos"], hc["cz"]]
+        hend = max(head_run) if head_hi else min(head_run)
+        he = centers[hend]
+        skull = (
+            [he["cx"], long_sig[hend]["pos"], he["cz"]]
+            if he is not None
+            else list(head)
+        )
+    else:
+        raise SystemExit("no head run past the neck gap")
+
+    # Legs from below: the lowest transverse band with 4+ blobs; each
+    # leg tracks upward (nearest centroid) until it merges (radius jump
+    # or nearest blob shared with another leg).
+    bottom_up = trans_sig  # low z first already
+    ground = None
+    for s in bottom_up:
+        if len(s["blobs"]) >= 4:
+            ground = s
+            break
+    if ground is None:
+        counts = [len(s["blobs"]) for s in bottom_up[: len(bottom_up) // 4]]
+        raise SystemExit(f"no 4-leg band near the ground (counts: {counts})")
+    seeds = sorted((b for b in ground["blobs"] if b["n"] >= 6), key=lambda b: -b["n"])[
+        :4
+    ]
+    if len(seeds) < 4:
+        raise SystemExit(f"only {len(seeds)} trackable leg blobs at the ground")
+    # Order seeds deterministically: front pair then rear pair, L then R.
+    seeds.sort(key=lambda b: (b["cy"] < torso_c, -b["cx"]))
+    legs = {}
+    for rank, seed in enumerate(seeds):
+        brow = "F" if seed["cy"] >= torso_c else "B"
+        side = "L" if seed["cx"] >= 0 else "R"
+        leg_id = brow + side
+        if leg_id in legs:  # lopsided pair: keep both, suffix the extra
+            leg_id = f"{brow}{side}{rank}"
+        col = [(seed["cx"], seed["cy"], ground["pos"], seed["r"])]
+        px, py, pr = seed["cx"], seed["cy"], seed["r"]
+        for s in bottom_up[bottom_up.index(ground) + 1 :]:
+            if not s["blobs"]:
+                break
+            nxt = min(
+                s["blobs"], key=lambda b: (b["cx"] - px) ** 2 + (b["cy"] - py) ** 2
+            )
+            if (
+                (nxt["cx"] - px) ** 2 + (nxt["cy"] - py) ** 2
+            ) ** 0.5 > 0.12 * x_span + 0.03:
+                break
+            if nxt["r"] > 2.2 * pr + 0.02:
+                break  # merged into the body mass
+            col.append((nxt["cx"], nxt["cy"], s["pos"], nxt["r"]))
+            px, py = nxt["cx"], nxt["cy"]
+        top = col[-1]
+        mid = col[len(col) // 2]
+        foot = [col[0][0], col[0][1], col[0][2]]
+        # Toe: front edge of the ground blob toward the facing side.
+        edge = seed["ymax"] if head_hi else seed["ymin"]
+        toe = [seed["cx"], edge, col[0][2] + 0.02 * z_span]
+        legs[leg_id] = {
+            "top": [round(top[0], 4), round(top[1], 4), round(top[2], 4)],
+            "mid": [round(mid[0], 4), round(mid[1], 4), round(mid[2], 4)],
+            "foot": [round(v, 4) for v in foot],
+            "toe": [round(toe[0], 4), round(toe[1], 4), round(toe[2], 4)],
+            "bands": len(col),
+        }
+
+    # Tail: past the torso rear end, near or below the spine line
+    # (dorsal spikes ride above it and must not read as tail); the
+    # stalker blockout has no tail geometry, so this is often a loud
+    # fallback. tail_base = nearest tail blob to the torso (the rump
+    # exit); tail_tip = farthest.
+    tail_base, tail_tip, tail_fallback = None, None, False
+    tail_idx = (
+        [i for i in range(0, rear_i)]
+        if head_hi
+        else [i for i in range(rear_i + 1, len(long_sig))]
+    )
+    tail_order = list(reversed(tail_idx)) if head_hi else list(tail_idx)
+    for i in tail_order:
+        for b in long_sig[i]["blobs"]:
+            if b["cz"] < spine_rear[2] + 0.05 * z_span and abs(b["cx"]) < 0.3 * x_span:
+                tail_base = [b["cx"], long_sig[i]["pos"], b["cz"]]
+                break
+        if tail_base is not None:
+            break
+    for i in reversed(tail_order):
+        for b in long_sig[i]["blobs"]:
+            if b["cz"] < spine_rear[2] + 0.05 * z_span and abs(b["cx"]) < 0.3 * x_span:
+                tail_tip = [b["cx"], long_sig[i]["pos"], b["cz"]]
+                break
+        if tail_tip is not None:
+            break
+    if tail_base is None:
+        tail_base = list(spine_rear)
+        tail_fallback = True
+
+    def r4(v):
+        return [round(c, 4) for c in v]
+
+    return {
+        "kind": "quadruped",
+        "facing": facing,
+        "spine_axis": "Y",
+        "length": round(ymax - ymin, 4),
+        "height": round(zmax - zmin, 4),
+        "bounds": {
+            "xmin": round(xmin, 4),
+            "xmax": round(xmax, 4),
+            "ymin": round(ymin, 4),
+            "ymax": round(ymax, 4),
+            "zmin": round(zmin, 4),
+            "zmax": round(zmax, 4),
+        },
+        "spine_front": r4(spine_front),
+        "spine_rear": r4(spine_rear),
+        "neck_base": r4(neck_base),
+        "head": r4(head),
+        "skull": r4(skull),
+        "legs": legs,
+        "tail_base": r4(tail_base),
+        "tail_tip": r4(tail_tip) if tail_tip is not None else None,
+        "tail_base_fallback": tail_fallback,
+        "stance": {k: [v["foot"][0], v["foot"][1]] for k, v in legs.items()},
+        "torso_y": round(torso_c, 4),
+        "body_width": round(body_w, 4),
+    }
+
+
+def check_quad(spec, landmarks):
+    """Compare quadruped landmarks against the build spec; returns bad dict."""
+    bad = {}
+    for k, v in spec.items():
+        got = landmarks.get(k)
+        if got is None and k.startswith("leg_"):
+            vals = []
+            for leg in landmarks.get("legs", {}).values():
+                if k == "leg_top_z":
+                    vals.append(leg["top"][2])
+                elif k == "leg_mid_z":
+                    vals.append(leg["mid"][2])
+                elif k == "leg_foot_z":
+                    vals.append(leg["foot"][2])
+                elif k == "leg_x":
+                    vals.append(abs(leg["foot"][0]))
+                elif k == "leg_front_y":
+                    if leg["foot"][1] > landmarks["torso_y"]:
+                        vals.append(leg["foot"][1])
+                elif k == "leg_rear_y":
+                    if leg["foot"][1] < landmarks["torso_y"]:
+                        vals.append(leg["foot"][1])
+            got = sum(vals) / len(vals) if vals else None
+        if got is None:
+            bad[k] = (None, v)
+        elif isinstance(v, list):
+            d = sum((a - b) ** 2 for a, b in zip(got, v, strict=True)) ** 0.5
+            if d > QUAD_CHECK_TOL:
+                bad[k] = (got, v)
+        elif abs(got - v) > QUAD_CHECK_TOL:
+            bad[k] = (got, v)
+    return bad
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     src = args[0] if args else "synthetic"
     slices = int(args[args.index("--slices") + 1]) if "--slices" in args else 120
     facing = args[args.index("--facing") + 1] if "--facing" in args else "-Y"
+    kind = args[args.index("--kind") + 1] if "--kind" in args else None
+    if kind is None:
+        kind = "quadruped" if src == "synthetic-quad" else "biped"
+    if kind not in ("biped", "quadruped"):
+        raise SystemExit(f"--kind must be biped or quadruped, got {kind!r}")
     check = "--check" in args
 
     spec = None
     if src == "synthetic":
         target, spec = build_synthetic()
+    elif src == "synthetic-quad":
+        target, spec = build_synthetic_quadruped()
     else:
         target = envelope_copy(import_mesh(src))
-    signature, zmin, zmax = slice_signature(target, slices)
-    if "--dump" in args:
-        print("COUNTS:", [len(s["blobs"]) for s in reversed(signature)])
-    landmarks = detect_biped(signature, zmin, zmax, facing)
+    if kind == "quadruped":
+        long_sig, ymin, ymax = slice_signature_axis(target, slices, "y")
+        trans_sig, zmin, zmax = slice_signature_axis(target, slices, "z")
+        mesh = target.data
+        xs = [v.co.x for v in mesh.vertices]
+        bounds = (min(xs), max(xs), ymin, ymax, zmin, zmax)
+        if "--dump" in args:
+            print("COUNTS-Y:", [len(s["blobs"]) for s in long_sig])
+            print("COUNTS-Z:", [len(s["blobs"]) for s in trans_sig])
+        landmarks = detect_quadruped(long_sig, trans_sig, bounds, facing)
+    else:
+        signature, zmin, zmax = slice_signature(target, slices)
+        if "--dump" in args:
+            print("COUNTS:", [len(s["blobs"]) for s in reversed(signature)])
+        landmarks = detect_biped(signature, zmin, zmax, facing)
+        landmarks["kind"] = "biped"
     print("RIGFORGE_LANDMARKS_BEGIN")
     print(json.dumps(landmarks, indent=2))
     if check:
         if spec is None:
-            raise SystemExit("--check needs the synthetic mesh")
-        bad = {
-            k: (landmarks[k], v)
-            for k, v in spec.items()
-            if landmarks.get(k) is None or abs(landmarks[k] - v) > CHECK_TOL
-        }
-        ordered = ["neck_z", "armpit_z", "elbow_z", "wrist_z", "hand_tip_z"]
-        ordered += ["crotch_z", "knee_z", "ankle_z"]
-        for a, b in pairwise(ordered):
-            if (
-                landmarks.get(a) is not None
-                and landmarks.get(b) is not None
-                and a.split("_")[0] != "hand"
-                and b.split("_")[0] != "crotch"
-                and not landmarks[a] > landmarks[b]
-            ):
-                bad[f"order:{a}>{b}"] = (landmarks[a], landmarks[b])
+            raise SystemExit("--check needs a synthetic mesh")
+        if kind == "quadruped":
+            bad = check_quad(spec, landmarks)
+        else:
+            bad = {
+                k: (landmarks[k], v)
+                for k, v in spec.items()
+                if landmarks.get(k) is None or abs(landmarks[k] - v) > CHECK_TOL
+            }
+            ordered = ["neck_z", "armpit_z", "elbow_z", "wrist_z", "hand_tip_z"]
+            ordered += ["crotch_z", "knee_z", "ankle_z"]
+            for a, b in pairwise(ordered):
+                if (
+                    landmarks.get(a) is not None
+                    and landmarks.get(b) is not None
+                    and a.split("_")[0] != "hand"
+                    and b.split("_")[0] != "crotch"
+                    and not landmarks[a] > landmarks[b]
+                ):
+                    bad[f"order:{a}>{b}"] = (landmarks[a], landmarks[b])
         if bad:
             print("CHECK FAIL:", json.dumps(bad))
             raise SystemExit("landmark check failed")

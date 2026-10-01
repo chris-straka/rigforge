@@ -15,7 +15,9 @@ close-up (PNG + a sibling _labels.json with pixel coords for text
 overlay); it exists to eyeball foot bones and catch strays.
 
 A fitted metarig must pass this gate before it is allowed near `generate`
-(docs/auto_placement.md Section 4.4). Hard gates (failures stop the
+(docs/auto_placement.md Section 4.4). The driver set is structural:
+metarigs with tail.001 take the stalker drivers (quadruped landmarks
+required), others the hero drivers. Hard gates (failures stop the
 pipeline, naming bones and what to fix):
 
 - closure: every connected driver joint gap < 1e-4 (same epsilon as
@@ -145,6 +147,87 @@ DRIVER_BONES = (
     "toe.R",
 )
 
+# Section 4.3 stalker drivers. Skull/ears/jaw/eyes/nose rigid-follow the
+# head (the quadruped "face": warn-only, same as the hero face). The
+# tail joins the hard set only when tail geometry was measured; with
+# the fallback tail base there is no geometry to verify against, so the
+# tail is warn-only ("unverified") instead of failing the mesh it never
+# had. See drivers_for().
+STALKER_MIDLINE = (
+    "spine.001",
+    "spine.002",
+    "spine.003",
+    "spine.004",
+    "spine.005",
+    "spine.006",
+    "neck.001",
+    "neck.002",
+    "neck.003",
+    "neck.004",
+    "head",
+)
+STALKER_LEGS = (
+    "shoulder.L",
+    "upper_arm.L",
+    "forearm.L",
+    "forefoot.L",
+    "pelvis.L",
+    "thigh.L",
+    "lower_leg.L",
+    "hind_foot.L",
+    "shoulder.R",
+    "upper_arm.R",
+    "forearm.R",
+    "forefoot.R",
+    "pelvis.R",
+    "thigh.R",
+    "lower_leg.R",
+    "hind_foot.R",
+)
+# Toe/hoof chains are warn-only (quad_toes), never hard-gated: the toe
+# landmark marks the foot blob's front edge (a surface feature, not a
+# measured joint) and blockout feet contain no toe sub-structure to
+# verify a joint against. Calibration: the stalker passes them at
+# 15.7 mm while the thinner-legged synthetic (leg r 0.09 vs 0.098)
+# flips them outside — the check tests flesh radius, not fit. Same
+# unmeasurable -> warn-only principle as the hero face and the
+# fallback tail. Placement stays visible via quad_toes containment.
+STALKER_TOES = (
+    "f_toe.L",
+    "f_hoof.L",
+    "r_toe.L",
+    "r_hoof.L",
+    "f_toe.R",
+    "f_hoof.R",
+    "r_toe.R",
+    "r_hoof.R",
+)
+STALKER_TAIL = ("tail.001", "tail.002", "tail.003", "tail.004", "tail.005")
+
+
+def drivers_for(meta, lm):
+    """Hard-gate driver set: stalker metarigs get stalker drivers.
+
+    Detection is structural (tail.001 exists only on the quadruped
+    preset), cross-checked against the landmarks kind. Returns
+    (drivers, tail_gated): the tail is hard-gated only with measured
+    tail geometry (see STALKER_TAIL note above).
+    """
+    bones = meta.data.edit_bones if meta.mode == "EDIT" else meta.data.bones
+    is_stalker = "tail.001" in bones
+    kind = (lm or {}).get("kind", "biped")
+    if is_stalker != (kind == "quadruped"):
+        fail(
+            f"metarig/landmarks mismatch: metarig "
+            f"{'has' if is_stalker else 'lacks'} tail.001 but kind={kind!r}"
+        )
+    if not is_stalker:
+        return DRIVER_BONES, False
+    tail_gated = not (lm or {}).get("tail_base_fallback", False)
+    drivers = STALKER_MIDLINE + STALKER_LEGS + (STALKER_TAIL if tail_gated else ())
+    return drivers, tail_gated
+
+
 FINGERS = ("f_index", "f_middle", "f_ring", "f_pinky")
 SIDES = ("L", "R")
 
@@ -195,7 +278,7 @@ def build_metarig_from_module(path):
     return obj
 
 
-def check_closure(meta):
+def check_closure(meta, drivers=DRIVER_BONES):
     """Connected-joint gaps + open drivers; runs in EDIT mode."""
     bpy.context.view_layer.objects.active = meta
     bpy.ops.object.mode_set(mode="EDIT")
@@ -209,7 +292,7 @@ def check_closure(meta):
             max_gap = max(max_gap, gap)
             if gap >= CLOSE_EPS:
                 gaps[b.name] = gap
-        elif b.name in DRIVER_BONES:
+        elif b.name in drivers:
             open_drivers.append(b.name)
     return {
         "max_gap": max_gap,
@@ -247,12 +330,12 @@ def point_depth(eval_obj, origin):
     }
 
 
-def check_inside(meta, eval_env, margin):
+def check_inside(meta, eval_env, margin, drivers=DRIVER_BONES):
     """Per-driver-bone surface stats; midpoint must be inside + margin."""
     bones = meta.data.edit_bones
     mat = meta.matrix_world
     stats, failures = {}, []
-    for name in DRIVER_BONES:
+    for name in drivers:
         b = bones.get(name)
         if b is None:
             failures.append({"bone": name, "reason": "missing driver bone"})
@@ -364,6 +447,10 @@ def chain_angle(mesh_dir, head_b, tail_b):
     return math.degrees(mesh_dir.angle(vec.normalized()))
 
 
+def _biped_only(lm):
+    return (lm or {}).get("kind", "biped") == "biped"
+
+
 def report_fingers(meta, env, eval_env, lm):
     """Warn-only: finger-chain angles + fingertip containment.
 
@@ -373,6 +460,9 @@ def report_fingers(meta, env, eval_env, lm):
     Per-finger lateral-vs-axis vectors name the nudge but never gate:
     they cannot separate a healthy fit from a bad one (see note above).
     """
+    if not _biped_only(lm):
+        na = {"status": "no-data", "reason": "quadruped landmarks"}
+        return {"L": dict(na), "R": dict(na)}
     bones = meta.data.edit_bones
     mat = meta.matrix_world
     out = {}
@@ -477,6 +567,8 @@ def yaw_deg(a, b):
 
 def report_toes(meta, env, eval_env, lm):
     """Warn-only: overshoot + toe-axis yaw vs foot dir + tip shortfall."""
+    if not _biped_only(lm):
+        return {"status": "no-data", "reason": "quadruped landmarks"}
     bones = meta.data.edit_bones
     mat = meta.matrix_world
     if lm["facing"] not in ("-Y", "+Y"):
@@ -553,6 +645,8 @@ def skullcap_z(signature, lm):
 
 def report_head(meta, signature, lm):
     """Warn-only: head-top vs skullcap (width-based, hair-proof)."""
+    if not _biped_only(lm):
+        return {"status": "no-data", "reason": "quadruped landmarks"}
     bones = meta.data.edit_bones
     head_bone = bones.get("spine.006")
     if head_bone is None:
@@ -601,6 +695,8 @@ def report_face(meta, signature, lm):
     threshold note above): slices cannot see mesh features and cannot
     separate hair from skull.
     """
+    if not _biped_only(lm):
+        return {"status": "no-data", "reason": "quadruped landmarks"}
     bones = meta.data.edit_bones
     found = face_bones(bones)
     if not found:
@@ -653,6 +749,125 @@ def report_face(meta, signature, lm):
     }
 
 
+QUAD_HOOVES = (
+    ("FL", "f_hoof.L"),
+    ("FR", "f_hoof.R"),
+    ("BL", "r_hoof.L"),
+    ("BR", "r_hoof.R"),
+)
+HOOF_GROUND_WARN = 0.05  # hoof tip |dz| past this warns (stance check)
+
+
+def report_quad_head(meta, eval_env):
+    """Warn-only: head-chain placement vs the mesh (mid/tip containment)."""
+    bones = meta.data.edit_bones
+    mat = meta.matrix_world
+    out = {}
+    head_b = bones.get("head")
+    skull_b = bones.get("skull")
+    if head_b is None:
+        return {"status": "no-data", "reason": "head bone missing"}
+    mid = mat @ ((head_b.head + head_b.tail) / 2)
+    held = point_depth(eval_env, mid)
+    out["head_mid"] = {
+        "inside": held["inside"],
+        "votes": held["votes"],
+        "depth": round(held["depth"], 4),
+    }
+    if skull_b is not None:
+        for which, pt in (
+            ("mid", mat @ ((skull_b.head + skull_b.tail) / 2)),
+            ("tip", mat @ skull_b.tail),
+        ):
+            h = point_depth(eval_env, pt)
+            out[f"skull_{which}"] = {
+                "inside": h["inside"],
+                "votes": h["votes"],
+                "depth": round(h["depth"], 4),
+            }
+    out["status"] = "warn" if not held["inside"] else "ok"
+    out["warn_cause"] = None if held["inside"] else "head-mid-outside"
+    return out
+
+
+def report_quad_tail(meta, eval_env, lm, tail_gated):
+    """Warn-only tail placement; 'unverified' with fallback tail geometry."""
+    if not tail_gated:
+        return {"status": "unverified", "reason": "no tail geometry (fallback base)"}
+    bones = meta.data.edit_bones
+    mat = meta.matrix_world
+    per, outsiders = {}, []
+    for name in STALKER_TAIL:
+        b = bones.get(name)
+        if b is None:
+            continue
+        held = point_depth(eval_env, mat @ ((b.head + b.tail) / 2))
+        per[name] = {
+            "inside": held["inside"],
+            "votes": held["votes"],
+            "depth": round(held["depth"], 4),
+        }
+        if not held["inside"]:
+            outsiders.append(name)
+    return {
+        "status": "warn" if outsiders else "ok",
+        "bones": per,
+        "warn_cause": ("outside:" + ",".join(outsiders)) if outsiders else None,
+    }
+
+
+def report_quad_toes(meta, eval_env):
+    """Warn-only: toe/hoof chain midpoint containment (never gated)."""
+    bones = meta.data.edit_bones
+    mat = meta.matrix_world
+    per, outsiders = {}, []
+    for name in STALKER_TOES:
+        b = bones.get(name)
+        if b is None:
+            continue
+        held = point_depth(eval_env, mat @ ((b.head + b.tail) / 2))
+        per[name] = {
+            "inside": held["inside"],
+            "votes": held["votes"],
+            "depth": round(held["depth"], 4),
+        }
+        if not held["inside"]:
+            outsiders.append(name)
+    return {
+        "status": "warn" if outsiders else "ok",
+        "bones": per,
+        "warn_cause": ("outside:" + ",".join(outsiders)) if outsiders else None,
+    }
+
+
+def report_quad_hooves(meta, lm):
+    """Warn-only stance check: hoof tips at ground level (signed dz)."""
+    bones = meta.data.edit_bones
+    mat = meta.matrix_world
+    zmin = (lm.get("bounds") or {}).get("zmin")
+    if zmin is None:
+        return {"status": "no-data", "reason": "landmarks lack bounds.zmin"}
+    per, worst, worst_leg = {}, 0.0, None
+    for leg, bone_name in QUAD_HOOVES:
+        b = bones.get(bone_name)
+        if b is None:
+            continue
+        dz = round((mat @ b.tail).z - zmin, 4)
+        per[leg] = dz
+        if abs(dz) > abs(worst):
+            worst, worst_leg = dz, leg
+    status = "warn" if abs(worst) > HOOF_GROUND_WARN else "ok"
+    return {
+        "status": status,
+        "dz": per,
+        "worst": worst_leg,
+        "worst_dz": round(worst, 4),
+        "warn_cause": f"{worst_leg} {worst:.4f} m off ground"
+        if status == "warn"
+        else None,
+    }
+
+
 def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
     """Run the gate on in-session objects; returns the report dict.
 
@@ -665,12 +880,13 @@ def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
     deps = bpy.context.evaluated_depsgraph_get()
     eval_env = env.evaluated_get(deps)
 
-    closure = check_closure(meta)
+    drivers, tail_gated = drivers_for(meta, lm)
+    closure = check_closure(meta, drivers)
     gaps = {k: round(v, 6) for k, v in closure["gaps"].items()}
     unlisted = [b for b in closure["open_drivers"] if b not in open_allow]
     closure_ok = not gaps and not unlisted
 
-    stats, inside_fail = check_inside(meta, eval_env, margin)
+    stats, inside_fail = check_inside(meta, eval_env, margin, drivers)
     sym = check_symmetry(meta)
     sym_ok = sym["worst"] < SYMMETRY_TOL
 
@@ -708,8 +924,26 @@ def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
 
     depths = [s["mid"] for s in stats.values()]
     worst_bone = min(stats, key=lambda n: stats[n]["mid"]) if stats else None
+    is_quad = (lm or {}).get("kind") == "quadruped"
+    warns = (
+        {
+            "quad_head": report_quad_head(meta, eval_env),
+            "quad_tail": report_quad_tail(meta, eval_env, lm, tail_gated),
+            "quad_toes": report_quad_toes(meta, eval_env),
+            "quad_hooves": report_quad_hooves(meta, lm),
+        }
+        if is_quad
+        else {
+            "fingers": report_fingers(meta, env, eval_env, lm),
+            "toes": report_toes(meta, env, eval_env, lm),
+            "head": report_head(meta, signature, lm),
+            "face": report_face(meta, signature, lm),
+        }
+    )
     report = {
         "margin": margin,
+        "preset": "hll_stalker" if is_quad else "hll_hero",
+        "tail_gated": tail_gated,
         "closure": {
             "max_gap": round(closure["max_gap"], 6),
             "gaps": gaps,
@@ -731,12 +965,7 @@ def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
             "pair": sym["pair"],
             "ok": sym_ok,
         },
-        "warns": {
-            "fingers": report_fingers(meta, env, eval_env, lm),
-            "toes": report_toes(meta, env, eval_env, lm),
-            "head": report_head(meta, signature, lm),
-            "face": report_face(meta, signature, lm),
-        },
+        "warns": warns,
         "overlay": None,
         "verdict": "pass" if not failures else "fail",
         "failures": failures,
@@ -745,7 +974,7 @@ def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
     return report
 
 
-def render_overlays(env, meta, lm, out_dir):
+def render_overlays(env, meta, lm, out_dir, drivers=DRIVER_BONES):
     """Front/side workbench PNGs + camera-projected driver joints JSON."""
     os.makedirs(out_dir, exist_ok=True)
     bpy.context.view_layer.objects.active = meta
@@ -791,7 +1020,7 @@ def render_overlays(env, meta, lm, out_dir):
         paths[view] = path
         joints = {}
         mat = meta.matrix_world
-        for name in DRIVER_BONES:
+        for name in drivers:
             b = meta.data.bones.get(name)
             if b is None:
                 continue
@@ -982,16 +1211,22 @@ def main():
 
     with open(lm_path, encoding="utf-8") as f:
         lm = json.load(f)
-    for key in (
-        "facing",
-        "height",
-        "zmax",
-        "neck_z",
-        "wrist_z",
-        "wrist_x",
-        "hand_tip_z",
-        "ankle_z",
-    ):
+    quad = lm.get("kind") == "quadruped"
+    need = (
+        ("facing", "length", "bounds", "head", "tail_base", "legs")
+        if quad
+        else (
+            "facing",
+            "height",
+            "zmax",
+            "neck_z",
+            "wrist_z",
+            "wrist_x",
+            "hand_tip_z",
+            "ankle_z",
+        )
+    )
+    for key in need:
         if lm.get(key) is None:
             fail(f"landmark JSON missing {key}")
 
@@ -1016,7 +1251,8 @@ def main():
     report["subject"] = mesh_path
     report["metarig"] = meta_path
     if want_render:
-        report["overlay"] = render_overlays(env, meta, lm, render_dir)
+        gate_drivers, _ = drivers_for(meta, lm)
+        report["overlay"] = render_overlays(env, meta, lm, render_dir, gate_drivers)
 
     if report["verdict"] == "pass":
         report["ladder"] = "full_auto"
@@ -1046,11 +1282,12 @@ def main():
 
     # Rung 2: stock preset as-is + its own report (explicit operator choice).
     bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.object.rigforge_hll_hero_metarig_add()
+    op = "rigforge_hll_stalker_metarig_add" if quad else "rigforge_hll_hero_metarig_add"
+    getattr(bpy.ops.object, op)()
     preset = bpy.context.view_layer.objects.active
     fallback = run_gate(env, preset, lm, signature, margin, open_allow)
     fallback["subject"] = mesh_path
-    fallback["metarig"] = "stock hll_hero preset as-is"
+    fallback["metarig"] = f"stock {'hll_stalker' if quad else 'hll_hero'} preset as-is"
     report["ladder"] = "preset_as_is"
     report["fallback_preset"] = fallback
     with open(report_path, "w", encoding="utf-8") as f:

@@ -14,15 +14,19 @@ Arguments:
 
 - MESH: subject mesh file (glb/gltf/fbx/obj — whatever
   tools/detect_landmarks.py imports). Read-only; never modified.
-- --preset: metarig preset. hll_hero is the supported biped pipeline.
-  hll_stalker is accepted for contract stability but fails clean at the
-  landmarks stage until the quadruped detector/fitter land (the
-  underlying tools/detect_landmarks.py + tools/fit_metarig.py +
-  tools/validate_fit.py are biped-only; see docs/auto_placement.md).
+- --preset: metarig preset. hll_hero runs the biped pipeline
+  (transverse slices); hll_stalker runs the quadruped pipeline
+  (longitudinal spine analysis + legs from below; see
+  docs/auto_placement.md). Each preset routes its own detector kind,
+  fitter preset, and gate driver set.
 - --out RIGGED.glb: written on success (parent dirs created).
 - --blend FILE: also save the final session (mesh + metarig + rig) here.
 - --no-validate: skip the validation gate (NOT recommended — the gate
   is the fail-stop that keeps bad fits from shipping).
+- --hints FILE: unirig-joints/1 JSON consumed by the fit stage as soft
+  priors (agree -> trust, disagree -> measurement wins + divergence
+  report; see tools/unirig_hints.py). --hints-rotated applies the Y-up
+  -> Z-up rotation to the hint coords (for normalized subjects).
 
 Pipeline stages (in order):
 
@@ -42,6 +46,9 @@ Orientation (part of the landmarks stage): generator meshes arrive Y-up
 (height along +Y) while the chain expects Z-up. A Y-up subject is
 rotated +90 deg about X and run from a normalized copy in the workdir
 (the input file is never modified); Z-up inputs pass through untouched.
+For hll_stalker the Y-up test additionally requires the Y span to start
+at the ground: a Z-up quadruped's longest span is its body length
+(ymin well below zero), which must not trigger the rotation.
 
 Exit contract:
 
@@ -78,13 +85,25 @@ from mathutils.kdtree import KDTree
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 
-# Driver joints the hll_hero stock preset floats by design (socket/hip/neck
-# pivots with real gaps) — explicitly listed as intentionally open, same as
+# Driver joints the stock presets float by design (socket/hip/neck pivots
+# with real gaps) — explicitly listed as intentionally open, same as
 # tests/test_auto_placement.py.
 HERO_OPEN = (
     "shoulder.L",
     "shoulder.R",
     "spine.004",
+    "thigh.L",
+    "thigh.R",
+    "upper_arm.L",
+    "upper_arm.R",
+)
+STALKER_OPEN = (
+    "neck.001",
+    "pelvis.L",
+    "pelvis.R",
+    "shoulder.L",
+    "shoulder.R",
+    "tail.001",
     "thigh.L",
     "thigh.R",
     "upper_arm.L",
@@ -133,13 +152,15 @@ def load_tool(name, filename):
     return mod
 
 
-def normalize_orientation(mesh_path, workdir):
+def normalize_orientation(mesh_path, workdir, preset):
     """Y-up subjects -> a Z-up normalized copy; Z-up passes through.
 
     Part of the landmarks stage: generator meshes arrive with height
     along +Y while slice analysis expects Z-up. Detection: height is a
     character's longest extent, so Y-span > X- and Z-span means Y-up.
     The +90 deg X rotation maps +Y to +Z and keeps feet (y=0) at z=0.
+    Quadrupeds additionally require ymin at the ground: a Z-up
+    quadruped's longest span is body length (ymin < 0), not height.
     """
     dl = load_tool("rf_auto_rig_dl", "detect_landmarks.py")
     try:
@@ -150,7 +171,11 @@ def normalize_orientation(mesh_path, workdir):
         raise StageFail("landmarks", one_line(str(e) or type(e).__name__)) from None
     corner = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
     spans = [max(c[i] for c in corner) - min(c[i] for c in corner) for i in range(3)]
-    if not (spans[1] > spans[0] and spans[1] > spans[2]):
+    y_up = spans[1] > spans[0] and spans[1] > spans[2]
+    if y_up and preset == "hll_stalker":
+        ymin = min(c[1] for c in corner)
+        y_up = abs(ymin) < 0.05 * spans[1]
+    if not y_up:
         print(f"[auto_rig] orientation: Z-up, using input as-is (spans={spans})")
         return mesh_path
     # Bake into mesh data directly (no object-level rotate/apply round trip).
@@ -182,13 +207,8 @@ def payload_between(output, begin, end, stage, what):
 
 def stage_landmarks(mesh_path, preset, workdir):
     """Landmarks via tools/detect_landmarks.py; returns the landmarks dict."""
-    if preset != "hll_hero":
-        raise StageFail(
-            "landmarks",
-            f"preset {preset}: quadruped pipeline not implemented "
-            "(detector/fitter/gate are biped-only; see docs/auto_placement.md)",
-        )
-    out, code = run_tool("detect_landmarks.py", [mesh_path])
+    kind = "quadruped" if preset == "hll_stalker" else "biped"
+    out, code = run_tool("detect_landmarks.py", [mesh_path, "--kind", kind])
     if code is not None:
         raise StageFail("landmarks", one_line(str(code) or "detector failed"))
     raw = payload_between(
@@ -209,13 +229,24 @@ def stage_landmarks(mesh_path, preset, workdir):
     return landmarks, lm_path
 
 
-def stage_fit(mesh_path, lm_path, workdir):
+def stage_fit(mesh_path, lm_path, workdir, preset, hints, hints_rotated):
     """Fit via tools/fit_metarig.py (generate deferred to its own stage)."""
     fitted = os.path.join(workdir, "fitted_metarig.py")
-    out, code = run_tool(
-        "fit_metarig.py",
-        [mesh_path, lm_path, "--out", fitted, "--no-generate", "--no-blend"],
-    )
+    argv = [
+        mesh_path,
+        lm_path,
+        "--out",
+        fitted,
+        "--no-generate",
+        "--no-blend",
+        "--preset",
+        preset,
+    ]
+    if hints:
+        argv += ["--hints", hints]
+    if hints_rotated:
+        argv.append("--hints-rotated")
+    out, code = run_tool("fit_metarig.py", argv)
     if code is not None:
         raise StageFail("fit", one_line(str(code) or "fitter failed"))
     payload_between(out, "RIGFORGE_FIT_BEGIN", "RIGFORGE_FIT_OK", "fit", "fit report")
@@ -225,9 +256,10 @@ def stage_fit(mesh_path, lm_path, workdir):
     return fitted
 
 
-def stage_validate(mesh_path, fitted, lm_path, workdir):
+def stage_validate(mesh_path, fitted, lm_path, workdir, preset):
     """Gate via tools/validate_fit.py (fail-stop; names bones and fixes)."""
     report_path = os.path.join(workdir, "validate_report.json")
+    allow = STALKER_OPEN if preset == "hll_stalker" else HERO_OPEN
     out, code = run_tool(
         "validate_fit.py",
         [
@@ -235,7 +267,7 @@ def stage_validate(mesh_path, fitted, lm_path, workdir):
             fitted,
             lm_path,
             "--open",
-            ",".join(HERO_OPEN),
+            ",".join(allow),
             "--no-render",
             "--report",
             report_path,
@@ -516,7 +548,9 @@ def one_line(text):
 
 def parse_args(argv):
     args = argv[argv.index("--") + 1 :] if "--" in argv else []
-    positional, preset, out, blend, no_validate = [], None, None, None, False
+    positional = []
+    preset = out = blend = hints = None
+    no_validate = hints_rotated = False
     i = 0
     while i < len(args):
         arg = args[i]
@@ -529,6 +563,11 @@ def parse_args(argv):
         elif arg == "--blend":
             i += 1
             blend = args[i] if i < len(args) else None
+        elif arg == "--hints":
+            i += 1
+            hints = args[i] if i < len(args) else None
+        elif arg == "--hints-rotated":
+            hints_rotated = True
         elif arg == "--no-validate":
             no_validate = True
         elif arg.startswith("-"):
@@ -547,11 +586,15 @@ def parse_args(argv):
     mesh = positional[0]
     if not os.path.isfile(mesh):
         raise StageFail("usage", f"mesh not found: {mesh}")
-    return mesh, preset, out, blend, no_validate
+    if hints is not None and not os.path.isfile(hints):
+        raise StageFail("usage", f"hints not found: {hints}")
+    return mesh, preset, out, blend, no_validate, hints, hints_rotated
 
 
 def main():
-    mesh_path, preset, out_path, blend_path, no_validate = parse_args(sys.argv)
+    mesh_path, preset, out_path, blend_path, no_validate, hints, hints_rotated = (
+        parse_args(sys.argv)
+    )
     try:
         bpy.ops.preferences.addon_enable(module="rigforge")
     except RuntimeError:
@@ -561,13 +604,13 @@ def main():
     workdir = tempfile.mkdtemp(prefix="rigforge_auto_")
     print(f"[auto_rig] preset={preset} mesh={mesh_path} workdir={workdir}")
     stages = ["landmarks", "fit"]
-    mesh_path = normalize_orientation(mesh_path, workdir)
+    mesh_path = normalize_orientation(mesh_path, workdir, preset)
     _landmarks, lm_path = stage_landmarks(mesh_path, preset, workdir)
-    fitted = stage_fit(mesh_path, lm_path, workdir)
+    fitted = stage_fit(mesh_path, lm_path, workdir, preset, hints, hints_rotated)
     if no_validate:
         print("[auto_rig] validate SKIPPED (--no-validate)")
     else:
-        stage_validate(mesh_path, fitted, lm_path, workdir)
+        stage_validate(mesh_path, fitted, lm_path, workdir, preset)
         stages.append("validate")
     # Resolve the subject BEFORE generate: generate adds ~200 WGT-* widget
     # meshes to the session, and only the subject/envelope pair exists now.
