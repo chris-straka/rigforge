@@ -21,6 +21,18 @@
 - [ ] Re-run the bake-off comparison with the fitter in the loop
       (fit-delta should now be ~0 vs unirig's zero-touch time)
 
+- [ ] Fork-or-add-on audit (owner request 2026-10-01): diff `rigforge/`
+      against stock Rigify 0.6.10 from the Blender 5.2 bundle, excluding
+      the module rename. List every change inside Rigify's own files vs
+      code that only adds new files/operators on top. If rigforge only
+      adds on top, propose turning it into a companion add-on that uses
+      Blender's stock Rigify (Blender updates then arrive for free); if
+      it edits internals, list which edits and whether each could move
+      out. Report only; do not restructure without the owner's go-ahead.
+- [ ] Mobile bone budget: the hero rig exports 160 deform bones. Add a
+      lighter game-export profile for mobile (drop or merge face/twist
+      bones) from the same rig, and measure skinning cost in Godot.
+
 ## Refactor / codebase health backlog
 
 - [ ] Lint debt: `ruff check` shows ~266 remaining (was 786 before the
