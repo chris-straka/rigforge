@@ -27,7 +27,8 @@ beat upstream on auto-placement, skinning, presets, and export.
 
 - `~/SWE/retopoforge` — mesh stage (MIT engine + GPL extension).
   Strategy hub: `retopoforge/docs/rigging-strategy.md`. Read it first.
-- `~/SWE/unirig-mac` — ML rigger port (MIT). Toolbox sibling, not a
+- `~/SWE/unirig-mac` — ML rigger port (MIT except vendored GPL
+  michelangelo subtree; never call it MIT-clean). Toolbox sibling, not a
   rival: this repo does heroes/control rigs, that one does creature
   volume/auto-placement. No contest, both stay.
 - `~/Games/hll` — the game (Godot 4.7 + C#). Its chars are the test
