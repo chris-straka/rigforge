@@ -11,6 +11,7 @@ submodules = (
     "copy_mirror_parameters",
     "upgrade_face",
     "game_export",
+    "auto_place",
 )
 
 loaded_submodules = []

@@ -189,8 +189,8 @@ prove insufficient on real HLL meshes — try deterministic first.
 - [x] Phase 4.5: unirig-joints/1 hints as soft priors with
       agree-vs-measure arbitration (`tools/unirig_hints.py`,
       `--hints` on the fitter and `auto_rig.py`); see Section 10.
-- [ ] Optional: `wm.rigforge_auto_place` operator + panel button (needs
-      the same code headless-first; UI is a thin wrapper).
+- [x] `wm.rigforge_auto_place` operator + panel button (thin UI over
+      the headless fitter, shared `rigforge/auto_place/` code; Section 11).
 
 ## 6. Prototype status (this change)
 
@@ -634,3 +634,44 @@ hll_stalker` strict exits 0 (80/80 DEF); hinted run strict
 exits 0; smoke (`RIGFORGE_SMOKE_OK`), presets, game-export,
 rename suites green; hero `auto_rig` regression green; `ruff
 check` + `ruff format --check` clean on all touched files.
+
+## 11. UI operator + package move (this change)
+
+The Section 5 checkbox is done: `wm.rigforge_auto_place` (Armature
+properties > Rigforge panel > Auto-Place to Mesh, or headless via
+`bpy.ops.wm.rigforge_auto_place()`) fits the active HLL metarig onto
+the selected mesh(es) in-session. Same pipeline as `auto_rig.py`
+(detect -> fit -> strict gate), same numbers: on the synthetic
+fixtures the operator run gates PASS (hero 23 drivers / 15.7 mm,
+stalker 32 drivers / 13.9 mm) and a second run is a float-noise
+no-op (drift 6e-08 m). Properties mirror the CLI surface: Preset
+(Auto/Hero/Stalker), Facing, Validation Gate toggle, Hints path +
+Rotated flag (stalker only). A failed gate restores the metarig
+untouched (preset-as-is + report rung) and the error names the
+failing bones; missing-bone and preset-mismatch preflights fail
+before any mutation. Covered by `tests/test_auto_place.py`
+(fit + gate + determinism + temp cleanup on both presets, five
+loud-cancel paths).
+
+To share the code instead of forking it, the implementation moved
+into the addon: `rigforge/auto_place/` now holds `detect_landmarks`,
+`fit_metarig`, `validate_fit`, `unirig_hints`, `make_hll_presets`
+(verbatim, except sibling `load_tool` calls became package imports),
+and `tools/*.py` are thin shims that re-export them and preserve
+every CLI contract (argv, markers, exit codes) for `auto_rig.py` and
+the suites. The fitter additionally exposes session-level entries
+(`track_axes_from_subject`, `fit_hero`, `fit_stalker_object`,
+`hint_target_overrides`) extracted verbatim from the CLI mains —
+report shapes and numerics unchanged. Two known consequences: the
+unirig-hints CLI now needs Blender (it imports the addon package;
+nothing ran it under plain python), and the `HERO/STALKER_OPEN`
+tuples exist in both `auto_rig.py` and the operator (headless-only
+vs shipped code, same as the tests' copies).
+
+Verified: `tests/test_auto_place.py` green (`RIGFORGE_AUTOPLACE_UI_OK`);
+`tests/test_auto_placement.py` green unmodified through the shims
+(§1-10, incl. production subjects + hints); smoke, presets,
+game-export, rename, retarget suites green; `ruff check` + `ruff
+format --check` clean on all touched files (the two `ui.py` findings
+are pre-existing HEAD debt). Bake-off re-run with the fitter:
+[rerun.md](bakeoff/rerun.md) — fit-delta 0.0, ~12 s / ~9 s wall.

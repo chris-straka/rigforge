@@ -16,10 +16,12 @@
 - [x] Auto-placement research: deterministic landmark detector +
       metarig fitter + validation gate for hero and quadruped, unirig
       joints as optional hints (docs/auto_placement.md, phases 1-4.5).
-- [ ] `wm.rigforge_auto_place` operator + panel button (thin UI over
-      the headless fitter; docs/auto_placement.md section 5)
-- [ ] Re-run the bake-off comparison with the fitter in the loop
-      (fit-delta should now be ~0 vs unirig's zero-touch time)
+- [x] `wm.rigforge_auto_place` operator + panel button (thin UI over
+      the headless fitter; docs/auto_placement.md section 11,
+      tests/test_auto_place.py)
+- [x] Re-run the bake-off comparison with the fitter in the loop
+      (docs/bakeoff/rerun.md: fit-delta 0.0 on both subjects,
+      11.6 s / 9.3 s wall, zero touch — under unirig's ~7 min)
 
 - [ ] Fork-or-add-on audit (owner request 2026-10-01): diff `rigforge/`
       against stock Rigify 0.6.10 from the Blender 5.2 bundle, excluding

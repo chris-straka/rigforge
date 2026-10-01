@@ -33,3 +33,10 @@ Presets: `hll_hero` (stylized biped, Andras-scale) and `hll_stalker`
 (quadruped, stalker-scale) metarigs in Add > Armature > Rigify
 Meta-Rigs. Generated modules — rebuild with
 `--python tools/make_hll_presets.py -- .` after tuning constants.
+
+Auto-place: with the HLL metarig active and the subject mesh(es)
+selected, Armature properties > Rigforge > Auto-Place to Mesh fits
+the metarig to the mesh in place (strict validation gate, metarig
+restored untouched on failure). Headless: one command per subject,
+`--python tools/auto_rig.py -- MESH --preset hll_hero|hll_stalker
+--out RIGGED.glb` (see `docs/bakeoff/rerun.md` for numbers).

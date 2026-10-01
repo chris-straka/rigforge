@@ -202,6 +202,11 @@ class DATA_PT_rigforge(bpy.types.Panel):
         row.operator("pose.rigforge_generate", text=text, icon="POSE_HLT")
         row.enabled = enable_generate
 
+        col.separator()
+        col.operator(
+            "wm.rigforge_auto_place", text="Auto-Place to Mesh", icon="ARMATURE_DATA"
+        )
+
 
 # noinspection PyPep8Naming
 class DATA_PT_rigforge_game_export(bpy.types.Panel):
