@@ -65,7 +65,8 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
         meshes = find_skinned_meshes(rig)
         if not meshes:
             self.report(
-                {"WARNING"}, "No meshes bound to %s; exporting skeleton only" % rig.name
+                {"WARNING"},
+                f"No meshes bound to {rig.name}; exporting skeleton only",
             )
 
         if context.mode != "OBJECT":
@@ -102,7 +103,7 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
             except ReferenceError:
                 pass
 
-        self.report({"INFO"}, "Exported %s" % self.filepath)
+        self.report({"INFO"}, f"Exported {self.filepath}")
         return {"FINISHED"}
 
 

@@ -231,8 +231,8 @@ def main():
         f.write(stalker_code)
 
     print(
-        "wrote hll_hero.py (%d bytes), hll_stalker.py (%d bytes)"
-        % (len(hero_code), len(stalker_code))
+        f"wrote hll_hero.py ({len(hero_code)} bytes), "
+        f"hll_stalker.py ({len(stalker_code)} bytes)"
     )
 
 
