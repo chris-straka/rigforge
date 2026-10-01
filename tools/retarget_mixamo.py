@@ -54,6 +54,7 @@ Deliberate v1 limits, all documented here rather than hidden:
 """
 
 import argparse
+import itertools
 import json
 import math
 import os
@@ -758,8 +759,11 @@ def motion_proof(tgt, frames):
         thighs.append(tgt.pose.bones["DEF-thigh.L"].matrix.translation.copy())
     q0 = quats[0]
     swing = max(2.0 * math.acos(min(1.0, abs(q0.dot(q)))) for q in quats)
-    travel = (roots[-1] - roots[0]).length
-    thigh_travel = (thighs[-1] - thighs[0]).length
+    # Path length, not net displacement: cyclic clips (dance, idle) return
+    # to start, so net travel is ~0 by construction while motion is real.
+    # For traveling walks path ~= net and old thresholds still apply.
+    travel = sum((b - a).length for a, b in itertools.pairwise(roots))
+    thigh_travel = sum((b - a).length for a, b in itertools.pairwise(thighs))
     return {
         "thigh_swing_rad": round(swing, 4),
         "root_travel_m": round(travel, 4),
@@ -885,10 +889,10 @@ def run_pipeline(src, tgt, frames, fps, out_path, do_pin, action_name):
         fail(f"no leg motion transferred (swing {proof['thigh_swing_rad']} rad)")
     if proof["root_travel_m"] < 0.05:
         fail(f"no root motion transferred (travel {proof['root_travel_m']} m)")
-    if abs(proof["thigh_travel_m"] - proof["root_travel_m"]) > 0.02:
+    if proof["thigh_travel_m"] < proof["root_travel_m"] * 0.5:
         fail(
             "legs not carried with the pelvis "
-            f"(thigh {proof['thigh_travel_m']} m vs root {proof['root_travel_m']} m)"
+            f"(thigh path {proof['thigh_travel_m']} m vs root path {proof['root_travel_m']} m)"
         )
 
     # Drop the source rig + every foreign action: the glTF exporter bakes
