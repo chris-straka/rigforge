@@ -352,6 +352,7 @@ def import_mixamo_clip(path):
     if arm is None:
         fail(f"no mixamorig skeleton found in {path}")
     action = find_clip_action(arm)
+    normalize_clip_transform(arm, action)
     if action is None:
         fail(f"no animation action found driving {arm.name} in {path}")
     lo, hi = action.frame_range
@@ -362,6 +363,40 @@ def import_mixamo_clip(path):
         f"clip: armature={arm.name} action={action.name} frames={frames[0]}..{frames[-1]}"
     )
     return arm, action, frames
+
+
+def normalize_clip_transform(arm, action):
+    """Bake the FBX import's object transform into meters/Z-up data.
+
+    Mixamo 'for Unity' clips arrive centimeters + Y-up: the importer keeps
+    raw data and compensates with object rotation+scale (0.01, +90deg X).
+    Downstream code (facing, rest orientations, stride) assumes meter-scale
+    Z-up data, so apply rotation+scale and scale location fcurves by the
+    uniform factor. Rotation channels are parent-relative and untouched.
+    """
+    s = tuple(arm.scale)
+    if abs(s[0] - s[1]) > 1e-6 or abs(s[0] - s[2]) > 1e-6:
+        fail(f"non-uniform clip scale {s} — unsupported")
+    if abs(s[0] - 1.0) < 1e-6 and Vector(arm.rotation_euler).length < 1e-6:
+        return
+    prev_active = bpy.context.view_layer.objects.active
+    prev_sel = [o for o in bpy.data.objects if o.select_get()]
+    bpy.ops.object.select_all(action="DESELECT")
+    arm.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in prev_sel:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = prev_active
+    if abs(s[0] - 1.0) > 1e-6:
+        for fc in all_fcurves(action):
+            if fc.data_path.endswith("location"):
+                for kp in fc.keyframe_points:
+                    kp.co.y *= s[0]
+                    kp.handle_left.y *= s[0]
+                    kp.handle_right.y *= s[0]
+    print(f"clip normalize: baked scale {s[0]:.4f} + object rotation")
 
 
 def facing_sign(arm, foot_name, toe_name):
