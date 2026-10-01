@@ -376,3 +376,82 @@ bad fit); smoke (`RIGFORGE_SMOKE_OK`) and `tests/test_presets.py`
 green; `ruff check` + `ruff format --check` clean on both touched
 files. Andras final: hard FAIL on toe margin (unchanged), fingers
 warn, toes/face warn-quiet with diagnostics, head ok.
+
+## 9. Fitter follow-ups: production meshes through the strict gate
+
+The Section 8 gate failed every production mesh (Andras: toe margin;
+Hunyuan elf: shoulder/foot/toe outside; Hunyuan millennial: untested
+merge case). All fixes below are fitter-side
+(`tools/fit_metarig.py`); the gate's thresholds and verdicts are
+untouched — where a threshold looked suspect it was held and the
+fitter was fixed instead (see "thresholds" below).
+
+Principle: verify-then-correct. Prospective driver midpoints raycast
+against the envelope with the gate's own `point_depth` (margin read
+from `validate_fit.MARGIN_DEFAULT`, never duplicated), on both sides
+(the `.L` solve mirrors to `.R`, so `.R` midpoints verify too).
+Corrections apply only to failing bones, so passing fits solve
+exactly as before. Every correction is bounded, logged in
+`fallbacks`/`cautions`, and re-verified; failures stay honest.
+
+Fixes:
+
+- Robust arm bands. Outer-blob validity (`n >= 12`, `r >= 0.012 m`)
+  replaces the count==3 filter: speck bands (ponytail splits, hair)
+  drop out while true upper-arm bands in count>3 slices join. Legacy
+  filters stay as fallback rungs (`band_mode` reports which won).
+- Elbow re-derive. The detector's elbow is re-found on the robust
+  profile and adopted past 5 mm of disagreement (its band was
+  speck-dragged: smoothing dips at the first clean band below noise).
+- Shoulder v2. Back-projection runs along the upper-arm ray (bands
+  above the elbow, full 3D — the old flat-y forearm projection
+  overshot medially on hanging arms and rode the front surface on
+  leaning arms). Legacy flat-y stays a candidate; the deepest passing
+  placement wins, else a shortening march (100% -> 40% of preset
+  length, armpit clamp kept).
+- Ankle v2. The sole fallback gains a forefoot trigger (dip above
+  dorsum + 0.025 m is a shin narrowing, not a joint) alongside the
+  weak-dip and 0.085-height triggers; sole ratio 0.044 -> 0.048
+  (anatomical ~8 cm at 1.7 m plus gate headroom); a prospective
+  foot/toe chain landing outside forces the fallback regardless.
+- Hand mesh-fit. When the preset hand vector lands outside (stubby
+  merge-shortened hands), the tail re-aims along the measured finger
+  column with a span-fit length instead of dangling past the fingers.
+- Verify-nudge. Failing foot/hand tail targets step 2 mm off the
+  nearest raycast surface (max 8 steps, 2 mm past the margin for
+  headroom), never un-passing a passing midpoint.
+- Finger re-aim. Each chain rotates about its knuckle onto its own
+  mesh column (thigh-safe asymmetric slab, thumb-masked,
+  lowest-flesh anchors for splay), scales to its flesh end, shifts
+  onto the column, and searches for flesh; per-finger revert on
+  failed verify (tip inside 1 mm+ both sides, gate angle < 45 both
+  sides). Untouched when already quiet.
+
+Before/after (strict `auto_rig.py`, no `--no-validate`):
+
+| subject | before | after |
+|---|---|---|
+| Andras | FAIL: toe.L/R margin 7.2/8.5 mm; pinky 46.2 deg + tips outside | PASS (min 12.4 mm); fingers quiet |
+| elf | FAIL: shoulder/foot/toe L/R outside | PASS (min 10.5 mm); fingers quiet; elbow re-derived, shoulder marched 0.75, ankle forefoot trigger |
+| millennial | FAIL (untested): shoulder/hand outside, upper-arm margin 3.6 mm, toe.R 9.0 mm | PASS (min 12.6 mm); hand mesh-fit + nudge; finger angle near-miss 45.5/46.9 (open, below) |
+
+Thresholds: none believed wrong. `MARGIN_DEFAULT` 1 cm fired on real
+misplacements in every case (medial toe hug, air-gap shoulder, sole
+graze); `FINGER_WARN_DEG` 45 fired on the 46-68 deg legacy fans and
+cleared on the 2-9 deg fitted ones; `HEAD_WARN` 3 cm correctly flags
+the elf ear-spike (open fitter item, not a threshold issue). No
+render showed a correctly placed bone failing a check.
+
+Open follow-ups: hair-robust head-top (elf ears stretch the head
+3.8 cm, warn-only); mill finger angle near-miss (gate slab catches
+the thigh, contaminating its reference a few degrees — fitter-side
+polish toward a contaminated reference was declined); mill finger
+deform caveat (5 cm stub hand vs 13 cm preset hand+fingers: gated
+hand bone fits, finger chains warn honestly); rigid toe length
+(shortfall still reported, ungated).
+
+Verified: `tests/test_auto_placement.py` §9 green on all three
+subjects (skip-if-absent) plus the synthetic contract unchanged;
+`auto_rig.py` strict exits 0 with GLBs out on all three, each
+`rfcheck`-clean (160 joints); smoke, presets, game-export, rename
+suites green; ruff clean on both touched files.

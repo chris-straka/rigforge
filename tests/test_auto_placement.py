@@ -13,6 +13,11 @@ detect landmarks, fit the hll_hero metarig, run the validation gate
 numbers. Also proves the failure path (a failed gate stops the pipeline
 naming bones) and the preset-as-is fallback rung.
 
+Section 8 adds the production regression subjects (Andras + two Hunyuan
+meshes, read-only external files): landmarks, fit with generate, and the
+in-session gate must pass on each. Subjects whose files are absent are
+skipped (external assets may rot); present subjects must pass.
+
 Pass criteria: exits 0 and prints RIGFORGE_AUTOPLACE_OK.
 """
 
@@ -362,5 +367,104 @@ rung = parse_report(rung_out, "RIGFORGE_VALIDATE_BEGIN", "RIGFORGE_VALIDATE_PRES
 check(rung["ladder"] == "preset_as_is", "ladder verdict not preset_as_is")
 check("fallback_preset" in rung, "no fallback preset report attached")
 print(f"ladder rung 2 OK (preset verdict: {rung['fallback_preset']['verdict']})")
+
+# 9. Production regression subjects (read-only external meshes, Section 9).
+# Andras: toe margin 7.2/8.5 mm + pinky warn; elf: shoulder/foot/toe
+# outside (ponytail-dragged elbow, flat-shoe ankle); millennial: merge
+# case (shoulder/hand outside, upper-arm margin). Absent files skip.
+SUBJECTS = [
+    ("andras", "/tmp/bakeoff/andras_body_raw.glb"),
+    ("elf", os.path.expanduser("~/Downloads/hunyuan_elf.glb")),
+    ("mill", os.path.expanduser("~/Downloads/hunyuan_millennial.glb")),
+]
+for tag, mesh_path in SUBJECTS:
+    if not os.path.exists(mesh_path):
+        print(f"subject {tag}: SKIP (missing {mesh_path})")
+        continue
+    s_tmp = os.path.join(TMP, tag)
+    os.makedirs(s_tmp, exist_ok=True)
+    s_lm = os.path.join(s_tmp, "lm.json")
+    s_fitted = os.path.join(s_tmp, "fitted.py")
+    lm_out, lm_code = run_tool("detect_landmarks.py", [mesh_path])
+    check(lm_code is None, f"{tag}: landmarks exited {lm_code!r}")
+    s_landmarks = parse_report(
+        lm_out, "RIGFORGE_LANDMARKS_BEGIN", "RIGFORGE_LANDMARKS_OK"
+    )
+    with open(s_lm, "w", encoding="utf-8") as f:
+        json.dump(s_landmarks, f, indent=2)
+    fit_out, fit_code = run_tool("fit_metarig.py", [mesh_path, s_lm, "--out", s_fitted])
+    check(fit_code is None, f"{tag}: fit exited {fit_code!r}")
+    s_fit = parse_report(fit_out, "RIGFORGE_FIT_BEGIN", "RIGFORGE_FIT_OK")
+    for joint, numbers in s_fit["joints"].items():
+        check(numbers["after_d"] < 1e-3, f"{tag}: {joint} not closed")
+    s_gen = s_fit["generate"]
+    check(s_gen and s_gen["def_bones"] > 30, f"{tag}: generate weak: {s_gen}")
+    s_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    s_meta = next(
+        (
+            o
+            for o in bpy.data.objects
+            if o.type == "ARMATURE" and "rig_id" not in o.data
+        ),
+        None,
+    )
+    check(s_meshes and s_meta is not None, f"{tag}: session lost mesh/metarig")
+    s_env = dl.envelope_copy(max(s_meshes, key=lambda o: len(o.data.vertices)))
+    s_sig = dl.slice_signature(s_env, 120)
+    s_gate = rv.run_gate(s_env, s_meta, s_landmarks, s_sig[0], open_allow=OPEN)
+    check(s_gate["verdict"] == "pass", f"{tag}: gate failed: {s_gate['failures']}")
+    check(s_gate["inside"]["min_depth"] >= 0.01, f"{tag}: driver in margin band")
+    s_rebuilt = rv.build_metarig_from_module(s_fitted)
+    s_names = {b.name for b in s_rebuilt.data.bones}
+    check("Bone" not in s_names, f"{tag}: stray bone in rebuilt metarig")
+    check(
+        s_names == {b.name for b in s_meta.data.bones},
+        f"{tag}: rebuilt bone set differs",
+    )
+    s_bones = s_gate["inside"]["bones"]
+    if tag == "andras":
+        check(
+            s_bones["toe.L"]["mid"] >= 0.01 and s_bones["toe.R"]["mid"] >= 0.01,
+            "andras: toe margin regressed",
+        )
+        for side in ("L", "R"):
+            finger = s_gate["warns"]["fingers"][side]
+            check(finger["status"] == "ok", f"andras: finger warn: {finger}")
+    elif tag == "elf":
+        for bone in (
+            "shoulder.L",
+            "shoulder.R",
+            "foot.L",
+            "foot.R",
+            "toe.L",
+            "toe.R",
+        ):
+            check(s_bones[bone]["inside"], f"elf: {bone} outside again")
+        check(s_fit["fallbacks"]["elbow"]["fired"], "elf: elbow re-derive did not fire")
+        check(
+            s_fit["fallbacks"]["ankle"]["forefoot_trigger"],
+            "elf: forefoot ankle trigger did not fire",
+        )
+        for side in ("L", "R"):
+            finger = s_gate["warns"]["fingers"][side]
+            check(finger["status"] == "ok", f"elf: finger warn: {finger}")
+    elif tag == "mill":
+        for bone in ("shoulder.L", "shoulder.R", "hand.L", "hand.R"):
+            check(s_bones[bone]["inside"], f"mill: {bone} outside again")
+        check(
+            s_fit["fallbacks"]["hand"]["mesh_fit"], "mill: hand mesh-fit did not fire"
+        )
+        check(s_bones["toe.R"]["mid"] >= 0.01, "mill: toe.R margin regressed")
+        for side in ("L", "R"):
+            finger = s_gate["warns"]["fingers"][side]
+            check(
+                "outside" not in (finger.get("warn_cause") or ""),
+                f"mill: finger tips outside: {finger}",
+            )
+            check(finger["worst_deg"] < 50, f"mill: finger angle worse: {finger}")
+    print(
+        f"subject {tag}: PASS (min {s_gate['inside']['min_depth']} "
+        f"worst {s_gate['inside']['worst_bone']} def {s_gen['def_bones']})"
+    )
 
 print("RIGFORGE_AUTOPLACE_OK")
