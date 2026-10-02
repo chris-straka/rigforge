@@ -12,6 +12,7 @@ submodules = (
     "upgrade_face",
     "game_export",
     "auto_place",
+    "voxel_weights",
 )
 
 loaded_submodules = []

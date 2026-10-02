@@ -1,0 +1,34 @@
+{
+  "_note": "Directions verified by pose discovery. No spine joint: the Rigify horse mid-spine has no accessible FK flex (spine_fk rotates nothing, torso/hips move it rigidly), so a spine cell would measure a rigid rotation, not a bend. The biped spine_30 covers the spine-bend case for the gate.",
+  "poses": {
+    "front_90": {
+      "set": {"forefoot_fk.L": ["X", -90.0]},
+      "bend": {"bone": "DEF-forefoot.L", "deg": 90.0},
+      "move": {"bone": "DEF-forefoot.L", "dir": [-0.7, -0.63, -0.3]}
+    },
+    "rear_90": {
+      "set": {"hind_foot_fk.L": ["X", 90.0]},
+      "bend": {"bone": "DEF-hind_foot.L", "deg": 90.0},
+      "move": {"bone": "DEF-hind_foot.L", "dir": [0.7, -0.65, -0.25]}
+    },
+    "neck_30": {
+      "set": {"head": ["X", -30.0]},
+      "bend": {"bone": "DEF-head", "deg": 30.0},
+      "move": {"bone": "DEF-head", "dir": [0, -0.25, 1]}
+    }
+  },
+  "joints": {
+    "front": {
+      "bones": ["DEF-forearm.L.001", "DEF-forefoot.L"],
+      "poses": ["front_90"]
+    },
+    "rear": {
+      "bones": ["DEF-lower_leg.L.001", "DEF-hind_foot.L"],
+      "poses": ["rear_90"]
+    },
+    "neck": {
+      "bones": ["DEF-neck.004", "DEF-head"],
+      "poses": ["neck_30"]
+    }
+  }
+}

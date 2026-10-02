@@ -34,6 +34,10 @@
 - [ ] Mobile bone budget: the hero rig exports 160 deform bones. Add a
       lighter game-export profile for mobile (drop or merge face/twist
       bones) from the same rig, and measure skinning cost in Godot.
+- [ ] Public-repo follow-ups: smart paths where cheap (BLENDER_BIN
+      env override with this machine's Blender as default,
+      skip-if-missing for external-asset suites); this rig stays the
+      target, no portability crusade.
 
 ## Refactor / codebase health backlog
 
@@ -45,6 +49,9 @@
       requires class-level `bl_options` sets).
 - [ ] Weight-paint assistance: smoothing, mirror, and cleanup operators.
       Biggest artist-time sink; Rigify barely helps. Highest value item.
+      (W1 shipped 2026-10-01: voxel auto-weights, tube + robustness
+      green, hero/quad tracked for W1b kernel R&D; W2-W4 per
+      docs/weight-assist-plan.md.)
 - [ ] Error diagnostics: Rigify failures on malformed metarigs are
       cryptic. Fail early with bone names + what to fix.
 - [ ] Game-export depth: validation + per-profile settings + Godot

@@ -1,0 +1,12 @@
+{
+  "_note": "Robustness fixtures (messy/micro/far) share the tube rig; only elbow_90 (no heat baseline: heat exceeds usable budgets on degenerate soup).",
+  "poses": {
+    "elbow_90": {
+      "set": {"Bone.001": ["X", -90.0]},
+      "bend": {"bone": "Bone.001", "deg": 90.0}
+    }
+  },
+  "joints": {
+    "elbow": {"bones": ["Bone", "Bone.001"], "poses": ["elbow_90"]}
+  }
+}

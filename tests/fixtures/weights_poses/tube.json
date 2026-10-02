@@ -1,0 +1,15 @@
+{
+  "poses": {
+    "elbow_90": {
+      "set": {"Bone.001": ["X", -90.0]},
+      "bend": {"bone": "Bone.001", "deg": 90.0}
+    },
+    "elbow_135": {
+      "set": {"Bone.001": ["X", -135.0]},
+      "bend": {"bone": "Bone.001", "deg": 135.0}
+    }
+  },
+  "joints": {
+    "elbow": {"bones": ["Bone", "Bone.001"], "poses": ["elbow_90", "elbow_135"]}
+  }
+}

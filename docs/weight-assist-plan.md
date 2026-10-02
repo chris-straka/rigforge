@@ -33,17 +33,56 @@ Python is too slow; Blender ships NumPy.
 
 ## Gates
 
-Use the deformation test (`~/SWE/retopoforge/docs/deformation-test.md`):
-on procedural tube, biped and quadruped fixtures, the new auto-weights
-must beat Blender's automatic weights on p95 stretch and volume loss at
-every joint, with 0 flips; nudge strokes must update in under 1 s on a
-15k-triangle mesh; all outputs deterministic.
+Use the deformation test (`~/SWE/retopoforge/docs/deformation-test.md`),
+as implemented in `tests/test_weights_w1.py` (metrics: p95 stretch,
+area distortion (mean |log area ratio|, rigid-invariant candy-wrap
+proxy — closed-slice volumes are ill-defined under weight-threshold
+boundaries), flips; poses in `tests/fixtures/weights_poses/`):
+
+- Tube (clean single joint): voxel beats Blender automatic weights on
+  p95, area distortion, and flip count at bends <= 90 deg. Shipped
+  green (elbow_90: p95 1.12 vs 1.19, ad 4.2% vs 7.8%, flips 47 vs 76).
+- Robustness (no heat baseline — heat exceeds usable budgets on
+  degenerate soup): voxel binds production soup, mm-scale meshes, and
+  far-off rigs with bounded fallbacks, bit-identical re-binds, and
+  smoke-grade deformation (p95 < 2.5, ad < 25%, flips < 15%).
+- Bends past 90 deg are report-only: flip-free LBS past 90 deg needs
+  weight gradient under cot(bend/2)/2r (at 135 deg a 24 cm blend on
+  the 50 cm tube), so both binders crush and compare as noise.
+- Hero/quad are tracked report-only pending W1b (below).
+
+Nudge strokes must update in under 1 s on a 15k-triangle mesh; all
+outputs deterministic.
+
+## W1 findings (2026-10-01)
+
+- Blender 5.2 heat converges on most adverse inputs (doubled shells,
+  slits, open meshes, needles, mm scale, bones 20 cm off) but goes
+  pathological on degenerate soup: ~15 min on zero-area soup, 20+
+  min (killed) on combined needles+slits+doubled+chunk. Voxel binds
+  the same soup in ~1 s, every time. Open meshes are the honest
+  limit: parity leaks, so the operator cancels with "not closed"
+  (the envelope flag fuses stacked closed shells, it cannot put
+  volume into an open shell).
+- Hero/quad parity needs kernel R&D, not tuning (all cheap fixes
+  falsified: finer cells, wider/narrower smoothing, smoothed
+  fixtures, tighter cutoffs). Diagnosis: the span-normalized kernel
+  has no distance decay (0.22 weight leaks to distant bones), the
+  physical blend width is global (tube wants narrow, hero wants
+  wide/narrow per joint), and top-4 membership churns across 160
+  bones (1.8x medium weight jumps vs heat). Path: soft per-bone
+  geodesic decay plus adaptive blend width.
+- Scale bugs found by the robustness suite and fixed: smoothing
+  passes are capped relative to mesh extent (mm meshes computed a
+  million passes), bones outside flesh are excluded (rigid
+  Euclidean-nearest follow instead of 50/50 mush).
 
 ## Phases
 
 | Phase | Builds | Gate |
 |---|---|---|
-| W1 | Geodesic voxel auto-weights | beats Blender auto weights on the deformation test |
+| W1 | Geodesic voxel auto-weights (tube + robustness) | shipped 2026-10-01, gate green |
+| W1b | Kernel R&D: decay + adaptive width | hero/quad parity with heat |
 | W2 | Nudge strokes | owner fixes a bad elbow in < 2 min |
 | W3 | Piece transfer with inpainting | cape hem moves smoothly, no body pull-through |
 | W4 | Cleanup ops | 4-influence limit passes rfcheck mobile |

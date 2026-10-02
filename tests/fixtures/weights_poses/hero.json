@@ -1,0 +1,58 @@
+{
+  "_note": "Directions verified by pose discovery (build + bend/move readout).",
+  "poses": {
+    "elbow_90": {
+      "set": {"forearm_fk.L": ["X", 90.0]},
+      "bend": {"bone": "DEF-forearm.L", "deg": 90.0},
+      "move": {"bone": "DEF-forearm.L", "dir": [-0.55, -0.6, 0.55]}
+    },
+    "elbow_135": {
+      "set": {"forearm_fk.L": ["X", 135.0]},
+      "bend": {"bone": "DEF-forearm.L", "deg": 135.0}
+    },
+    "knee_90": {
+      "set": {"shin_fk.L": ["X", 90.0]},
+      "bend": {"bone": "DEF-shin.L", "deg": 90.0},
+      "move": {"bone": "DEF-shin.L", "dir": [0, 1, 1]}
+    },
+    "knee_120": {
+      "set": {"shin_fk.L": ["X", 120.0]},
+      "bend": {"bone": "DEF-shin.L", "deg": 120.0}
+    },
+    "shoulder_90": {
+      "set": {"upper_arm_fk.L": ["X", 90.0]},
+      "bend": {"bone": "DEF-upper_arm.L", "deg": 90.0},
+      "move": {"bone": "DEF-upper_arm.L", "dir": [-0.55, -0.6, 0.55]}
+    },
+    "neck_60": {
+      "set": {"head": ["Y", 60.0]},
+      "move": {"bone": "DEF-nose.004", "dir": [0.87, 0.5, 0]}
+    },
+    "spine_30": {
+      "set": {"torso": ["X", -30.0]},
+      "move": {"bone": "DEF-spine.006", "dir": [0, 1, -0.2]}
+    }
+  },
+  "joints": {
+    "elbow": {
+      "bones": ["DEF-upper_arm.L.001", "DEF-forearm.L"],
+      "poses": ["elbow_90", "elbow_135"]
+    },
+    "knee": {
+      "bones": ["DEF-thigh.L.001", "DEF-shin.L"],
+      "poses": ["knee_90", "knee_120"]
+    },
+    "shoulder": {
+      "bones": ["DEF-shoulder.L", "DEF-upper_arm.L"],
+      "poses": ["shoulder_90"]
+    },
+    "neck": {
+      "bones": ["DEF-spine.004", "DEF-spine.005"],
+      "poses": ["neck_60"]
+    },
+    "spine": {
+      "bones": ["DEF-spine.001", "DEF-spine.002"],
+      "poses": ["spine_30"]
+    }
+  }
+}
