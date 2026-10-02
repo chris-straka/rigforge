@@ -30,7 +30,6 @@ ALLOWLIST = (
     "Rigify_Leg_",
     "Rigify_Rot2PoleSwitch",
     "Rigify Snap ",
-    "RIGIFY-",
 )
 
 # Old-prefix *identifiers*: UPPER_SNAKE and ClassNames. Plain prose ("a Rigify
@@ -107,5 +106,36 @@ for metarig_op, generate_op, label in GENERATE_CASES:
     if not rigs:
         fail(f"{label}: generate produced no rig")
     print(f"{label}: generate OK ({rigs[0].name}, {len(rigs[0].data.bones)} bones)")
+
+# 5. Driver freeze prefix round-trip (incl. legacy RIGIFY- healing).
+from types import SimpleNamespace  # noqa: E402
+
+from rigforge.generate import Generator  # noqa: E402
+
+bpy.ops.object.select_all(action="SELECT")
+bpy.ops.object.delete(use_global=False)
+bpy.ops.object.armature_add()
+ob = bpy.context.object
+bone_name = ob.pose.bones[0].name
+ob.pose.bones[0]["rf_probe"] = 1.0
+fc = ob.driver_add("location", 0)
+var = fc.driver.variables.new()
+var.type = "SINGLE_PROP"
+tar = var.targets[0]
+tar.id = ob
+path = f'pose.bones["{bone_name}"]["rf_probe"]'
+tar.data_path = path
+Generator._Generator__freeze_driver_vars(ob)
+if tar.data_path != "RIGFORGE-" + path:
+    fail(f"freeze prefix wrong: {tar.data_path}")
+fake = SimpleNamespace(obj=ob, org_rename_table={})
+Generator._Generator__restore_driver_vars(fake)
+if tar.data_path != path:
+    fail(f"restore did not strip: {tar.data_path}")
+tar.data_path = "RIGIFY-" + path
+Generator._Generator__restore_driver_vars(fake)
+if tar.data_path != path:
+    fail(f"legacy RIGIFY- not healed: {tar.data_path}")
+print("driver freeze round-trip OK (RIGFORGE-, legacy RIGIFY- heals)")
 
 print("RIGFORGE_RENAME_TEST_OK")

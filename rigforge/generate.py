@@ -327,7 +327,7 @@ class Generator(base_generate.BaseGenerator):
                         if var.type == "SINGLE_PROP" and re.match(
                             r'^pose.bones\["[^"\]]*"]\["[^"\]]*"]$', tar.data_path
                         ):
-                            tar.data_path = "RIGIFY-" + tar.data_path
+                            tar.data_path = "RIGFORGE-" + tar.data_path
 
     def __rename_org_bones(self, obj: ArmatureObject):
         # Clear any assigned Action, so we don't rename fcurves when renaming ORG- bones.
@@ -448,12 +448,15 @@ class Generator(base_generate.BaseGenerator):
     def __restore_driver_vars(self):
         obj = self.obj
 
-        # Alter marked driver targets
+        # Alter marked driver targets. "RIGIFY-" is the pre-rename
+        # marker: still unfreeze it so rigs saved mid-generate (a
+        # failed generate leaves frozen drivers behind) by older
+        # versions heal on regenerate.
         if obj.animation_data:
             for d in obj.animation_data.drivers:
                 for v in d.driver.variables:
                     for tar in v.targets:
-                        if tar.data_path.startswith("RIGIFY-"):
+                        if tar.data_path.startswith(("RIGFORGE-", "RIGIFY-")):
                             temp, bone, prop = tuple(
                                 [x.strip('"]') for x in tar.data_path.split('["')]
                             )
@@ -461,7 +464,9 @@ class Generator(base_generate.BaseGenerator):
                                 bone in obj.data.bones
                                 and prop in obj.pose.bones[bone].keys()
                             ):
-                                tar.data_path = tar.data_path[7:]
+                                tar.data_path = tar.data_path.removeprefix(
+                                    "RIGFORGE-"
+                                ).removeprefix("RIGIFY-")
                             else:
                                 org_name = make_original_name(bone)
                                 org_name = self.org_rename_table.get(org_name, org_name)

@@ -59,8 +59,10 @@ to its commit and classified.
   **bit-identical** — 706 bones (names, heads, tails, parents,
   deform flags, constraints, custom props), 198 drivers (paths,
   expressions, variables), 220 widgets, collections.
-- `RIGIFY-` driver data-path prefix deliberately kept
-  (`generate.py:330,456`), so drivers match stock exactly.
+- Driver freeze prefix renamed `RIGIFY-` → `RIGFORGE-`
+  (`generate.py`; restore still heals legacy `RIGIFY-` paths).
+  The prefix is transient within one generate pass, so output
+  rigs still match stock exactly (see bit-identical proof above).
 
 ## New files (all additive, 19 total)
 

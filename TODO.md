@@ -71,8 +71,9 @@
       (panel checkbox, auto-fix on copies); tools/godot_import_check
       (headless Godot 4.7.1 import gate, skip-if-missing via
       GODOT_BIN) wired into the export test (160/65 bones).
-- [ ] Optional: rename `RIGIFY-` fcurve data-path prefix in
-      `generate.py` (kept for generated-file compat; harmless either way).
+- [x] Optional: renamed `RIGIFY-` fcurve data-path prefix in
+      `generate.py` to `RIGFORGE-` (2026-10-02); restore still heals
+      legacy `RIGIFY-` paths, round-trip pinned in test_rename.py.
 - [ ] Optional: upstream watch — Blender keeps fixing Rigify; review
       new upstream commits periodically and hand-port (re-apply by
       judgment, never `git merge`: this tree has structurally diverged).
