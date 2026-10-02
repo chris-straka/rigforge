@@ -77,12 +77,28 @@ outputs deterministic.
   million passes), bones outside flesh are excluded (rigid
   Euclidean-nearest follow instead of 50/50 mush).
 
+## W1b findings (2026-10-02): tuning frontier mapped, ceiling found
+
+16-run sweep over decay strength, kernel power/sharpness, smoothing
+width, output k, adaptive k/power, field/output-k split, and
+post-sparsify re-smoothing. Falsified: softmax kernel, wide field-k,
+adaptive k (per-vert cliffs explode p95), adaptive power, re-smooth.
+Promoted (all green: tube strict, robustness, operator, smoke):
+power 6 (crisp commitment), decay len/4 (far-bone fade), 3x blend
+width. Hero bends improve strongly (elbow p95 now beats heat;
+knee/shoulder flips beat heat) but full parity is out of reach for
+any global setting: shoulder p95 and neck twist need soft multi-way
+blends while bends need crisp commitment. Remaining gaps need a
+solver upgrade (bounded-biharmonic-class), not more tuning — queued
+as optional W1c. Heat itself wobbles run to run (p95 ±1e-4, flips
+±1), so hairline wins stay ungated.
+
 ## Phases
 
 | Phase | Builds | Gate |
 |---|---|---|
 | W1 | Geodesic voxel auto-weights (tube + robustness) | shipped 2026-10-01, gate green |
-| W1b | Kernel R&D: decay + adaptive width | hero/quad parity with heat |
+| W1b | Kernel tuning: best-safe defaults | shipped 2026-10-02, bends near-parity, rest tracked |
 | W2 | Nudge strokes | owner fixes a bad elbow in < 2 min |
 | W3 | Piece transfer with inpainting | cape hem moves smoothly, no body pull-through |
 | W4 | Cleanup ops | 4-influence limit passes rfcheck mobile |

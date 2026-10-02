@@ -50,7 +50,8 @@
 - [ ] Weight-paint assistance: smoothing, mirror, and cleanup operators.
       Biggest artist-time sink; Rigify barely helps. Highest value item.
       (W1 shipped 2026-10-01: voxel auto-weights, tube + robustness
-      green, hero/quad tracked for W1b kernel R&D; W2-W4 per
+      green; W1b shipped 2026-10-02: best-safe defaults, bends
+      near-parity, shoulder/neck tracked (method ceiling); W2-W4 per
       docs/weight-assist-plan.md.)
 - [ ] Error diagnostics: Rigify failures on malformed metarigs are
       cryptic. Fail early with bone names + what to fix.

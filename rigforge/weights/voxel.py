@@ -20,6 +20,7 @@ callers should pass transforms-applied meshes.
 """
 
 import heapq
+import os
 
 import numpy as np
 from mathutils import Vector
@@ -30,8 +31,14 @@ K_DEFAULT = 4  # bones per voxel/vert (Godot/mobile 4-influence budget)
 BLEND_REF = 0.016  # reference blend scale (m): smoothing passes are
 # (BLEND_REF / cell)^2, so the physical blend width stays constant
 # across grid resolutions (calibrated: 6 passes at 6.5 mm cells).
-POWER_DEFAULT = 2.0  # per-voxel-relative kernel exponent
+SMOOTH_MULT = 3.0  # W1b: characters want ~3x the tube blend (wider
+# physical target; tube stays green with margin).
+POWER_DEFAULT = 6.0  # per-voxel-relative kernel exponent (W1b: crisp
+# commitment; pre-smooth transitions are razor-thin, smoothing re-spreads)
 MAX_GRID_CELLS = 8_000_000  # voxelize guard: pass explicit cell past this
+DECAY_LEN_DIV = 4.0  # per-bone decay scale = length / div ...
+DECAY_S_MIN = 0.02  # ... clamped to [s_min, s_max] (m). Env RF_VOX_LEN_DIV,
+DECAY_S_MAX = 0.10  # RF_VOX_S_MIN/S_MAX override; RF_VOX_DECAY=0 disables.
 SEED_R_CELLS = 1.5  # seed voxels within this many cells of a bone segment
 SEED_OUT_CELLS = 4.0  # past this the bone is out of flesh: excluded
 # (no mush from 20 cm-away bones); inside it the nearest voxels seed
@@ -315,7 +322,7 @@ def bind_weights(
     source_obj=None,
     k=K_DEFAULT,
     smooth_iters=None,
-    power=POWER_DEFAULT,
+    power=None,
 ):
     """Geodesic voxel weights; returns (assignment, report).
 
@@ -332,13 +339,18 @@ def bind_weights(
         bone_names = sorted(bone_names)
     if not bone_names:
         raise ValueError("no deforming bones on the armature")
+    k = int(os.environ.get("RF_VOX_K", str(k)))
     source = source_obj or mesh_obj
     if cell is None:
         cell = default_cell(world_verts(source))
+    if power is None:
+        power = float(os.environ.get("RF_VOX_POWER", str(POWER_DEFAULT)))
     if smooth_iters is None:
         sco = world_verts(source)
         diag = float(np.linalg.norm(sco.max(axis=0) - sco.min(axis=0)))
         smooth_iters = smooth_for_cell(cell, diag)
+        mult = float(os.environ.get("RF_VOX_SMOOTH_MULT", str(SMOOTH_MULT)))
+        smooth_iters = max(1, round(smooth_iters * mult))
     grid = voxelize(source, cell)
     centers = grid["centers"]
     interior = grid["interior"]
@@ -352,6 +364,12 @@ def bind_weights(
     neighbors = interior_neighbors(grid)
 
     segments = [bone_world_segment(armature_obj, n) for n in bone_names]
+    bone_lens = np.array([float(np.linalg.norm(p1 - p0)) for p0, p1 in segments])
+    decay_on = os.environ.get("RF_VOX_DECAY", "1") != "0"
+    len_div = float(os.environ.get("RF_VOX_LEN_DIV", str(DECAY_LEN_DIV)))
+    s_min = float(os.environ.get("RF_VOX_S_MIN", str(DECAY_S_MIN)))
+    s_max = float(os.environ.get("RF_VOX_S_MAX", str(DECAY_S_MAX)))
+    scales = np.clip(bone_lens / len_div, s_min, s_max)
     dists = np.full((m, len(bone_names)), np.inf)
     bone_info = []
     for b, (name, (p0, p1)) in enumerate(zip(bone_names, segments, strict=True)):
@@ -410,6 +428,11 @@ def bind_weights(
         else:
             w = ((d.max() - d) / span) ** power
             w = w / w.sum()
+        if decay_on:
+            # Cauchy falloff per bone scale: far bones fade instead of
+            # sharing span-normalized mush (W1b: kills distant splits).
+            w = w / (1.0 + (d / scales[cols]) ** 2)
+            w = w / w.sum()
         for col, weight in zip(cols.tolist(), w.tolist(), strict=True):
             stacked[col, i] = weight
     del dists, order, nearest, usable, rows
@@ -465,6 +488,12 @@ def bind_weights(
         "k": k,
         "smooth_iters": smooth_iters,
         "power": power,
+        "decay": {
+            "on": decay_on,
+            "len_div": len_div,
+            "s_min": s_min,
+            "s_max": s_max,
+        },
         "fallback_verts": filled_fallback,
         "bone_info": bone_info,
     }
