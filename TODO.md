@@ -65,8 +65,12 @@
       bone with did-you-mean (typos threw a bare KeyError), root
       parent/type rules, no-types rig, spaced-type / degenerate /
       stray warnings (strays proven to become dead ORG bones).
-- [ ] Game-export depth: validation + per-profile settings + Godot
-      import checks on top of `wm.rigforge_game_export`.
+- [x] Game-export depth (2026-10-02): validate_export fails early
+      (unweighted mesh, no DEF bones) + warns (partial weights,
+      negative scale, mobile >4 influences); mobile cap-4 toggle
+      (panel checkbox, auto-fix on copies); tools/godot_import_check
+      (headless Godot 4.7.1 import gate, skip-if-missing via
+      GODOT_BIN) wired into the export test (160/65 bones).
 - [ ] Optional: rename `RIGIFY-` fcurve data-path prefix in
       `generate.py` (kept for generated-file compat; harmless either way).
 - [ ] Optional: upstream watch — Blender keeps fixing Rigify; review

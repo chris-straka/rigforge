@@ -13,6 +13,7 @@ Pass criteria: exits 0 and prints RIGFORGE_EXPORT_TEST_OK.
 import json
 import os
 import struct
+import subprocess
 import sys
 
 import bpy
@@ -247,6 +248,85 @@ if [o for o in bpy.data.objects if o.name.startswith("rig.")]:
     fail("mobile export left temp copies behind")
 print("mobile: originals untouched, no temp leftovers")
 
+# 5d. Validation fails early; the limit toggle caps influences.
+bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 2.0, 0.0))
+bare_mesh = bpy.context.view_layer.objects.active
+bare_mod = bare_mesh.modifiers.new("Armature", "ARMATURE")
+bare_mod.object = rig
+errs, _ = gx.validate_export(rig, [bare_mesh], "FULL")
+if [e["code"] for e in errs] != ["unweighted_mesh"]:
+    fail(f"bare mesh not rejected: {errs}")
+bpy.ops.object.select_all(action="DESELECT")
+rig.select_set(True)
+bpy.context.view_layer.objects.active = rig
+try:
+    result = bpy.ops.wm.rigforge_game_export(filepath="/tmp/rigforge_export_bare.glb")
+except RuntimeError as exc:
+    if "no weights" not in str(exc):
+        fail(f"wrong cancel error: {exc}")
+else:
+    if "CANCELLED" not in result:
+        fail(f"bare mesh export not cancelled: {result}")
+bpy.data.objects.remove(bare_mesh, do_unlink=True)
+print("validate: unweighted mesh fails early")
+
+bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 3.0, 0.0))
+part_mesh = bpy.context.view_layer.objects.active
+part_mod = part_mesh.modifiers.new("Armature", "ARMATURE")
+part_mod.object = rig
+part_mesh.vertex_groups.new(name="DEF-spine")
+for v in part_mesh.data.vertices:
+    if v.index < 4:
+        part_mesh.vertex_groups[0].add([v.index], 1.0, "REPLACE")
+_, warns = gx.validate_export(rig, [part_mesh], "FULL")
+if [w["code"] for w in warns] != ["unweighted_verts"]:
+    fail(f"partial weights not warned: {warns}")
+part_mesh.scale.x = -1.0
+_, warns = gx.validate_export(rig, [part_mesh], "FULL")
+if "negative_scale" not in [w["code"] for w in warns]:
+    fail(f"negative scale not warned: {warns}")
+bpy.data.objects.remove(part_mesh, do_unlink=True)
+print("validate: partial weights + negative scale warn")
+
+multi_mesh = bpy.data.objects.new("MultiMesh", jaw_mesh.data.copy())
+bpy.context.scene.collection.objects.link(multi_mesh)
+multi_mod = multi_mesh.modifiers.new("Armature", "ARMATURE")
+multi_mod.object = rig
+five = ["DEF-jaw", "DEF-spine.001", "DEF-spine.002", "DEF-hand.L", "DEF-foot.L"]
+for name in five:
+    multi_mesh.vertex_groups.new(name=name)
+for v in multi_mesh.data.vertices:
+    for i in range(len(five)):
+        multi_mesh.vertex_groups[i].add([v.index], 0.2, "REPLACE")
+_, warns = gx.validate_export(rig, [multi_mesh], "MOBILE")
+if "many_influences" not in [w["code"] for w in warns]:
+    fail(f"5 influences not warned: {warns}")
+op_cls = bpy.types.WM_OT_rigforge_game_export
+rig_capped, capped, _, capped_n = op_cls._mobile_copies(
+    op_cls, bpy.context, rig, [multi_mesh], targets, True
+)
+top_capped = max(len(v.groups) for c in capped for v in c.data.vertices)
+rig_loose, loose, _, _ = op_cls._mobile_copies(
+    op_cls, bpy.context, rig, [multi_mesh], targets, False
+)
+top_loose = max(len(v.groups) for c in loose for v in c.data.vertices)
+for c in capped + loose:
+    data = c.data
+    bpy.data.objects.remove(c, do_unlink=True)
+    if data.users == 0:
+        bpy.data.meshes.remove(data)
+for r in (rig_capped, rig_loose):
+    data = r.data
+    bpy.data.objects.remove(r, do_unlink=True)
+    if data.users == 0:
+        bpy.data.armatures.remove(data)
+if top_capped != 4 or capped_n != 8:
+    fail(f"limit toggle did not cap (max={top_capped}, n={capped_n})")
+if top_loose != 5:
+    fail(f"limit off should keep 5 influences (got {top_loose})")
+bpy.data.objects.remove(multi_mesh, do_unlink=True)
+print("validate: limit toggle caps 5 -> 4 (off keeps 5)")
+
 # 6. Round-trip: re-import and verify the armature + skinned mesh.
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
@@ -309,5 +389,36 @@ for mesh in mob_meshes:
 if not found_target:
     fail(f"merge target {jaw_target} missing from re-imported meshes")
 print("mobile re-import: dropped groups gone, jaw weights on target")
+
+# 7. Godot import check (skipped when Godot is absent).
+godot_bin = os.environ.get("GODOT_BIN", "/Applications/Godot.app/Contents/MacOS/Godot")
+if not (os.path.isfile(godot_bin) and os.access(godot_bin, os.X_OK)):
+    print("godot: skipped (no Godot binary)")
+else:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "tools/godot_import_check.py",
+            GLB_PATH,
+            mobile_path,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    print(proc.stdout.strip())
+    if proc.returncode != 0:
+        fail(f"godot import check failed: {proc.stdout} {proc.stderr[-500:]}")
+    bones_by_path = {}
+    for line in proc.stdout.splitlines():
+        if "GODOT_STAT" not in line:
+            continue
+        parts = dict(kv.split("=", 1) for kv in line.split()[1:] if "=" in kv)
+        bones_by_path[parts["path"]] = int(parts["bones"])
+    if bones_by_path.get(GLB_PATH) != len(def_bones):
+        fail(f"godot full bones wrong: {bones_by_path}")
+    if bones_by_path.get(mobile_path) != len(kept):
+        fail(f"godot mobile bones wrong: {bones_by_path}")
+    print("godot: both GLBs import with full/mobile skeletons")
 
 print("RIGFORGE_EXPORT_TEST_OK")

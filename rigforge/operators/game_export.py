@@ -8,6 +8,9 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper
 
+from ..weights import cleanup as _cleanup
+from ..weights import nudge as _nudge
+
 # Mobile profile: DEF bone stems dropped as face (rigid with the head).
 MOBILE_FACE_STEMS = frozenset(
     {
@@ -81,6 +84,63 @@ def mobile_merge_targets(rig):
         elif anchor is not None:
             targets[bone.name] = anchor.name
     return targets
+
+
+def _vert_influences(vert):
+    return sum(1 for el in vert.groups if el.weight > 0.0)
+
+
+def validate_export(rig, meshes, profile):
+    """Pre-export checks; returns (errors, warnings) as [{code, message}].
+
+    Errors fail the export (fail early); warnings ride along in the
+    report. Influence counts are checked again post-merge on mobile
+    (merging can add a group), where the limit toggle auto-fixes.
+    """
+    errors = []
+    warnings = []
+    if not [b for b in rig.data.bones if b.name.startswith("DEF-")]:
+        errors.append(
+            {"code": "no_def_bones", "message": f"{rig.name} has no DEF bones"}
+        )
+    for obj in [rig, *meshes]:
+        if min(obj.scale) < 0.0:
+            warnings.append(
+                {
+                    "code": "negative_scale",
+                    "message": f"{obj.name} has negative scale "
+                    "(glTF cannot represent it; apply scale)",
+                }
+            )
+    for mesh in meshes:
+        verts = mesh.data.vertices
+        bare = sum(1 for v in verts if _vert_influences(v) == 0)
+        if bare and bare == len(verts):
+            errors.append(
+                {
+                    "code": "unweighted_mesh",
+                    "message": f"{mesh.name}: all {bare} verts have no weights",
+                }
+            )
+        elif bare:
+            warnings.append(
+                {
+                    "code": "unweighted_verts",
+                    "message": f"{mesh.name}: {bare}/{len(verts)} verts have "
+                    "no weights (left behind in-game)",
+                }
+            )
+        if profile == "MOBILE" and verts:
+            top = max(_vert_influences(v) for v in verts)
+            if top > 4:
+                warnings.append(
+                    {
+                        "code": "many_influences",
+                        "message": f"{mesh.name}: up to {top} influences/vert "
+                        "(mobile prefers 4; Cleanup > Limit)",
+                    }
+                )
+    return errors, warnings
 
 
 def merge_weights(mesh_obj, targets):
@@ -160,6 +220,11 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
         ],
         default="FULL",
     )
+    mobile_limit_4: BoolProperty(
+        name="Mobile Cap 4",
+        description="Cap mobile influences at 4 per vertex after merging",
+        default=True,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -187,13 +252,19 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
         if context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
 
+        errors, warnings = validate_export(rig, meshes, self.profile)
+        if errors:
+            self.report({"ERROR"}, "; ".join(e["message"] for e in errors))
+            return {"CANCELLED"}
+
         targets = mobile_merge_targets(rig) if self.profile == "MOBILE" else {}
         copies = []
         remapped = 0
+        limited = 0
         try:
             if targets:
-                rig, meshes, remapped = self._mobile_copies(
-                    context, rig, meshes, targets
+                rig, meshes, remapped, limited = self._mobile_copies(
+                    context, rig, meshes, targets, self.mobile_limit_4
                 )
                 copies = [rig, *meshes]
             prev_selected = list(context.selected_objects)
@@ -238,18 +309,22 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
                     )
                     kind.remove(data)
 
+        notes = [w["message"] for w in warnings]
         if self.profile == "MOBILE":
+            notes.append(
+                f"{len(targets)} bones merged up, "
+                f"{remapped} weights remapped"
+                + (f", {limited} verts capped at 4" if limited else "")
+            )
             self.report(
-                {"INFO"},
-                f"Exported mobile {self.filepath} "
-                f"({len(targets)} bones merged up, "
-                f"{remapped} weights remapped)",
+                {"INFO"}, f"Exported mobile {self.filepath} ({'; '.join(notes)})"
             )
         else:
-            self.report({"INFO"}, f"Exported {self.filepath}")
+            suffix = f" ({'; '.join(notes)})" if notes else ""
+            self.report({"INFO"}, f"Exported {self.filepath}{suffix}")
         return {"FINISHED"}
 
-    def _mobile_copies(self, context, rig, meshes, targets):
+    def _mobile_copies(self, context, rig, meshes, targets, limit_4):
         """Temp export copies: dropped bones non-deforming, weights merged.
 
         The originals are never touched. Copies share the action/NLA so
@@ -278,6 +353,7 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
                     dup.mute = strip.mute
         mesh_copies = []
         remapped = 0
+        limited = 0
         for mesh in meshes:
             dup = mesh.copy()
             dup.data = mesh.data.copy()
@@ -286,13 +362,26 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
                 if mod.type == "ARMATURE" and mod.object == rig:
                     mod.object = rig_copy
             remapped += merge_weights(dup, targets)
+            if limit_4:
+                rows, _names = _nudge.read_weights(dup)
+                over = sum(1 for row in rows if len(row) > 4)
+                if over:
+                    limited += over
+                    rows = _cleanup.limit_rows(rows, k=4)
+                    _nudge.apply_nudge(dup, _nudge.rows_to_assignment(rows))
             mesh_copies.append(dup)
-        return rig_copy, mesh_copies, remapped
+        return rig_copy, mesh_copies, remapped, limited
 
 
 def register():
     bpy.utils.register_class(WM_OT_rigforge_game_export)
+    bpy.types.WindowManager.rigforge_mobile_limit_4 = BoolProperty(
+        name="Mobile Cap 4",
+        description="Cap mobile influences at 4 per vertex after merging",
+        default=True,
+    )
 
 
 def unregister():
+    del bpy.types.WindowManager.rigforge_mobile_limit_4
     bpy.utils.unregister_class(WM_OT_rigforge_game_export)
