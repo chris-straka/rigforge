@@ -23,14 +23,14 @@
       (docs/bakeoff/rerun.md: fit-delta 0.0 on both subjects,
       11.6 s / 9.3 s wall, zero touch — under unirig's ~7 min)
 
-- [ ] Fork-or-add-on audit (owner request 2026-10-01): diff `rigforge/`
-      against stock Rigify 0.6.10 from the Blender 5.2 bundle, excluding
-      the module rename. List every change inside Rigify's own files vs
-      code that only adds new files/operators on top. If rigforge only
-      adds on top, propose turning it into a companion add-on that uses
-      Blender's stock Rigify (Blender updates then arrive for free); if
-      it edits internals, list which edits and whether each could move
-      out. Report only; do not restructure without the owner's go-ahead.
+- [x] Fork-or-add-on audit (docs/fork-audit.md, 2026-10-02):
+      verdict is companion-feasible — zero functional edits inside
+      Rigify's own files (renames + ruff autofixes proven mechanical,
+      stock-vs-fork human rigs bit-identical at 706 bones / 198
+      drivers / 220 widgets); only adds are 19 new files + 5 panels +
+      6 submodule lines. One migration cost: renamed id-props in old
+      .blends need a one-time adopt operator. Restructure pending
+      owner's go-ahead (not started).
 - [ ] Mobile bone budget: the hero rig exports 160 deform bones. Add a
       lighter game-export profile for mobile (drop or merge face/twist
       bones) from the same rig, and measure skinning cost in Godot.
