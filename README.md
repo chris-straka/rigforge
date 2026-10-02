@@ -40,3 +40,6 @@ the metarig to the mesh in place (strict validation gate, metarig
 restored untouched on failure). Headless: one command per subject,
 `--python tools/auto_rig.py -- MESH --preset hll_hero|hll_stalker
 --out RIGGED.glb` (see `docs/bakeoff/rerun.md` for numbers).
+
+License: GPL-2.0-or-later (see `COPYING`). Fork of Blender's Rigify;
+like all Blender addons this tree is GPL.
