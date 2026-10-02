@@ -16,6 +16,7 @@ submodules = (
     "nudge",
     "transfer",
     "cleanup",
+    "diagnose",
 )
 
 loaded_submodules = []

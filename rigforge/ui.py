@@ -230,6 +230,23 @@ class DATA_PT_rigforge_game_export(bpy.types.Panel):
 
 
 # noinspection PyPep8Naming
+class DATA_PT_rigforge_diagnose(bpy.types.Panel):
+    bl_label = "Rigforge Diagnose"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return bool(obj and obj.type == "ARMATURE" and "rig_id" not in obj.data)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("wm.rigforge_diagnose_metarig", text="Diagnose Metarig")
+
+
+# noinspection PyPep8Naming
 class DATA_PT_rigforge_voxel_weights(bpy.types.Panel):
     bl_label = "Rigforge Voxel Weights"
     bl_space_type = "PROPERTIES"
@@ -2246,6 +2263,7 @@ classes = (
     DATA_PT_rigforge_nudge,
     DATA_PT_rigforge_transfer,
     DATA_PT_rigforge_cleanup,
+    DATA_PT_rigforge_diagnose,
     DATA_PT_rigforge_advanced,
     DATA_PT_rigforge_color_sets,
     DATA_UL_rigforge_bone_collections,

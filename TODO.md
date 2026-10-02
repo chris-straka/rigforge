@@ -60,8 +60,11 @@
       2026-10-02: piece transfer with inpainting, solver + operator
       green; W4 shipped 2026-10-02: cleanup ops, rows + operator
       green (weight assist complete).)
-- [ ] Error diagnostics: Rigify failures on malformed metarigs are
-      cryptic. Fail early with bone names + what to fix.
+- [x] Error diagnostics (2026-10-02): wm.rigforge_diagnose_metarig
+      pre-flight (read-only, armature panel): unknown Rig Type per
+      bone with did-you-mean (typos threw a bare KeyError), root
+      parent/type rules, no-types rig, spaced-type / degenerate /
+      stray warnings (strays proven to become dead ORG bones).
 - [ ] Game-export depth: validation + per-profile settings + Godot
       import checks on top of `wm.rigforge_game_export`.
 - [ ] Optional: rename `RIGIFY-` fcurve data-path prefix in
