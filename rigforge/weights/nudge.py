@@ -254,6 +254,11 @@ def solve_nudge(per_vert, offsets, neighbors, pins, k=4, iters=NUDGE_ITERS):
     return _softmax_rows(field, bones, k, cut=True)
 
 
+def rows_to_assignment(rows):
+    """Dict rows -> apply_nudge assignment (weight desc, name asc)."""
+    return [sorted(row.items(), key=lambda t: (-t[1], t[0])) for row in rows]
+
+
 def apply_nudge(mesh_obj, assignment):
     """Replace the mesh's vertex groups with the solved assignment."""
     groups = mesh_obj.vertex_groups

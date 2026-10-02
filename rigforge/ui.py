@@ -302,6 +302,44 @@ class DATA_PT_rigforge_transfer(bpy.types.Panel):
 
 
 # noinspection PyPep8Naming
+class DATA_PT_rigforge_cleanup(bpy.types.Panel):
+    bl_label = "Rigforge Cleanup"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return bool(obj and obj.type == "MESH")
+
+    def draw(self, context):
+        layout = self.layout
+        wm = context.window_manager
+        layout.prop(wm, "rigforge_cleanup_limit")
+        layout.prop(wm, "rigforge_cleanup_threshold", slider=True)
+        layout.prop(wm, "rigforge_cleanup_passes")
+        row = layout.row(align=True)
+        for mode, text in (
+            ("LIMIT", "Limit"),
+            ("NORMALIZE", "Norm"),
+            ("PRUNE", "Prune"),
+        ):
+            op = row.operator("wm.rigforge_cleanup", text=text)
+            op.mode = mode
+            op.limit = wm.rigforge_cleanup_limit
+            op.threshold = wm.rigforge_cleanup_threshold
+            op.passes = wm.rigforge_cleanup_passes
+        row = layout.row(align=True)
+        for mode, text in (("MIRROR", "Mirror"), ("SMOOTH", "Smooth")):
+            op = row.operator("wm.rigforge_cleanup", text=text)
+            op.mode = mode
+            op.limit = wm.rigforge_cleanup_limit
+            op.threshold = wm.rigforge_cleanup_threshold
+            op.passes = wm.rigforge_cleanup_passes
+
+
+# noinspection PyPep8Naming
 class DATA_PT_rigforge_advanced(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
@@ -2205,6 +2243,7 @@ classes = (
     DATA_PT_rigforge_voxel_weights,
     DATA_PT_rigforge_nudge,
     DATA_PT_rigforge_transfer,
+    DATA_PT_rigforge_cleanup,
     DATA_PT_rigforge_advanced,
     DATA_PT_rigforge_color_sets,
     DATA_UL_rigforge_bone_collections,

@@ -15,6 +15,7 @@ submodules = (
     "voxel_weights",
     "nudge",
     "transfer",
+    "cleanup",
 )
 
 loaded_submodules = []
