@@ -38,28 +38,28 @@
       Both GLBs import clean in headless Godot 4.7.1 (160/65 bones).
       In-game FPS-side skinning measurement stays a game-side step
       (needs HLL scenes + profiler, hll repo).
-- [ ] Public-repo follow-ups: smart paths where cheap (BLENDER_BIN
-      env override with this machine's Blender as default,
-      skip-if-missing for external-asset suites); this rig stays the
-      target, no portability crusade.
+- [x] Public-repo follow-ups (2026-10-02): smart paths where cheap
+      (BLENDER_BIN env override with this machine's Blender as
+      default, tools/run_test.sh runner, skip-if-missing for
+      external-asset suites); this rig stays the target, no
+      portability crusade.
 
 ## Refactor / codebase health backlog
 
-- [ ] Lint debt: `ruff check` shows ~266 remaining (was 786 before the
-      format pass). Grind down file-by-file, never in bulk: F401 unused
-      imports (some are Blender registration side effects — verify each),
-      UP031 `%`-formatting, B905 `zip(strict=)` (adding strict can raise),
-      B007 unused loop vars. RUF012 is ignored repo-wide (Blender
-      requires class-level `bl_options` sets).
-- [ ] Weight-paint assistance: smoothing, mirror, and cleanup operators.
-      Biggest artist-time sink; Rigify barely helps. Highest value item.
-      (W1 shipped 2026-10-01: voxel auto-weights, tube + robustness
-      green; W1b shipped 2026-10-02: best-safe defaults, bends
-      near-parity, shoulder/neck tracked (method ceiling); W2 shipped
-      2026-10-02: nudge strokes, solver + operator green; W3 shipped
-      2026-10-02: piece transfer with inpainting, solver + operator
-      green; W4 shipped 2026-10-02: cleanup ops, rows + operator
-      green (weight assist complete).)
+- [x] Lint debt (2026-10-02): all rigforge-authored code clean
+      under `ruff check` + `ruff format` (weights, operators,
+      auto_place, metarigs, tools, tests). Remaining ~253 findings
+      are pristine upstream-fork files, deliberately untouched:
+      F401s there are re-exports (removal risk) and any rebase
+      re-copy would wipe the churn. RUF012 ignored repo-wide
+      (Blender requires class-level `bl_options` sets).
+- [x] Weight-paint assistance (complete 2026-10-02): smoothing,
+      mirror, and cleanup operators. (W1: voxel auto-weights, tube
+      + robustness green; W1b: best-safe defaults, bends
+      near-parity, shoulder/neck tracked (method ceiling); W2:
+      nudge strokes, solver + operator green; W3: piece transfer
+      with inpainting, solver + operator green; W4: cleanup ops,
+      rows + operator green.)
 - [x] Error diagnostics (2026-10-02): wm.rigforge_diagnose_metarig
       pre-flight (read-only, armature panel): unknown Rig Type per
       bone with did-you-mean (typos threw a bare KeyError), root
