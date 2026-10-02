@@ -21,8 +21,15 @@ BLENDER_USER_SCRIPTS=/tmp/rf_scripts \
   --factory-startup --python /tmp/rigforge_smoke.py
 ```
 
-Headless tests (`tests/`, same overlay + Blender invocation, e.g.
-`--python tests/test_game_export.py`).
+Headless tests (`tests/`): run one via `tools/run_test.sh
+tests/test_game_export.py` (syncs the addon overlay, then the same
+Blender invocation). Binaries resolve via env with same-machine
+defaults: `BLENDER_BIN` (default
+`/Applications/Blender.app/Contents/MacOS/Blender`), `GODOT_BIN`
+(default `godot` on PATH, used by `tools/godot_import_check.py`).
+Suites needing files outside the repo (e.g.
+`test_auto_placement.py`'s HLL subjects) skip absent subjects
+instead of failing.
 
 Game export: with a generated rig active, Armature properties >
 Rigforge Game Export > Export Game GLB — writes a deform-bones-only

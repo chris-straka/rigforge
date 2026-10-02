@@ -9,8 +9,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BLENDER=/Applications/Blender.app/Contents/MacOS/Blender
+BLENDER="${BLENDER_BIN:-/Applications/Blender.app/Contents/MacOS/Blender}"
 SCRIPTS=/tmp/rf_scripts
+
+if [ ! -x "$BLENDER" ]; then
+    echo "auto_rig.sh: Blender not found at $BLENDER (set BLENDER_BIN)" >&2
+    exit 1
+fi
 
 mkdir -p "$SCRIPTS/addons"
 rsync -a --delete "$ROOT/rigforge/" "$SCRIPTS/addons/rigforge/"
