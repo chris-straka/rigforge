@@ -30,6 +30,7 @@ def fail(msg):
 # 1. Enable our copy of the addon (same gate as the smoke test).
 bpy.ops.preferences.addon_enable(module="rigforge")
 import rigforge  # noqa: E402
+from rigforge.operators import game_export as gx  # noqa: E402
 
 assert "rf_scripts" in rigforge.__file__, "loaded wrong copy: " + rigforge.__file__
 print("enable OK:", rigforge.__file__)
@@ -168,6 +169,84 @@ print(f"anim: {n_channels} channels, all on DEF joints")
 if n_channels < 10:
     fail(f"only {n_channels} animation channels baked")
 
+# 5c. Mobile profile: face + twist merged up, originals untouched.
+if gx.classify_def_bone("DEF-jaw.L.001") != "face":
+    fail("face stem misclassified")
+if gx.classify_def_bone("DEF-chin") != "face":
+    fail("bare face stem misclassified")
+if gx.classify_def_bone("DEF-thigh.L.001") != "twist":
+    fail("twist segment misclassified")
+for keep in ("DEF-spine.001", "DEF-f_index.01.L", "DEF-hand.L", "DEF-upper_arm.L"):
+    if gx.classify_def_bone(keep) != "keep":
+        fail(f"{keep} should survive the mobile profile")
+targets = gx.mobile_merge_targets(rig)
+kept = [b for b in def_bones if b not in targets]
+print(f"mobile: {len(targets)} dropped, {len(kept)} kept")
+if not targets or not kept or len(kept) >= len(def_bones):
+    fail("mobile profile did not split the skeleton")
+if any(t not in kept for t in targets.values()):
+    fail("mobile merge target is not a kept bone")
+if any(gx.classify_def_bone(b) == "keep" for b in targets):
+    fail("kept bone scheduled for merge")
+
+bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 2.0))
+jaw_mesh = bpy.context.view_layer.objects.active
+jaw_mod = jaw_mesh.modifiers.new("Armature", "ARMATURE")
+jaw_mod.object = rig
+jaw_vg = jaw_mesh.vertex_groups.new(name="DEF-jaw")
+jaw_vg.add(range(len(jaw_mesh.data.vertices)), 1.0, "REPLACE")
+jaw_target = targets.get("DEF-jaw")
+if jaw_target is None:
+    fail("DEF-jaw has no mobile merge target")
+print(f"mobile: jaw test mesh -> {jaw_target}")
+# A kept-bound mesh alongside (4b deleted the main cube): the mobile
+# GLB must carry both, merged and unmerged.
+bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 1.0, 0.0))
+kept_mesh = bpy.context.view_layer.objects.active
+kept_mod = kept_mesh.modifiers.new("Armature", "ARMATURE")
+kept_mod.object = rig
+kept_vg = kept_mesh.vertex_groups.new(name="DEF-spine")
+kept_vg.add(range(len(kept_mesh.data.vertices)), 1.0, "REPLACE")
+
+mobile_path = "/tmp/rigforge_export_mobile.glb"
+if os.path.exists(mobile_path):
+    os.remove(mobile_path)
+bpy.ops.object.select_all(action="DESELECT")
+rig.select_set(True)
+bpy.context.view_layer.objects.active = rig
+bpy.ops.wm.rigforge_game_export(filepath=mobile_path, profile="MOBILE")
+with open(mobile_path, "rb") as f:
+    mob_raw = f.read()
+mob_len = struct.unpack("<I", mob_raw[12:16])[0]
+mob = json.loads(mob_raw[20 : 20 + mob_len])
+mob_joints = []
+for skin in mob.get("skins", []):
+    mob_joints += [mob["nodes"][j].get("name") for j in skin["joints"]]
+print(f"mobile glb: joints={len(mob_joints)} (kept={len(kept)})")
+if set(mob_joints) != set(kept):
+    fail(
+        f"mobile joints != kept set "
+        f"(extra={set(mob_joints) - set(kept)}, "
+        f"missing={set(kept) - set(mob_joints)})"
+    )
+for clip in mob.get("animations", []):
+    for ch in clip["channels"]:
+        target = mob["nodes"][ch["target"]["node"]].get("name") or ""
+        if target not in kept:
+            fail(f"mobile animation targets dropped joint: {target!r}")
+print("mobile glb: joints == kept set, animations on kept joints")
+
+# Originals untouched by the mobile path (temp copies only).
+if [b.name for b in rig.data.bones if b.name.startswith("DEF-")] != def_bones:
+    fail("mobile export changed the rig's DEF bones")
+if any(not b.use_deform for b in rig.data.bones if b.name in targets):
+    fail("mobile export toggled deform flags on the original")
+if [g.name for g in jaw_mesh.vertex_groups] != ["DEF-jaw"]:
+    fail("mobile export rewrote the original mesh groups")
+if [o for o in bpy.data.objects if o.name.startswith("rig.")]:
+    fail("mobile export left temp copies behind")
+print("mobile: originals untouched, no temp leftovers")
+
 # 6. Round-trip: re-import and verify the armature + skinned mesh.
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
@@ -200,5 +279,35 @@ if len(imported_bones) != len(def_bones):
     fail(
         f"re-import has {len(imported_bones)} bones, rig has {len(def_bones)} DEF bones"
     )
+
+# 6b. Mobile round-trip: jaw weights land on the merge target.
+bpy.ops.object.select_all(action="SELECT")
+bpy.ops.object.delete(use_global=False)
+for coll in (bpy.data.meshes, bpy.data.armatures, bpy.data.actions):
+    for x in list(coll):
+        coll.remove(x)
+bpy.ops.import_scene.gltf(filepath=mobile_path)
+mob_arms = [o for o in bpy.data.objects if o.type == "ARMATURE" and is_imported(o)]
+mob_meshes = [o for o in bpy.data.objects if o.type == "MESH" and is_imported(o)]
+if len(mob_arms) != 1 or len(mob_meshes) != 2:
+    fail(
+        f"mobile re-import: {len(mob_arms)} armatures, "
+        f"{len(mob_meshes)} meshes (want 1 + 2)"
+    )
+if {b.name for b in mob_arms[0].data.bones} != set(kept):
+    fail("mobile re-import bones != kept set")
+found_target = False
+for mesh in mob_meshes:
+    names = [g.name for g in mesh.vertex_groups]
+    if any(n in targets for n in names):
+        fail(f"dropped group survived mobile export: {names}")
+    if jaw_target in names:
+        found_target = True
+        for v in mesh.data.vertices:
+            if abs(mesh.vertex_groups[jaw_target].weight(v.index) - 1.0) > 1e-4:
+                fail("jaw weight did not remap to 1.0 on the target")
+if not found_target:
+    fail(f"merge target {jaw_target} missing from re-imported meshes")
+print("mobile re-import: dropped groups gone, jaw weights on target")
 
 print("RIGFORGE_EXPORT_TEST_OK")

@@ -31,9 +31,13 @@
       6 submodule lines. One migration cost: renamed id-props in old
       .blends need a one-time adopt operator. Restructure pending
       owner's go-ahead (not started).
-- [ ] Mobile bone budget: the hero rig exports 160 deform bones. Add a
-      lighter game-export profile for mobile (drop or merge face/twist
-      bones) from the same rig, and measure skinning cost in Godot.
+- [x] Mobile bone budget (2026-10-02): game-export MOBILE profile
+      (Full/Mobile buttons) merges 95 face+twist DEF bones up to kept
+      ancestors (face roots ride the topmost kept bone) on temp copies
+      — 160 -> 65 joints, originals untouched, anims on kept joints.
+      Both GLBs import clean in headless Godot 4.7.1 (160/65 bones).
+      In-game FPS-side skinning measurement stays a game-side step
+      (needs HLL scenes + profiler, hll repo).
 - [ ] Public-repo follow-ups: smart paths where cheap (BLENDER_BIN
       env override with this machine's Blender as default,
       skip-if-missing for external-asset suites); this rig stays the

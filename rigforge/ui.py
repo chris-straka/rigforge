@@ -222,9 +222,11 @@ class DATA_PT_rigforge_game_export(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator(
-            "wm.rigforge_game_export", text="Export Game GLB", icon="EXPORT"
-        )
+        row = layout.row(align=True)
+        full = row.operator("wm.rigforge_game_export", text="Full GLB", icon="EXPORT")
+        full.profile = "FULL"
+        mobile = row.operator("wm.rigforge_game_export", text="Mobile GLB")
+        mobile.profile = "MOBILE"
 
 
 # noinspection PyPep8Naming
