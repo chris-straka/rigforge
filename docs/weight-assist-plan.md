@@ -101,5 +101,6 @@ as optional W1c. Heat itself wobbles run to run (p95 ±1e-4, flips
 | W1b | Kernel tuning: best-safe defaults | shipped 2026-10-02, bends near-parity, rest tracked |
 | W2 | Nudge strokes | shipped 2026-10-02, solver + operator green (below) |
 | W2 findings (2026-10-02) | Logit-space Jacobi + softmax refill; value pins are absolute (complement pinned: proportional, else nearest-present summon); excludes get a two-pass whole-row feather (pass 1 finds band redistribution, pass 2 ramps band→seed over 5 rings); exact pins rejected (crease), exact excludes rejected (reassignment cliff); pins stored as JSON on the mesh; undo static-gated (no undo ctx headless). Repair gate: damaged elbow p95 4.5→1.2, flips 222→59; re-solve 0.08 s at 15k tris. |
-| W3 | Piece transfer with inpainting | cape hem moves smoothly, no body pull-through |
+| W3 | Piece transfer with inpainting | shipped 2026-10-02, solver + operator green (below) |
+| W3 findings (2026-10-02) | Nearest-triangle barycentric copy within 5%-of-body radius, W2 solver inpaints the rest (copied verts as pins; transfer solves unseeded so stale piece weights cannot fight the pins); unseeded verts warm-start at the pins' mean row (floor init needs 100s of passes over long hangs); all-far pieces seed the nearest vert; operator copies the body's armature modifier. Cape gate: naive hem pulls to Bone (fixture discriminates), inpainted hem rides Bone.001 rigidly (bend err 0.0), jump 0.0. |
 | W4 | Cleanup ops | 4-influence limit passes rfcheck mobile |

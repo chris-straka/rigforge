@@ -204,6 +204,16 @@ def solve_nudge(per_vert, offsets, neighbors, pins, k=4, iters=NUDGE_ITERS):
                 for j2 in best:
                     pinned[i, j2] = True
                     pinval[i, j2] = _to_logit((1.0 - v) / len(best))
+    # Warm start: fully unseeded verts begin at the pins' mean row
+    # instead of the logit floor (far inpaint regions would otherwise
+    # need hundreds of passes to crawl up from exp(-12)). Seeded
+    # verts keep their seeds (W2 behavior unchanged).
+    empty = [i for i, row in enumerate(per_vert) if not row]
+    if empty:
+        for j in range(len(bones)):
+            vals = pinval[pinned[:, j], j]
+            if len(vals):
+                field[empty, j] = _to_logit(float(np.exp(vals).mean()))
     _relax(field, pinned, pinval, offsets, neighbors, iters)
     if not excl_by_bone:
         return _softmax_rows(field, bones, k, cut=True)

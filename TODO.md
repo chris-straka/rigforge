@@ -52,8 +52,9 @@
       (W1 shipped 2026-10-01: voxel auto-weights, tube + robustness
       green; W1b shipped 2026-10-02: best-safe defaults, bends
       near-parity, shoulder/neck tracked (method ceiling); W2 shipped
-      2026-10-02: nudge strokes, solver + operator green; W3-W4 per
-      docs/weight-assist-plan.md.)
+      2026-10-02: nudge strokes, solver + operator green; W3 shipped
+      2026-10-02: piece transfer with inpainting, solver + operator
+      green; W4 per docs/weight-assist-plan.md.)
 - [ ] Error diagnostics: Rigify failures on malformed metarigs are
       cryptic. Fail early with bone names + what to fix.
 - [ ] Game-export depth: validation + per-profile settings + Godot

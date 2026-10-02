@@ -278,6 +278,30 @@ class DATA_PT_rigforge_nudge(bpy.types.Panel):
 
 
 # noinspection PyPep8Naming
+class DATA_PT_rigforge_transfer(bpy.types.Panel):
+    bl_label = "Rigforge Piece Transfer"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return bool(obj and obj.type == "MESH")
+
+    def draw(self, context):
+        layout = self.layout
+        wm = context.window_manager
+        layout.prop_search(
+            wm, "rigforge_transfer_source", bpy.data, "objects", text="Source"
+        )
+        layout.prop(wm, "rigforge_transfer_dist")
+        op = layout.operator("wm.rigforge_piece_transfer", text="Transfer")
+        op.source = wm.rigforge_transfer_source
+        op.max_dist = wm.rigforge_transfer_dist
+
+
+# noinspection PyPep8Naming
 class DATA_PT_rigforge_advanced(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
@@ -2180,6 +2204,7 @@ classes = (
     DATA_PT_rigforge_game_export,
     DATA_PT_rigforge_voxel_weights,
     DATA_PT_rigforge_nudge,
+    DATA_PT_rigforge_transfer,
     DATA_PT_rigforge_advanced,
     DATA_PT_rigforge_color_sets,
     DATA_UL_rigforge_bone_collections,

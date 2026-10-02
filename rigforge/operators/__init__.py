@@ -14,6 +14,7 @@ submodules = (
     "auto_place",
     "voxel_weights",
     "nudge",
+    "transfer",
 )
 
 loaded_submodules = []
