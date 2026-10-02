@@ -13,6 +13,7 @@ submodules = (
     "game_export",
     "auto_place",
     "voxel_weights",
+    "nudge",
 )
 
 loaded_submodules = []

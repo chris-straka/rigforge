@@ -249,6 +249,35 @@ class DATA_PT_rigforge_voxel_weights(bpy.types.Panel):
 
 
 # noinspection PyPep8Naming
+class DATA_PT_rigforge_nudge(bpy.types.Panel):
+    bl_label = "Rigforge Nudge"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return bool(obj and obj.type == "MESH")
+
+    def draw(self, context):
+        layout = self.layout
+        wm = context.window_manager
+        layout.prop(wm, "rigforge_nudge_bone")
+        layout.prop(wm, "rigforge_nudge_value", slider=True)
+        row = layout.row(align=True)
+        pin = row.operator("wm.rigforge_nudge", text="Pin")
+        pin.mode = "PIN"
+        pin.bone = wm.rigforge_nudge_bone
+        pin.value = wm.rigforge_nudge_value
+        exc = row.operator("wm.rigforge_nudge", text="Exclude")
+        exc.mode = "EXCLUDE"
+        exc.bone = wm.rigforge_nudge_bone
+        clr = row.operator("wm.rigforge_nudge", text="Clear")
+        clr.mode = "CLEAR"
+
+
+# noinspection PyPep8Naming
 class DATA_PT_rigforge_advanced(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
@@ -2150,6 +2179,7 @@ classes = (
     DATA_PT_rigforge,
     DATA_PT_rigforge_game_export,
     DATA_PT_rigforge_voxel_weights,
+    DATA_PT_rigforge_nudge,
     DATA_PT_rigforge_advanced,
     DATA_PT_rigforge_color_sets,
     DATA_UL_rigforge_bone_collections,
