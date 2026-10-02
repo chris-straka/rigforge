@@ -11,7 +11,7 @@ def create(obj):
     bpy.ops.object.mode_set(mode="EDIT")
     arm = obj.data
 
-    for i in range(6):
+    for _ in range(6):
         arm.rigforge_colors.add()
 
     arm.rigforge_colors[0].name = "Root"
