@@ -1,0 +1,74 @@
+# Headless suites on the bpy pip wheel (Blender as a Python module).
+# The wheel (5.0.1) trails the Blender 5.2 this fork tracks: the owner's
+# Mac binary stays canonical, this gates PRs between local runs.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      # Repo-wide format is clean; lint debt stays in upstream files
+      # (see TODO), so only formatting gates here.
+      - run: ruff format --check .
+      - name: Every suite is in the matrix
+        run: |
+          for f in tests/test_*.py; do
+            n=$(basename "$f" .py)
+            grep -q "^          - $n\$" .github/workflows/tests.yml \
+              || { echo "::error::$n missing from the suite matrix"; exit 1; }
+          done
+
+  suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - smoke
+          - test_auto_place
+          - test_auto_placement
+          - test_cleanup
+          - test_diagnose
+          - test_game_export
+          - test_nudge
+          - test_presets
+          - test_rename
+          - test_retarget
+          - test_transfer
+          - test_voxel_weights
+          - test_weights_w1
+    name: ${{ matrix.test }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/workflows/tests.yml
+      - name: System libraries for bpy
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libegl1 libgl1 libxkbcommon0 \
+            libsm6 libxi6 libxxf86vm1 libxfixes3 libxrender1
+      - run: pip install bpy==5.0.1
+      - name: Run ${{ matrix.test }}
+        run: python tools/run_test_bpy.py tests/${{ matrix.test }}.py
