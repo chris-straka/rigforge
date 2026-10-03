@@ -548,19 +548,22 @@ def apply_weights(mesh_obj, assignment):
             group.add([vi], float(weight), "REPLACE")
 
 
-def fill_unassigned(mesh_obj):
+def fill_unassigned(mesh_obj, only=None):
     """Copy nearest-weighted-vert weights onto verts with no usable entry.
 
     Returns the number of verts filled. Mirrors tools/auto_rig.py: without
     this, the exporter parks such verts on a synthesized non-DEF joint.
+    only: group names that count as weights (None: every group), so a
+    vert holding just a mask is still filled, and masks never spread.
     """
     verts = mesh_obj.data.vertices
-    good_idx = [
-        v.index for v in verts if any(el.weight > MIN_INFLUENCE for el in v.groups)
-    ]
-    bad = [
-        v.index for v in verts if not any(el.weight > MIN_INFLUENCE for el in v.groups)
-    ]
+    scope = {g.index for g in mesh_obj.vertex_groups if only is None or g.name in only}
+
+    def weighted(v):
+        return any(el.group in scope and el.weight > MIN_INFLUENCE for el in v.groups)
+
+    good_idx = [v.index for v in verts if weighted(v)]
+    bad = [v.index for v in verts if not weighted(v)]
     if not bad or not good_idx:
         return 0
     kd = KDTree(len(good_idx))
@@ -571,7 +574,7 @@ def fill_unassigned(mesh_obj):
     for vi in bad:
         _, i, _ = kd.find(verts[vi].co)
         for el in verts[good_idx[i]].groups:
-            if el.weight > MIN_INFLUENCE:
+            if el.group in scope and el.weight > MIN_INFLUENCE:
                 groups[el.group].add([vi], el.weight, "REPLACE")
     return len(bad)
 

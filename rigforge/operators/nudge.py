@@ -101,6 +101,11 @@ class WM_OT_rigforge_nudge(bpy.types.Operator):
         if self.bone not in mesh.vertex_groups:
             self.report({"ERROR"}, f"Bone '{self.bone}' has no vertex group")
             return {"CANCELLED"}
+        # Bone groups only: masks/pins are not fields to re-solve.
+        only = _nudge.deform_group_names(mesh)
+        if only is not None and self.bone not in only:
+            self.report({"ERROR"}, f"'{self.bone}' is not a deform bone of the rig")
+            return {"CANCELLED"}
         selected = [v.index for v in mesh.data.vertices if v.select]
         if not selected:
             self.report({"ERROR"}, "Select verts to nudge first")
@@ -110,11 +115,17 @@ class WM_OT_rigforge_nudge(bpy.types.Operator):
         for vi in selected:
             pins.setdefault(vi, {})[self.bone] = pinval
         set_pins(mesh, pins)
-        per_vert, _names = _nudge.read_weights(mesh)
+        if only is not None:
+            pins = {
+                vi: {b: v for b, v in spec.items() if b in only}
+                for vi, spec in pins.items()
+            }
+            pins = {vi: spec for vi, spec in pins.items() if spec}
+        per_vert, _names = _nudge.read_weights(mesh, only)
         offsets, neighbors = _nudge.mesh_adjacency(mesh)
         assignment = _nudge.solve_nudge(per_vert, offsets, neighbors, pins)
-        _nudge.apply_nudge(mesh, assignment)
-        _voxel.fill_unassigned(mesh)
+        _nudge.write_weights(mesh, [dict(row) for row in assignment], only)
+        _voxel.fill_unassigned(mesh, only)
         what = "excluded from" if self.mode == "EXCLUDE" else f"pinned to {self.bone}"
         self.report(
             {"INFO"},

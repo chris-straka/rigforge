@@ -68,8 +68,11 @@ class WM_OT_rigforge_piece_transfer(bpy.types.Operator):
         assignment, report = _transfer.solve_transfer(
             body, piece, max_dist=self.max_dist
         )
-        _nudge.apply_nudge(piece, assignment)
-        _voxel.fill_unassigned(piece)
+        # Replace the piece's bone groups (the body rig's deform bones);
+        # its own masks/pins stay. Unrigged body: every group, as before.
+        only = _nudge.deform_group_names(body)
+        _nudge.write_weights(piece, [dict(row) for row in assignment], only)
+        _voxel.fill_unassigned(piece, only)
         for mod in body.modifiers:
             if mod.type == "ARMATURE" and mod.object is not None:
                 _voxel.ensure_armature_modifier(piece, mod.object)

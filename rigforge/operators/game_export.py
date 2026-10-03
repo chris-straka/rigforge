@@ -375,12 +375,15 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
                     mod.object = rig_copy
             remapped += merge_weights(dup, targets)
             if limit_4:
-                rows, _names = _nudge.read_weights(dup)
+                # Bone groups only: a mask or pin group must not take
+                # one of the 4 slots (or be renormalized with bones).
+                only = _nudge.deform_group_names(dup)
+                rows, _names = _nudge.read_weights(dup, only)
                 over = sum(1 for row in rows if len(row) > 4)
                 if over:
                     limited += over
                     rows = _cleanup.limit_rows(rows, k=4)
-                    _nudge.apply_nudge(dup, _nudge.rows_to_assignment(rows))
+                    _nudge.write_weights(dup, rows, only)
             mesh_copies.append(dup)
         return rig_copy, mesh_copies, remapped, limited
 

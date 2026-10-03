@@ -295,12 +295,15 @@ multi_mesh = bpy.data.objects.new("MultiMesh", jaw_mesh.data.copy())
 bpy.context.scene.collection.objects.link(multi_mesh)
 multi_mod = multi_mesh.modifiers.new("Armature", "ARMATURE")
 multi_mod.object = rig
+# Group names live on the mesh data: the copy brings DEF-jaw along,
+# so start clean (else new("DEF-jaw") makes a non-bone DEF-jaw.001).
+multi_mesh.vertex_groups.clear()
 five = ["DEF-jaw", "DEF-spine.001", "DEF-spine.002", "DEF-hand.L", "DEF-foot.L"]
 for name in five:
-    multi_mesh.vertex_groups.new(name=name)
-for v in multi_mesh.data.vertices:
-    for i in range(len(five)):
-        multi_mesh.vertex_groups[i].add([v.index], 0.2, "REPLACE")
+    vg = multi_mesh.vertex_groups.new(name=name)
+    vg.add(range(len(multi_mesh.data.vertices)), 0.2, "REPLACE")
+if [g.name for g in multi_mesh.vertex_groups] != five:
+    fail(f"multi mesh groups: {[g.name for g in multi_mesh.vertex_groups]}")
 _, warns = gx.validate_export(rig, [multi_mesh], "MOBILE")
 if "many_influences" not in [w["code"] for w in warns]:
     fail(f"5 influences not warned: {warns}")
@@ -327,6 +330,29 @@ if top_capped != 4 or capped_n != 8:
     fail(f"limit toggle did not cap (max={top_capped}, n={capped_n})")
 if top_loose != 5:
     fail(f"limit off should keep 5 influences (got {top_loose})")
+# A non-bone group (mask/pin) never takes one of the 4 bone slots.
+mask_vg = multi_mesh.vertex_groups.new(name="Mask")
+mask_vg.add(range(len(multi_mesh.data.vertices)), 0.9, "REPLACE")
+rig_masked, masked, _, _ = op_cls._mobile_copies(
+    op_cls, bpy.context, rig, [multi_mesh], targets, True
+)
+for c in masked:
+    for v in c.data.vertices:
+        got = {c.vertex_groups[el.group].name: el.weight for el in v.groups}
+        if abs(got.pop("Mask", 0.0) - 0.9) > 1e-6:
+            fail(f"mobile cap rewrote the Mask group: {got}")
+        if len([w for w in got.values() if w > 0.0]) != 4:
+            fail(f"mobile cap counted Mask as an influence: {got}")
+    data = c.data
+    bpy.data.objects.remove(c, do_unlink=True)
+    if data.users == 0:
+        bpy.data.meshes.remove(data)
+data = rig_masked.data
+bpy.data.objects.remove(rig_masked, do_unlink=True)
+if data.users == 0:
+    bpy.data.armatures.remove(data)
+multi_mesh.vertex_groups.remove(mask_vg)
+print("mobile cap: Mask group untouched, 4 bone influences kept")
 bpy.data.objects.remove(multi_mesh, do_unlink=True)
 print("validate: limit toggle caps 5 -> 4 (off keeps 5)")
 
@@ -384,13 +410,25 @@ for mesh in mob_meshes:
     names = [g.name for g in mesh.vertex_groups]
     if any(n in targets for n in names):
         fail(f"dropped group survived mobile export: {names}")
-    if jaw_target in names:
-        found_target = True
-        for v in mesh.data.vertices:
-            if abs(mesh.vertex_groups[jaw_target].weight(v.index) - 1.0) > 1e-4:
-                fail("jaw weight did not remap to 1.0 on the target")
+    # Only the jaw mesh (the cube at z=2; the importer renames meshes):
+    # every skinned mesh gets a group per joint, so the kept mesh
+    # carries an empty target group too.
+    zs = [(mesh.matrix_world @ v.co).z for v in mesh.data.vertices]
+    if sum(zs) / len(zs) < 1.0:
+        continue
+    if jaw_target not in names:
+        fail(f"merge target {jaw_target} missing from {mesh.name}: {names}")
+    found_target = True
+    group = mesh.vertex_groups[jaw_target]
+    for v in mesh.data.vertices:
+        try:
+            w = group.weight(v.index)
+        except RuntimeError:
+            w = 0.0
+        if abs(w - 1.0) > 1e-4:
+            fail(f"jaw weight did not remap to 1.0 on {jaw_target} (got {w})")
 if not found_target:
-    fail(f"merge target {jaw_target} missing from re-imported meshes")
+    fail("jaw mesh missing from the mobile re-import")
 print("mobile re-import: dropped groups gone, jaw weights on target")
 
 # 7. Godot import check (skipped when Godot is absent).
