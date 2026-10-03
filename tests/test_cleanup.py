@@ -157,7 +157,9 @@ mesh.select_set(True)
 bpy.context.view_layer.objects.active = mesh
 # Blender clamps group weights to [0, 1]: paint in range, distinct.
 paint(mesh, lambda v: {f"B{b}": (b + 1) / 6.0 for b in range(6)})
-result = bpy.ops.wm.rigforge_cleanup(mode="LIMIT", limit=4)
+# B0..B5 are not rig bones: All Groups (the default only cleans the
+# rig's deform-bone groups; covered below).
+result = bpy.ops.wm.rigforge_cleanup(mode="LIMIT", limit=4, subset="ALL")
 check("FINISHED" in result, f"limit did not finish: {result}")
 rows = rows_of(mesh)
 check(all(len(r) <= 4 for r in rows), "limit blew the mobile budget")
@@ -184,7 +186,7 @@ paint(mesh, lambda v: {"Bone.001": 1.0} if v.index == 0 else {"Bone": 1.0})
 check("FINISHED" in bpy.ops.wm.rigforge_cleanup(mode="SMOOTH", passes=5))
 check(rows_of(mesh)[0].get("Bone.001", 0.0) < 1.0, "operator smooth no-op")
 paint(mesh, lambda v: {"Arm.L": 1.0} if v.co.x > 0 else {})
-check("FINISHED" in bpy.ops.wm.rigforge_cleanup(mode="MIRROR"))
+check("FINISHED" in bpy.ops.wm.rigforge_cleanup(mode="MIRROR", subset="ALL"))
 rows = rows_of(mesh)
 # Off-center only: the center strip mirrors in place (module-tested).
 check(
@@ -196,6 +198,82 @@ check(
     "mirror kept stale left weights",
 )
 print("operator: prune/normalize/smooth/mirror OK")
+
+# --- Default subset: deform-bone groups only, other groups untouched ---
+check(
+    nudge_mod.deform_group_names(mesh) == {"Bone", "Bone.001"},
+    f"deform groups: {nudge_mod.deform_group_names(mesh)}",
+)
+
+
+def paint_masked(mesh):
+    # Mask first (order must survive), locked, plus an empty pin group.
+    mesh.vertex_groups.clear()
+    mask = mesh.vertex_groups.new(name="Mask")
+    pin = mesh.vertex_groups.new(name="ClothPin")
+    bone = mesh.vertex_groups.new(name="Bone")
+    child = mesh.vertex_groups.new(name="Bone.001")
+    for v in mesh.data.vertices:
+        mask.add([v.index], 0.25 + 0.5 * (v.index % 2), "REPLACE")
+        bone.add([v.index], 0.3 if v.index == 0 else 0.6, "REPLACE")
+        child.add([v.index], 0.004 if v.index == 0 else 0.2, "REPLACE")
+    mask.lock_weight = True
+    del pin
+
+
+def mask_of(mesh):
+    group = mesh.vertex_groups["Mask"]
+    return [group.weight(v.index) for v in mesh.data.vertices]
+
+
+paint_masked(mesh)
+mask_before = mask_of(mesh)
+for mode in ("LIMIT", "NORMALIZE", "PRUNE", "MIRROR", "SMOOTH"):
+    paint_masked(mesh)
+    result = bpy.ops.wm.rigforge_cleanup(mode=mode, limit=1, threshold=0.01)
+    check("FINISHED" in result, f"{mode} did not finish: {result}")
+    names = [g.name for g in mesh.vertex_groups]
+    check(names[:2] == ["Mask", "ClothPin"], f"{mode} reordered groups: {names}")
+    check(mesh.vertex_groups["Mask"].lock_weight, f"{mode} dropped the Mask lock")
+    check(mask_of(mesh) == mask_before, f"{mode} touched the Mask weights")
+    if mode != "MIRROR":  # mirror copies rows as-is (no renormalize)
+        rows = nudge_mod.read_weights(mesh, {"Bone", "Bone.001"})[0]
+        check(
+            all(abs(sum(r.values()) - 1.0) < 1e-6 for r in rows if r),
+            f"{mode} left bone rows unnormalized (Mask counted?)",
+        )
+paint_masked(mesh)
+bpy.ops.wm.rigforge_cleanup(mode="LIMIT", limit=1)
+rows = rows_of(mesh)
+check(
+    all(set(r) == {"Mask", "Bone"} for r in rows),
+    "limit 1 should keep Bone + the untouched Mask",
+)
+paint_masked(mesh)
+bpy.ops.wm.rigforge_cleanup(mode="PRUNE", threshold=0.01)
+check("Bone.001" not in rows_of(mesh)[0], "prune missed the 0.004 speck")
+check(rows_of(mesh)[1]["Bone.001"] > 0.2, "prune did not renormalize bones")
+paint_masked(mesh)
+bpy.ops.wm.rigforge_cleanup(mode="LIMIT", limit=1, subset="ALL")
+check(
+    all(len(r) == 1 for r in rows_of(mesh)),
+    "All Groups should limit the Mask together with the bones",
+)
+print("operator: default subset keeps non-bone groups (order, lock, weights)")
+
+paint(mesh, lambda v: {"Mask": 1.0})
+try:
+    result = bpy.ops.wm.rigforge_cleanup(mode="NORMALIZE")
+except RuntimeError as exc:
+    result = str(exc)
+check("no deform-bone weights" in str(result), f"bone-less mesh gave {result}")
+mod = next(m for m in mesh.modifiers if m.type == "ARMATURE")
+mesh.modifiers.remove(mod)
+check(nudge_mod.deform_group_names(mesh) is None, "unbound mesh has a rig?")
+paint(mesh, lambda v: {f"B{b}": (b + 1) / 6.0 for b in range(6)})
+check("FINISHED" in bpy.ops.wm.rigforge_cleanup(mode="LIMIT", limit=4))
+check(all(len(r) == 4 for r in rows_of(mesh)), "unbound mesh should clean all")
+print("operator: no-bone-weights error + unbound mesh cleans every group")
 
 
 def expect_cancelled(fn, needle):

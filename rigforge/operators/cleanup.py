@@ -5,6 +5,8 @@
 
 Whole-mesh weight hygiene: limit influences per vert (Godot/mobile
 budgets), normalize, prune specks, mirror L/R, smooth. Undoable.
+By default only the deform-bone groups of the mesh's rig are touched:
+masks, cloth pins and other non-bone groups keep their weights.
 """
 
 import bpy
@@ -12,6 +14,15 @@ from bpy.props import EnumProperty, FloatProperty, IntProperty
 
 from ..weights import cleanup as _cleanup
 from ..weights import nudge as _nudge
+
+SUBSET_ITEMS = [
+    (
+        "BONE_DEFORM",
+        "Deform Bones",
+        "Groups of the rig's deform bones (all groups if the mesh has no rig)",
+    ),
+    ("ALL", "All Groups", "Every vertex group, masks and pins included"),
+]
 
 
 # noinspection PyPep8Naming
@@ -54,6 +65,12 @@ class WM_OT_rigforge_cleanup(bpy.types.Operator):
         min=1,
         max=200,
     )
+    subset: EnumProperty(
+        name="Subset",
+        description="Which vertex groups the cleanup reads and rewrites",
+        items=SUBSET_ITEMS,
+        default="BONE_DEFORM",
+    )
 
     @classmethod
     def poll(cls, context):
@@ -70,7 +87,17 @@ class WM_OT_rigforge_cleanup(bpy.types.Operator):
         if not mesh.vertex_groups:
             self.report({"ERROR"}, f"'{mesh.name}' has no weights to clean")
             return {"CANCELLED"}
-        rows, _names = _nudge.read_weights(mesh)
+        only = None
+        if self.subset == "BONE_DEFORM":
+            only = _nudge.deform_group_names(mesh)
+        if only is not None and not any(g.name in only for g in mesh.vertex_groups):
+            self.report(
+                {"ERROR"},
+                f"'{mesh.name}' has no deform-bone weights (Subset: All Groups "
+                "cleans every group)",
+            )
+            return {"CANCELLED"}
+        rows, _names = _nudge.read_weights(mesh, only)
         if self.mode == "LIMIT":
             rows = _cleanup.limit_rows(rows, k=self.limit)
             what = f"limited to {self.limit}"
@@ -87,7 +114,7 @@ class WM_OT_rigforge_cleanup(bpy.types.Operator):
             offsets, neighbors = _nudge.mesh_adjacency(mesh)
             rows = _cleanup.smooth_rows(rows, offsets, neighbors, self.passes)
             what = f"smoothed ({self.passes} passes)"
-        _nudge.apply_nudge(mesh, _nudge.rows_to_assignment(rows))
+        _nudge.write_weights(mesh, rows, only)
         self.report({"INFO"}, f"Weights {what} on '{mesh.name}'")
         return {"FINISHED"}
 
@@ -116,9 +143,16 @@ def register():
         min=1,
         max=200,
     )
+    bpy.types.WindowManager.rigforge_cleanup_subset = EnumProperty(
+        name="Subset",
+        description="Which vertex groups the cleanup reads and rewrites",
+        items=SUBSET_ITEMS,
+        default="BONE_DEFORM",
+    )
 
 
 def unregister():
+    del bpy.types.WindowManager.rigforge_cleanup_subset
     del bpy.types.WindowManager.rigforge_cleanup_passes
     del bpy.types.WindowManager.rigforge_cleanup_threshold
     del bpy.types.WindowManager.rigforge_cleanup_limit

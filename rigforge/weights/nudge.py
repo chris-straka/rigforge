@@ -38,26 +38,79 @@ def mesh_adjacency(mesh_obj):
     counts = np.bincount(flat, minlength=n)
     offsets = np.zeros(n + 1, dtype=np.int64)
     offsets[1:] = np.cumsum(counts)
-    neighbors = np.zeros(int(offsets[-1]), dtype=np.int64)
-    fill = offsets[:-1].copy()
-    for v, w in zip(flat.tolist(), other.tolist(), strict=True):
-        neighbors[fill[v]] = w
-        fill[v] += 1
+    # Stable sort by source vert keeps each vert's neighbors in edge order.
+    neighbors = other[np.argsort(flat, kind="stable")]
     return offsets, neighbors
 
 
-def read_weights(mesh_obj):
-    """Per-vert {bone: weight} plus the bone order seen."""
+def deform_group_names(mesh_obj):
+    """Names of deform bones driving the mesh, or None if no armature.
+
+    Bones come from every Armature modifier's rig (plus an armature
+    parent), so callers can tell bone weights from masks, cloth pins,
+    and other non-bone vertex groups. None means the mesh is not bound
+    yet: treat every group as a weight.
+    """
+    rigs = [
+        mod.object
+        for mod in mesh_obj.modifiers
+        if mod.type == "ARMATURE"
+        and mod.object is not None
+        and mod.object.type == "ARMATURE"
+    ]
+    parent = mesh_obj.parent
+    if parent is not None and parent.type == "ARMATURE":
+        rigs.append(parent)
+    if not rigs:
+        return None
+    return {b.name for rig in rigs for b in rig.data.bones if b.use_deform}
+
+
+def read_weights(mesh_obj, only=None):
+    """Per-vert {bone: weight} plus the bone order seen.
+
+    only: set of group names to read (None reads every group).
+    """
     groups = mesh_obj.vertex_groups
-    names = [g.name for g in groups]
+    names = [g.name for g in groups if only is None or g.name in only]
+    lookup = {g.index: g.name for g in groups if only is None or g.name in only}
     per_vert = []
     for v in mesh_obj.data.vertices:
         row = {}
         for el in v.groups:
-            if el.weight > 0.0:
-                row[names[el.group]] = float(el.weight)
+            name = lookup.get(el.group)
+            if name is not None and el.weight > 0.0:
+                row[name] = float(el.weight)
         per_vert.append(row)
     return per_vert, names
+
+
+def write_weights(mesh_obj, rows, only=None):
+    """Write per-vert {bone: weight} rows back, in place.
+
+    Groups in scope (only, or every group when None) take exactly the
+    rows' weights; groups outside it are never touched. Groups are
+    edited, not recreated, so order and lock flags survive; names in
+    the rows with no group yet (a mirror's other side) are created.
+    """
+    groups = mesh_obj.vertex_groups
+    scope = {g.index for g in groups if only is None or g.name in only}
+    stale = {}  # group index -> verts whose membership must go
+    for v in mesh_obj.data.vertices:
+        row = rows[v.index]
+        for el in v.groups:
+            if el.group in scope and groups[el.group].name not in row:
+                stale.setdefault(el.group, []).append(v.index)
+    for gi, verts in stale.items():
+        groups[gi].remove(verts)
+    cache = {}
+    for vi, row in enumerate(rows):
+        for name, weight in sorted(row.items(), key=lambda t: (-t[1], t[0])):
+            group = cache.get(name)
+            if group is None:
+                group = groups.get(name) or groups.new(name=name)
+                cache[name] = group
+            group.add([vi], float(weight), "REPLACE")
 
 
 def _to_logit(w):
@@ -109,18 +162,31 @@ def _softmax_rows(field, bones, k, cut):
     """Per-vert softmax rows; cut drops specks and caps influences at k."""
     field = field - field.max(axis=1, keepdims=True)
     np.exp(field, out=field)
+    if cut:
+        return _top_rows(field, bones, k)
     out = []
     for i in range(field.shape[0]):
         row = [(bones[j], float(field[i, j])) for j in range(len(bones))]
-        if cut:
-            row = [(b, w) for b, w in row if w > NUDGE_MIN_WEIGHT]
-            row.sort(key=lambda t: -t[1])
-            row = row[:k]
         total = sum(w for _, w in row)
         if total <= 0.0:
             out.append([])
         else:
             out.append([(b, w / total) for b, w in row])
+    return out
+
+
+def _top_rows(field, bones, k):
+    """Cut rows: weights over the speck floor, top k (weight desc, ties
+    in bone order), renormalized. Sorting is vectorized; the Python
+    loop only touches the k survivors per vert."""
+    order = np.argsort(-field, axis=1, kind="stable")[:, :k]
+    top = np.take_along_axis(field, order, axis=1)
+    keep = top > NUDGE_MIN_WEIGHT
+    out = []
+    for cols, vals, ok in zip(order.tolist(), top.tolist(), keep.tolist(), strict=True):
+        row = [(bones[c], w) for c, w, o in zip(cols, vals, ok, strict=True) if o]
+        total = sum(w for _, w in row)
+        out.append([(b, w / total) for b, w in row] if total > 0.0 else [])
     return out
 
 

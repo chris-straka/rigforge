@@ -19,7 +19,6 @@ to the caller); mesh data is read raw with matrix_world applied, so
 callers should pass transforms-applied meshes.
 """
 
-import heapq
 import os
 
 import numpy as np
@@ -177,7 +176,11 @@ def _grid_centers(origin, cell, shape, interior):
 
 
 def interior_neighbors(grid):
-    """6-neighborhood over interior voxels: list per row of neighbor rows."""
+    """6-neighborhood over interior voxels as CSR: (offsets, neighbors).
+
+    Row i's neighbors are neighbors[offsets[i] : offsets[i + 1]], in
+    -x, +x, -y, +y, -z, +z order. Vectorized: no per-voxel Python.
+    """
     nx, ny, nz = grid["shape"]
     index = grid["index"]
     flat = np.flatnonzero(grid["interior"])
@@ -185,23 +188,23 @@ def interior_neighbors(grid):
     rem = flat % (nx * ny)
     iy = rem // nx
     ix = rem % nx
-    out = []
-    for x, y, z in zip(ix.tolist(), iy.tolist(), iz.tolist(), strict=True):
-        nbrs = []
-        if x > 0:
-            nbrs.append(index[(z * ny + y) * nx + x - 1])
-        if x < nx - 1:
-            nbrs.append(index[(z * ny + y) * nx + x + 1])
-        if y > 0:
-            nbrs.append(index[(z * ny + y - 1) * nx + x])
-        if y < ny - 1:
-            nbrs.append(index[(z * ny + y + 1) * nx + x])
-        if z > 0:
-            nbrs.append(index[((z - 1) * ny + y) * nx + x])
-        if z < nz - 1:
-            nbrs.append(index[((z + 1) * ny + y) * nx + x])
-        out.append([int(n) for n in nbrs if n >= 0])
-    return out
+    cols = []
+    for ok, delta in (
+        (ix > 0, -1),
+        (ix < nx - 1, 1),
+        (iy > 0, -nx),
+        (iy < ny - 1, nx),
+        (iz > 0, -nx * ny),
+        (iz < nz - 1, nx * ny),
+    ):
+        nb = np.full(flat.size, -1, dtype=np.int64)
+        nb[ok] = index[flat[ok] + delta]
+        cols.append(nb)
+    table = np.stack(cols, axis=1)  # (m, 6), -1 = off-grid or exterior
+    valid = table >= 0
+    offsets = np.zeros(flat.size + 1, dtype=np.int64)
+    offsets[1:] = np.cumsum(valid.sum(axis=1))
+    return offsets, table[valid]
 
 
 def segment_distances(centers, p0, p1):
@@ -214,29 +217,35 @@ def segment_distances(centers, p0, p1):
     return np.linalg.norm(centers - (p0 + t[:, None] * axis), axis=1)
 
 
-def dijkstra_bounded(neighbors, seeds, cutoff, step):
+def dijkstra_bounded(adjacency, seeds, cutoff, step):
     """Geodesic distances from seeds over the voxel graph (inf past cutoff).
 
-    neighbors: interior adjacency; seeds: row indices at distance 0.
-    Tie-breaks by voxel index, so the field is deterministic.
+    adjacency: interior_neighbors CSR; seeds: row indices at distance 0.
+    Every edge costs the same step, so Dijkstra reduces to a
+    level-synchronous BFS: hop h gets ((0 + step) + step)... h times,
+    the exact float a heap Dijkstra assigns, so fields are unchanged
+    (and deterministic) while each level expands in numpy.
     """
-    dist = np.full(len(neighbors), np.inf)
-    heap = []
-    for s in seeds:
-        dist[s] = 0.0
-        heap.append((0.0, int(s)))
-    heapq.heapify(heap)
-    while heap:
-        d, i = heapq.heappop(heap)
-        if d > dist[i] or d > cutoff:
-            continue
+    offsets, neighbors = adjacency
+    dist = np.full(len(offsets) - 1, np.inf)
+    frontier = np.unique(np.asarray(seeds, dtype=np.int64))
+    dist[frontier] = 0.0
+    d = 0.0
+    while frontier.size:
         nxt = d + step
         if nxt > cutoff:
-            continue
-        for j in neighbors[i]:
-            if nxt < dist[j]:
-                dist[j] = nxt
-                heapq.heappush(heap, (nxt, j))
+            break
+        starts = offsets[frontier]
+        counts = offsets[frontier + 1] - starts
+        total = int(counts.sum())
+        if total == 0:
+            break
+        # Concatenate every frontier row's neighbor slice.
+        run = np.repeat(starts - np.cumsum(counts) + counts, counts)
+        cand = np.unique(neighbors[run + np.arange(total)])
+        frontier = cand[np.isinf(dist[cand])]
+        dist[frontier] = nxt
+        d = nxt
     return dist
 
 
@@ -249,35 +258,54 @@ def bone_world_segment(armature_obj, bone_name):
     )
 
 
-def _smooth_field(dense, interior, shape, iters):
-    """Laplacian smoothing of one bone field (interior only, dense grid)."""
+def _smooth_setup(interior, shape):
+    """Per-grid smoothing constants (shared by every bone field)."""
     nx, ny, nz = shape
-    vol = dense.reshape((nz, ny, nx))
     mask = interior.reshape((nz, ny, nx))
-    for _ in range(iters):
-        acc = np.zeros_like(vol)
-        cnt = np.zeros_like(vol)
-        for axis, delta in (
-            (0, 1),
-            (0, -1),
-            (1, 1),
-            (1, -1),
-            (2, 1),
-            (2, -1),
-        ):
-            shifted = np.roll(vol, delta, axis=axis)
-            shifted_m = np.roll(mask, delta, axis=axis)
-            # np.roll wraps; zero the wrapped face.
-            face = [slice(None)] * 3
-            face[axis] = 0 if delta > 0 else -1
-            shifted[tuple(face)] = 0.0
-            shifted_m[tuple(face)] = False
-            acc += np.where(shifted_m, shifted, 0.0)
-            cnt += shifted_m.astype(np.float64)
-        vol = np.where(mask & (cnt > 0), (vol + acc) / (1.0 + cnt), vol)
-    dense = vol.reshape(-1)
+    cnt = _shift_sum(mask.astype(np.float64))
+    return mask, mask & (cnt > 0), 1.0 + cnt
+
+
+def _smooth_field(dense, interior, shape, iters, setup=None):
+    """Laplacian smoothing of one bone field (interior only, dense grid).
+
+    Exterior cells hold 0 throughout, so summing all six face-neighbor
+    shifts (slice adds, no wraparound) equals summing interior
+    neighbors only. A pass spreads the field one cell, so it runs on
+    the field's bounding box padded by iters cells: everything past
+    that stays exactly 0, and small bones (fingers, face) skip the
+    rest of the grid.
+    """
+    nx, ny, nz = shape
+    mask, update, denom = setup or _smooth_setup(interior, shape)
+    vol = dense.reshape((nz, ny, nx)).copy()
+    vol[~mask] = 0.0
+    nonzero = np.nonzero(vol)
+    out = np.zeros_like(vol)
+    if nonzero[0].size:
+        box = tuple(
+            slice(max(0, int(a.min()) - iters), min(n, int(a.max()) + 1 + iters))
+            for a, n in zip(nonzero, vol.shape, strict=True)
+        )
+        sub, upd, den = vol[box], update[box], denom[box]
+        for _ in range(iters):
+            sub = np.where(upd, (sub + _shift_sum(sub)) / den, sub)
+        out[box] = sub
+    dense = out.reshape(-1)
     dense[~interior] = 0.0
     return dense
+
+
+def _shift_sum(vol):
+    """Sum of the six face-neighbor shifts of vol (zero past the edges)."""
+    acc = np.zeros_like(vol)
+    acc[1:] += vol[:-1]
+    acc[:-1] += vol[1:]
+    acc[:, 1:] += vol[:, :-1]
+    acc[:, :-1] += vol[:, 1:]
+    acc[:, :, 1:] += vol[:, :, :-1]
+    acc[:, :, :-1] += vol[:, :, 1:]
+    return acc
 
 
 def _trilinear_rows(grid, kd, point):
@@ -412,36 +440,42 @@ def bind_weights(
     flat_inside = np.flatnonzero(interior)
     order = np.argsort(dists, axis=1, kind="stable")[:, :k]
     nearest = np.take_along_axis(dists, order, axis=1)
-    usable = np.isfinite(nearest)
-    rows = np.flatnonzero(usable.any(axis=1))
+    usable = np.isfinite(nearest)  # a prefix per row (inf sorts last)
+    count = usable.sum(axis=1)
+    rows = np.flatnonzero(count)
+    order, usable, count = order[rows], usable[rows], count[rows]
+    d = np.where(usable, nearest[rows], 0.0)
+    # Vectorized over voxel rows; masked slots stay exactly 0, so for
+    # k < 8 row sums are bit-identical to a per-row loop (k >= 8 hits
+    # numpy's pairwise summation: same weights to ~1e-16).
+    d_min = d[:, 0]
+    d_max = d[np.arange(rows.size), count - 1]
+    span = d_max - d_min
+    flat_rows = span < 1e-9
+    safe_span = np.where(flat_rows, 1.0, span)
+    w = np.where(usable, ((d_max[:, None] - d) / safe_span[:, None]) ** power, 0.0)
+    total = w.sum(axis=1, keepdims=True)  # >= 1 off flat rows (d_min -> 1)
+    w = w / np.where(total > 0.0, total, 1.0)
+    w[flat_rows] = np.where(usable[flat_rows], 1.0 / count[flat_rows, None], 0.0)
+    if decay_on:
+        # Cauchy falloff per bone scale: far bones fade instead of
+        # sharing span-normalized mush (W1b: kills distant splits).
+        w = np.where(usable, w / (1.0 + (d / scales[order]) ** 2), 0.0)
+        w = w / w.sum(axis=1, keepdims=True)
     # Per-bone values over interior rows only; each bone is densified
     # for smoothing one at a time so big rigs never hold bones x grid.
     stacked = np.zeros((len(bone_names), m))
-    for i in rows.tolist():
-        cols = order[i][usable[i]]
-        if cols.size == 0:
-            continue
-        d = nearest[i][usable[i]]
-        span = d.max() - d.min()
-        if span < 1e-9:
-            w = np.full_like(d, 1.0 / d.size)
-        else:
-            w = ((d.max() - d) / span) ** power
-            w = w / w.sum()
-        if decay_on:
-            # Cauchy falloff per bone scale: far bones fade instead of
-            # sharing span-normalized mush (W1b: kills distant splits).
-            w = w / (1.0 + (d / scales[cols]) ** 2)
-            w = w / w.sum()
-        for col, weight in zip(cols.tolist(), w.tolist(), strict=True):
-            stacked[col, i] = weight
-    del dists, order, nearest, usable, rows
+    stacked[order[usable], np.repeat(rows, count)] = w[usable]
+    del dists, order, nearest, usable, rows, d, w
+    setup = _smooth_setup(interior, shape)
     for b in range(len(bone_names)):
         if np.count_nonzero(stacked[b]) == 0:
             continue
         dense = np.zeros(flat_n)
         dense[flat_inside] = stacked[b]
-        stacked[b] = _smooth_field(dense, interior, shape, smooth_iters)[flat_inside]
+        stacked[b] = _smooth_field(dense, interior, shape, smooth_iters, setup)[
+            flat_inside
+        ]
 
     # Re-sparsify to k per voxel after smoothing, then sample at verts.
     order2 = np.argsort(-stacked, axis=0, kind="stable")[:k]
@@ -514,19 +548,22 @@ def apply_weights(mesh_obj, assignment):
             group.add([vi], float(weight), "REPLACE")
 
 
-def fill_unassigned(mesh_obj):
+def fill_unassigned(mesh_obj, only=None):
     """Copy nearest-weighted-vert weights onto verts with no usable entry.
 
     Returns the number of verts filled. Mirrors tools/auto_rig.py: without
     this, the exporter parks such verts on a synthesized non-DEF joint.
+    only: group names that count as weights (None: every group), so a
+    vert holding just a mask is still filled, and masks never spread.
     """
     verts = mesh_obj.data.vertices
-    good_idx = [
-        v.index for v in verts if any(el.weight > MIN_INFLUENCE for el in v.groups)
-    ]
-    bad = [
-        v.index for v in verts if not any(el.weight > MIN_INFLUENCE for el in v.groups)
-    ]
+    scope = {g.index for g in mesh_obj.vertex_groups if only is None or g.name in only}
+
+    def weighted(v):
+        return any(el.group in scope and el.weight > MIN_INFLUENCE for el in v.groups)
+
+    good_idx = [v.index for v in verts if weighted(v)]
+    bad = [v.index for v in verts if not weighted(v)]
     if not bad or not good_idx:
         return 0
     kd = KDTree(len(good_idx))
@@ -537,7 +574,7 @@ def fill_unassigned(mesh_obj):
     for vi in bad:
         _, i, _ = kd.find(verts[vi].co)
         for el in verts[good_idx[i]].groups:
-            if el.weight > MIN_INFLUENCE:
+            if el.group in scope and el.weight > MIN_INFLUENCE:
                 groups[el.group].add([vi], el.weight, "REPLACE")
     return len(bad)
 

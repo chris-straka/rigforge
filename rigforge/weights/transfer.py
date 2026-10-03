@@ -66,7 +66,10 @@ def solve_transfer(body_obj, piece_obj, max_dist=0.0, inpaint=True, k=4, iters=N
     bvh = BVHTree.FromPolygons(
         body_cos, [list(t.vertices) for t in tris], all_triangles=True
     )
-    body_rows, _names = _nudge.read_weights(body_obj)
+    # Bone groups only: body masks/pins are not weights to hand on.
+    body_rows, _names = _nudge.read_weights(
+        body_obj, _nudge.deform_group_names(body_obj)
+    )
     diag = body_diag(body_obj)
     thresh = max_dist if max_dist > 0.0 else TRANSFER_AUTO_FRACTION * diag
     pins = {}

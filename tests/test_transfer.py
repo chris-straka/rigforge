@@ -193,9 +193,29 @@ bpy.ops.object.mode_set(mode="OBJECT")
 bpy.ops.object.select_all(action="DESELECT")
 cape.select_set(True)
 bpy.context.view_layer.objects.active = cape
+# Non-bone groups: the body's Mask is not a weight to hand on, the
+# cape's own Pin group must survive the replace.
+body_mask = mesh.vertex_groups.new(name="Mask")
+body_mask.add(range(len(mesh.data.vertices)), 0.7, "REPLACE")
+pin = cape.vertex_groups.new(name="Pin")
+pin.add(range(len(cape.data.vertices)), 0.4, "REPLACE")
 result = bpy.ops.wm.rigforge_piece_transfer(source="Tube")
 check("FINISHED" in result, f"transfer did not finish: {result}")
 check("Bone.001" in cape.vertex_groups, "transfer wrote no groups")
+check("Mask" not in cape.vertex_groups, "body Mask leaked onto the cape")
+check(
+    all(
+        abs(cape.vertex_groups["Pin"].weight(v.index) - 0.4) < 1e-6
+        for v in cape.data.vertices
+    ),
+    "transfer rewrote the cape's Pin group",
+)
+cape_rows = nudge_mod.read_weights(cape, {"Bone", "Bone.001"})[0]
+check(
+    all(abs(sum(r.values()) - 1.0) < 1e-5 for r in cape_rows),
+    "cape bone rows not normalized",
+)
+mesh.vertex_groups.remove(body_mask)
 check(
     any(m.type == "ARMATURE" and m.object == rig for m in cape.modifiers),
     "armature modifier not copied",

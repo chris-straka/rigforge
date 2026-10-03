@@ -341,6 +341,7 @@ class DATA_PT_rigforge_cleanup(bpy.types.Panel):
         layout.prop(wm, "rigforge_cleanup_limit")
         layout.prop(wm, "rigforge_cleanup_threshold", slider=True)
         layout.prop(wm, "rigforge_cleanup_passes")
+        layout.prop(wm, "rigforge_cleanup_subset")
         row = layout.row(align=True)
         for mode, text in (
             ("LIMIT", "Limit"),
@@ -352,6 +353,7 @@ class DATA_PT_rigforge_cleanup(bpy.types.Panel):
             op.limit = wm.rigforge_cleanup_limit
             op.threshold = wm.rigforge_cleanup_threshold
             op.passes = wm.rigforge_cleanup_passes
+            op.subset = wm.rigforge_cleanup_subset
         row = layout.row(align=True)
         for mode, text in (("MIRROR", "Mirror"), ("SMOOTH", "Smooth")):
             op = row.operator("wm.rigforge_cleanup", text=text)
@@ -359,6 +361,7 @@ class DATA_PT_rigforge_cleanup(bpy.types.Panel):
             op.limit = wm.rigforge_cleanup_limit
             op.threshold = wm.rigforge_cleanup_threshold
             op.passes = wm.rigforge_cleanup_passes
+            op.subset = wm.rigforge_cleanup_subset
 
 
 # noinspection PyPep8Naming

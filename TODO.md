@@ -79,8 +79,28 @@
       reuses utils.naming.mirror_name); mobile face anchor reads
       armature-space `head_local` (Bone.head is parent-relative);
       mobile weight merge is one pass over verts (was one per dropped
-      group, ~95x). Verified offline (name table + randomized
-      old-vs-new merge equivalence); Blender suites not re-run here.
+      group, ~95x). Fixed test_game_export follow-up (2026-10-03,
+      found on the bpy wheel): the jaw check now reads only the jaw
+      mesh (importer gives every skinned mesh every joint group).
+- [x] Weight-solver speed (2026-10-03, no output change): voxel
+      geodesics are a numpy level-synchronous BFS (uniform step, so
+      the same floats as the heap Dijkstra), CSR voxel adjacency,
+      vectorized kernel, smoothing on each bone's support box
+      (+iters cells) with shared neighbor counts; nudge adjacency
+      and top-k softmax rows vectorized. Proven offline against the
+      old code with stubbed mathutils: bit-identical on randomized
+      grids/meshes (k < 8). Synthetic 92k-voxel / 60-bone bind ~3.7x
+      faster outside KD lookups; all suites green on the bpy wheel.
+- [x] Non-bone vertex groups (2026-10-03): cleanup (new Subset:
+      Deform Bones default / All Groups), nudge, piece transfer,
+      fill_unassigned and the mobile cap-4 read + write only the
+      rig's deform-bone groups; masks, cloth pins, group order and
+      locks survive (they used to be solved/normalized as bones and
+      the groups recreated). Unrigged meshes: every group, as before.
+      Also fixed a test_game_export fixture whose "5 bones" were 4
+      bones + a stray non-bone DEF-jaw.001.
+- [x] tools/run_test_bpy.py (2026-10-03): run any suite on the `bpy`
+      pip wheel (no Blender install); used for the entries above.
 - [ ] Optional: upstream watch — Blender keeps fixing Rigify; review
       new upstream commits periodically and hand-port (re-apply by
       judgment, never `git merge`: this tree has structurally diverged).

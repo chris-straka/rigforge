@@ -31,6 +31,12 @@ Suites needing files outside the repo (e.g.
 `test_auto_placement.py`'s HLL subjects) skip absent subjects
 instead of failing.
 
+No Blender install (cloud sessions, CI): `pip install bpy` (5.0.1,
+CPython 3.11; Linux also needs `libegl1`), then
+`python tools/run_test_bpy.py tests/test_cleanup.py` — same overlay,
+in-process. The wheel trails the 5.2 this fork tracks, so the Mac
+binary stays canonical; all suites pass on both as of 2026-10-03.
+
 Game export: with a generated rig active, Armature properties >
 Rigforge Game Export > Export Game GLB — writes a deform-bones-only
 GLB (Godot-friendly settings) with all meshes bound via Armature

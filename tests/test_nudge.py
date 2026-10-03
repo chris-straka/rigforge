@@ -121,6 +121,11 @@ mesh.select_set(True)
 bpy.context.view_layer.objects.active = mesh
 for v in mesh.data.vertices:
     v.select = v.index in pin_rows
+# A locked non-bone group rides along untouched through every stroke.
+mask = mesh.vertex_groups.new(name="Mask")
+mask.add(range(len(mesh.data.vertices)), 0.5, "REPLACE")
+mask.lock_weight = True
+group_order = [g.name for g in mesh.vertex_groups]
 before = weights_of(mesh, "Bone")
 result = bpy.ops.wm.rigforge_nudge(bone="Bone", value=0.7, mode="PIN")
 check("FINISHED" in result, f"pin did not finish: {result}")
@@ -145,10 +150,32 @@ check(
     all(w_after.get(vi, 0.0) < 0.02 for vi in exc_rows),
     "operator exclude not under 2%",
 )
+check(
+    [g.name for g in mesh.vertex_groups] == group_order,
+    f"strokes reordered groups: {[g.name for g in mesh.vertex_groups]}",
+)
+check(mesh.vertex_groups["Mask"].lock_weight, "strokes dropped the Mask lock")
+check(
+    weights_of(mesh, "Mask") == dict.fromkeys(range(len(mesh.data.vertices)), 0.5),
+    "strokes rewrote the Mask group",
+)
+bone_rows = nudge_mod.read_weights(mesh, {"Bone", "Bone.001"})[0]
+check(
+    all(abs(sum(r.values()) - 1.0) < 1e-5 for r in bone_rows),
+    "bone rows not normalized (Mask solved as a bone?)",
+)
+for v in mesh.data.vertices:
+    v.select = v.index in pin_rows
+try:
+    result = bpy.ops.wm.rigforge_nudge(bone="Mask", value=0.7, mode="PIN")
+except RuntimeError as exc:
+    result = str(exc)
+check("not a deform bone" in str(result), f"pinning a mask gave {result}")
+mesh.vertex_groups.remove(mesh.vertex_groups["Mask"])
 result = bpy.ops.wm.rigforge_nudge(mode="CLEAR")
 check("FINISHED" in result, f"clear did not finish: {result}")
 check("rigforge_nudge_pins" not in mesh, "pins not cleared")
-print("operator: pin/exclude/clear OK")
+print("operator: pin/exclude/clear OK (Mask group untouched)")
 
 
 def expect_cancelled(fn, needle):
