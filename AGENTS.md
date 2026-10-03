@@ -12,7 +12,7 @@ beat upstream on auto-placement, skinning, presets, and export.
   tree is GPL, like all Blender addons.
 - The headless smoke test must stay green: `BLENDER_USER_SCRIPTS`
   overlay + enable + human metarig + generate (see README; canonical
-  script at `/tmp/rigforge_smoke.py`, recreate if missing).
+  script is `tests/smoke.py`, also run by CI on every PR).
 - Blender binary: `/Applications/Blender.app/Contents/MacOS/Blender`.
   Headless only unless the user approves a GUI launch.
 - Remote: `github.com/chris-straka/rigforge` (owner flipping to

@@ -18,7 +18,7 @@ Smoke test:
 rsync -a --delete rigforge/ /tmp/rf_scripts/addons/rigforge/
 BLENDER_USER_SCRIPTS=/tmp/rf_scripts \
   /Applications/Blender.app/Contents/MacOS/Blender --background \
-  --factory-startup --python /tmp/rigforge_smoke.py
+  --factory-startup --python tests/smoke.py
 ```
 
 Headless tests (`tests/`): run one via `tools/run_test.sh
@@ -36,6 +36,9 @@ CPython 3.11; Linux also needs `libegl1`), then
 `python tools/run_test_bpy.py tests/test_cleanup.py` — same overlay,
 in-process. The wheel trails the 5.2 this fork tracks, so the Mac
 binary stays canonical; all suites pass on both as of 2026-10-03.
+CI (`.github/workflows/tests.yml`) runs the smoke test + every suite
+this way on each PR and push to main; new `tests/test_*.py` files
+must be added to its matrix (a check fails otherwise).
 
 Game export: with a generated rig active, Armature properties >
 Rigforge Game Export > Export Game GLB — writes a deform-bones-only
