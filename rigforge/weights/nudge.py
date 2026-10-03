@@ -38,11 +38,8 @@ def mesh_adjacency(mesh_obj):
     counts = np.bincount(flat, minlength=n)
     offsets = np.zeros(n + 1, dtype=np.int64)
     offsets[1:] = np.cumsum(counts)
-    neighbors = np.zeros(int(offsets[-1]), dtype=np.int64)
-    fill = offsets[:-1].copy()
-    for v, w in zip(flat.tolist(), other.tolist(), strict=True):
-        neighbors[fill[v]] = w
-        fill[v] += 1
+    # Stable sort by source vert keeps each vert's neighbors in edge order.
+    neighbors = other[np.argsort(flat, kind="stable")]
     return offsets, neighbors
 
 
@@ -109,18 +106,31 @@ def _softmax_rows(field, bones, k, cut):
     """Per-vert softmax rows; cut drops specks and caps influences at k."""
     field = field - field.max(axis=1, keepdims=True)
     np.exp(field, out=field)
+    if cut:
+        return _top_rows(field, bones, k)
     out = []
     for i in range(field.shape[0]):
         row = [(bones[j], float(field[i, j])) for j in range(len(bones))]
-        if cut:
-            row = [(b, w) for b, w in row if w > NUDGE_MIN_WEIGHT]
-            row.sort(key=lambda t: -t[1])
-            row = row[:k]
         total = sum(w for _, w in row)
         if total <= 0.0:
             out.append([])
         else:
             out.append([(b, w / total) for b, w in row])
+    return out
+
+
+def _top_rows(field, bones, k):
+    """Cut rows: weights over the speck floor, top k (weight desc, ties
+    in bone order), renormalized. Sorting is vectorized; the Python
+    loop only touches the k survivors per vert."""
+    order = np.argsort(-field, axis=1, kind="stable")[:, :k]
+    top = np.take_along_axis(field, order, axis=1)
+    keep = top > NUDGE_MIN_WEIGHT
+    out = []
+    for cols, vals, ok in zip(order.tolist(), top.tolist(), keep.tolist(), strict=True):
+        row = [(bones[c], w) for c, w, o in zip(cols, vals, ok, strict=True) if o]
+        total = sum(w for _, w in row)
+        out.append([(b, w / total) for b, w in row] if total > 0.0 else [])
     return out
 
 

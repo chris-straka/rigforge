@@ -81,6 +81,15 @@
       mobile weight merge is one pass over verts (was one per dropped
       group, ~95x). Verified offline (name table + randomized
       old-vs-new merge equivalence); Blender suites not re-run here.
+- [x] Weight-solver speed (2026-10-03, no output change): voxel
+      geodesics are a numpy level-synchronous BFS (uniform step, so
+      the same floats as the heap Dijkstra), CSR voxel adjacency,
+      vectorized kernel, smoothing on each bone's support box
+      (+iters cells) with shared neighbor counts; nudge adjacency
+      and top-k softmax rows vectorized. Proven offline against the
+      old code with stubbed mathutils: bit-identical on randomized
+      grids/meshes (k < 8). Synthetic 92k-voxel / 60-bone bind ~3.7x
+      faster outside KD lookups; Blender suites not re-run here.
 - [ ] Optional: upstream watch — Blender keeps fixing Rigify; review
       new upstream commits periodically and hand-port (re-apply by
       judgment, never `git merge`: this tree has structurally diverged).
