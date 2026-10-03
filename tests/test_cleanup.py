@@ -88,6 +88,17 @@ check(cleanup_mod.mirror_bone("DEF-arm.L") == "DEF-arm.R", "mirror .L")
 check(cleanup_mod.mirror_bone("DEF-arm.R") == "DEF-arm.L", "mirror .R")
 check(cleanup_mod.mirror_bone("leg_L") == "leg_R", "mirror _L")
 check(cleanup_mod.mirror_bone("spine") == "spine", "mirror unmarked")
+# Rigify puts the side before the .NNN number (twist + face DEF bones).
+check(
+    cleanup_mod.mirror_bone("DEF-upper_arm.L.001") == "DEF-upper_arm.R.001",
+    "mirror twist .L.001",
+)
+check(
+    cleanup_mod.mirror_bone("DEF-lip.T.L.001") == "DEF-lip.T.R.001",
+    "mirror face .T.L.001",
+)
+check(cleanup_mod.mirror_bone("hand_l") == "hand_r", "mirror keeps case")
+check(cleanup_mod.mirror_bone("DEF-spine.001") == "DEF-spine.001", "mirror .001")
 print("rows: limit/normalize/prune/mirror-name OK")
 
 # --- Smooth + mirror on the tube ---

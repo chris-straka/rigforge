@@ -10,17 +10,19 @@ back. All deterministic: sorted bones, fixed pass counts.
 
 from mathutils.kdtree import KDTree
 
-CLEANUP_SMOOTH_BLEND = 0.5  # neighbor mean vs self per smooth pass
+from ..utils.naming import mirror_name
 
-_MIRROR_SUFFIXES = ((".L", ".R"), (".R", ".L"), ("_L", "_R"), ("_R", "_L"))
+CLEANUP_SMOOTH_BLEND = 0.5  # neighbor mean vs self per smooth pass
 
 
 def mirror_bone(name):
-    """Left<->right bone name (.L/.R, _L/_R); unmarked names unchanged."""
-    for left, right in _MIRROR_SUFFIXES:
-        if name.endswith(left):
-            return name[: -len(left)] + right
-    return name
+    """Left<->right bone name; unmarked names unchanged.
+
+    Rigify's own side parser: the side may sit before a .NNN number
+    (DEF-upper_arm.L.001 twist, DEF-lip.T.L.001 face), use . _ or -,
+    and keep its case (hand_l -> hand_r).
+    """
+    return mirror_name(name)
 
 
 def _renorm(row):

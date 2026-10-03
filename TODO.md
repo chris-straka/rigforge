@@ -74,6 +74,13 @@
 - [x] Optional: renamed `RIGIFY-` fcurve data-path prefix in
       `generate.py` to `RIGFORGE-` (2026-10-02); restore still heals
       legacy `RIGIFY-` paths, round-trip pinned in test_rename.py.
+- [x] Review fixes (2026-10-03): cleanup Mirror now flips Rigify
+      `.L.001` twist/face names (was leaving them on the wrong side;
+      reuses utils.naming.mirror_name); mobile face anchor reads
+      armature-space `head_local` (Bone.head is parent-relative);
+      mobile weight merge is one pass over verts (was one per dropped
+      group, ~95x). Verified offline (name table + randomized
+      old-vs-new merge equivalence); Blender suites not re-run here.
 - [ ] Optional: upstream watch — Blender keeps fixing Rigify; review
       new upstream commits periodically and hand-port (re-apply by
       judgment, never `git merge`: this tree has structurally diverged).

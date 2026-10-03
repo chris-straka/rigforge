@@ -200,6 +200,9 @@ jaw_target = targets.get("DEF-jaw")
 if jaw_target is None:
     fail("DEF-jaw has no mobile merge target")
 print(f"mobile: jaw test mesh -> {jaw_target}")
+# Face roots ride the head (topmost kept bone in armature space).
+if not jaw_target.startswith("DEF-spine"):
+    fail(f"DEF-jaw merges into {jaw_target}, not the head/neck chain")
 # A kept-bound mesh alongside (4b deleted the main cube): the mobile
 # GLB must carry both, merged and unmerged.
 bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 1.0, 0.0))
