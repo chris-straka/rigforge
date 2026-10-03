@@ -53,7 +53,8 @@ def mobile_merge_targets(rig):
 
     Target is the nearest kept DEF ancestor (twist, nested face).
     Face roots hang off controls with no DEF ancestor, so they ride
-    the topmost kept DEF bone (max head Z, name tiebreak): on a Z-up
+    the topmost kept DEF bone (max armature-space head Z, name
+    tiebreak; Bone.head is parent-relative, so head_local): on a Z-up
     rig that is the head/neck base, which is what the face should
     follow rigidly. Raw head distance is useless (rigs vary in
     scale; everything can sit within centimeters). Bones with no
@@ -66,7 +67,7 @@ def mobile_merge_targets(rig):
         for b in bones
         if b.name.startswith("DEF-") and classify_def_bone(b.name) == "keep"
     ]
-    anchor = max(kept, key=lambda b: (b.head.z, b.name)) if kept else None
+    anchor = max(kept, key=lambda b: (b.head_local.z, b.name)) if kept else None
     targets = {}
     for bone in bones:
         if not bone.name.startswith("DEF-"):
@@ -144,11 +145,17 @@ def validate_export(rig, meshes, profile):
 
 
 def merge_weights(mesh_obj, targets):
-    """Fold dropped groups into their targets; returns verts remapped."""
+    """Fold dropped groups into their targets; returns verts remapped.
+
+    One pass over the verts (not one per dropped group: the mobile
+    profile drops ~95 bones). Targets are kept bones, never dropped
+    ones, so a fold never lands in a group that is itself removed.
+    """
     if not targets:
         return 0
     groups = mesh_obj.vertex_groups
-    remapped = 0
+    moves = {}  # dropped group index -> target group index
+    dropped_names = []
     for dropped, target in targets.items():
         src = groups.get(dropped)
         if src is None:
@@ -156,20 +163,25 @@ def merge_weights(mesh_obj, targets):
         dst = groups.get(target)
         if dst is None:
             dst = groups.new(name=target)
-        for vert in mesh_obj.data.vertices:
-            try:
-                w = src.weight(vert.index)
-            except RuntimeError:
+        moves[src.index] = dst.index
+        dropped_names.append(dropped)
+    if not moves:
+        return 0
+    by_index = {g.index: g for g in groups}
+    remapped = 0
+    for vert in mesh_obj.data.vertices:
+        have = {el.group: el.weight for el in vert.groups}
+        folded = {}
+        for gi, w in have.items():
+            di = moves.get(gi)
+            if di is None or w <= 0.0:
                 continue
-            if w <= 0.0:
-                continue
-            try:
-                have = dst.weight(vert.index)
-            except RuntimeError:
-                have = 0.0
-            dst.add([vert.index], min(have + w, 1.0), "REPLACE")
+            folded[di] = folded.get(di, have.get(di, 0.0)) + w
             remapped += 1
-        groups.remove(src)
+        for di, w in folded.items():
+            by_index[di].add([vert.index], min(w, 1.0), "REPLACE")
+    for name in dropped_names:
+        groups.remove(groups[name])
     return remapped
 
 
