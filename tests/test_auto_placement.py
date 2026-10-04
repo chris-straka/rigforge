@@ -629,7 +629,7 @@ print("quad CLI gate: full_auto")
 # 10g. HLL stalker mesh (read-only, skip-if-absent): the reference
 # subject runs landmarks -> fit -> strict gate with every driver
 # joint closed; the tail stays honestly unverified (no geometry).
-STALKER_MESH = "/Users/c/Games/hll/enemies/stalker/models/glb/stalker.glb"
+STALKER_MESH = "/Users/c/SWE/games/hll/enemies/stalker/models/glb/stalker.glb"
 s_landmarks = None
 if not os.path.exists(STALKER_MESH):
     print(f"subject stalker: SKIP (missing {STALKER_MESH})")

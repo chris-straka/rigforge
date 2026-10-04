@@ -39,7 +39,7 @@ beat upstream on auto-placement, skinning, presets, and export.
   creature quality, and this repo's own auto-placement covers
   unirig's zero-touch win. unirig survives only as an optional
   joint-hints source (coordinates in, never code).
-- `~/Games/hll` — the game (Godot 4.7 + C#). Its chars are the test
+- `~/SWE/games/hll` — the game (Godot 4.7 + C#). Its chars are the test
   subjects; never commit game assets outside that repo.
 - NOTE (2026-09-30): other agent sessions are active in this area
   (`retopoforge`, `SWE` workspaces). Check `git status`/`git log`
