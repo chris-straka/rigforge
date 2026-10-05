@@ -49,6 +49,7 @@ jobs:
           - test_cleanup
           - test_diagnose
           - test_game_export
+          - test_genforge_adapter
           - test_nudge
           - test_presets
           - test_rename
