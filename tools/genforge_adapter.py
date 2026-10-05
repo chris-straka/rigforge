@@ -76,7 +76,9 @@ def strip_rig(src, bare_path):
     """Import src, remove armatures/skin, export the bare meshes."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
     try:
-        bpy.ops.import_scene.gltf(filepath=src)
+        # No bind-pose guessing: with it, meshes under a translated root
+        # node come back lifted by that translation.
+        bpy.ops.import_scene.gltf(filepath=src, guess_original_bind_pose=False)
     except RuntimeError as exc:
         raise AdapterError(f"cannot import {src}: {exc}") from None
     meshes = [o for o in bpy.data.objects if o.type == "MESH" and o.visible_get()]
