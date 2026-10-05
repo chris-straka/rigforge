@@ -239,7 +239,8 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
     )
     hints: StringProperty(
         name="Hints",
-        description="Optional unirig-joints/1 JSON consumed as soft priors "
+        description="Optional skintokens-joints/1 (or legacy unirig-joints/1) JSON "
+        "consumed as soft priors "
         "(stalker only, same arbitration as fit --hints)",
         subtype="FILE_PATH",
         default="",

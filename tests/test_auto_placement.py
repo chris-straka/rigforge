@@ -753,4 +753,51 @@ else:
         f"{len(h_rep['diverged'])} measurement-wins"
     )
 
+# 10i. SkinTokens hints (skintokens-joints/1, the current hint source since
+# unirig-mac retired; read-only sample, skip-if-absent): same structural
+# properties as 10h, and a hinted stalker fit still gates strict.
+ST_HINTS = os.path.expanduser(
+    "~/SWE/blender/skintokens/tools/joints_samples/stalker_seed0.json"
+)
+if not os.path.exists(ST_HINTS):
+    print(f"skintokens hints: SKIP (missing {ST_HINTS})")
+else:
+    st_doc = uh.load_hints(ST_HINTS)
+    check(st_doc["format"] == "skintokens-joints/1", "skintokens hints format")
+    st_rep = uh.arbitrate(
+        st_doc, s_landmarks if s_landmarks is not None else q_landmarks
+    )
+    st_total = len(st_rep["agreed"]) + len(st_rep["diverged"]) + len(st_rep["unmapped"])
+    check(
+        st_total == st_rep["joints"] == len(st_doc["joints"]),
+        f"skintokens hints classified {st_total}",
+    )
+    for e in st_rep["agreed"]:
+        check(e["delta"] <= st_rep["tol"], f"trusted {e['hint']} past tol")
+    for e in st_rep["diverged"]:
+        check(e["delta"] > st_rep["tol"], f"diverged {e['hint']} within tol")
+    for target in st_rep["trusted"]:
+        check(target in uh.ROLE_TO_TARGET.values(), f"bad target {target}")
+    if s_landmarks is not None:
+        st_fit_path = os.path.join(Q_TMP, "stalker", "hinted_skintokens.py")
+        sf_out, sf_code = run_tool(
+            "fit_metarig.py",
+            [
+                STALKER_MESH,
+                os.path.join(Q_TMP, "stalker", "lm.json"),
+                "--out",
+                st_fit_path,
+                "--preset",
+                "hll_stalker",
+                "--hints",
+                ST_HINTS,
+            ],
+        )
+        check(sf_code is None, f"skintokens-hinted fit exited {sf_code!r}")
+    print(
+        f"skintokens hints: {len(st_rep['trusted'])} trusted, "
+        f"{len(st_rep['supporting'])} supporting, "
+        f"{len(st_rep['diverged'])} measurement-wins"
+    )
+
 print("RIGFORGE_AUTOPLACE_OK")

@@ -11,7 +11,7 @@ Headless (from the repo root; the preset + generate need the addon overlay):
 
 --preset defaults from the landmarks kind (biped -> hll_hero,
 quadruped -> hll_stalker) and must match it. --hints feeds a
-unirig-joints/1 document as soft priors (agree -> trust, disagree ->
+skintokens-joints/1 (or legacy unirig-joints/1) document as soft priors (agree -> trust, disagree ->
 measurement wins + divergence report; see tools/unirig_hints.py).
 
 Inputs: subject mesh (glb/fbx/obj, transforms applied + joined, same as

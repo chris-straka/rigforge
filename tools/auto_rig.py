@@ -23,7 +23,7 @@ Arguments:
 - --blend FILE: also save the final session (mesh + metarig + rig) here.
 - --no-validate: skip the validation gate (NOT recommended — the gate
   is the fail-stop that keeps bad fits from shipping).
-- --hints FILE: unirig-joints/1 JSON consumed by the fit stage as soft
+- --hints FILE: skintokens-joints/1 (or legacy unirig-joints/1) JSON consumed by the fit stage as soft
   priors (agree -> trust, disagree -> measurement wins + divergence
   report; see tools/unirig_hints.py). --hints-rotated applies the Y-up
   -> Z-up rotation to the hint coords (for normalized subjects).

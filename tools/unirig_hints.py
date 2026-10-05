@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""unirig-joints/1 hints CLI (thin shim).
+"""ML joint hints CLI (skintokens-joints/1 or legacy unirig-joints/1; thin shim).
 
 Implementation lives in rigforge.auto_place.unirig_hints (shared with
 the fitter and wm.rigforge_auto_place); this file preserves the headless

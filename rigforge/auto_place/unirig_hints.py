@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Unirig joint hints as SOFT priors for the metarig fitter (Phase 4.5).
+"""ML joint hints as SOFT priors for the metarig fitter (Phase 4.5).
 
-Reads a unirig-joints/1 document (coordinates only — see
-docs/auto_placement.md Section 4.5 for the license boundary) and
-arbitrates each hint against the measured landmarks:
+Reads a skintokens-joints/1 document (`skintokens joints`, the current
+source, ~/SWE/blender/skintokens) or a legacy unirig-joints/1 one (same
+schema; unirig-mac is retired). Coordinates only — see
+docs/auto_placement.md Section 4.5 for the license boundary. Each hint is
+arbitrated against the measured landmarks:
 
 - hint agrees with the measured landmark (within AGREE_TOL) -> trust
   the hint (its position becomes the fitter target);
@@ -28,7 +30,7 @@ Frame: hint `normalized` coords map through the SUBJECT normalizer
 mapping survives scale differences between the hint source mesh and
 the fitting subject. When auto_rig normalized a Y-up subject into Z-up
 (rotated=True), the same +90 deg X rotation applies to the hint coords
-first. Confidence is null in unirig-joints/1 (uniform weighting).
+first. Confidence is null in both formats (uniform weighting).
 
 Pure Python (no bpy): runnable with system python for tests, imported
 by tools/fit_metarig.py for the --hints path.
@@ -38,7 +40,8 @@ import json
 import math
 import sys
 
-FORMAT = "unirig-joints/1"
+FORMAT = "skintokens-joints/1"
+FORMATS = (FORMAT, "unirig-joints/1")  # same schema; unirig-joints/1 is legacy
 
 # Agree tolerance: the longitudinal slice pitch is ~2 cm (length/120)
 # plus envelope smoothing, so the same landmark remeasured lands
@@ -152,8 +155,10 @@ def subject_normalizer(bounds):
 def load_hints(path):
     with open(path, encoding="utf-8") as f:
         doc = json.load(f)
-    if doc.get("format") != FORMAT:
-        raise ValueError(f"{path}: format {doc.get('format')!r}, need {FORMAT!r}")
+    if doc.get("format") not in FORMATS:
+        raise ValueError(
+            f"{path}: format {doc.get('format')!r}, need one of {FORMATS!r}"
+        )
     if not doc.get("joints"):
         raise ValueError(f"{path}: no joints")
     for j in doc["joints"]:
