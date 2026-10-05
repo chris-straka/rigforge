@@ -33,7 +33,7 @@ beat upstream on auto-placement, skinning, presets, and export.
 
 - `~/SWE/retopoforge` — mesh stage (MIT engine + GPL extension).
   Strategy hub: `retopoforge/docs/rigging-strategy.md`. Read it first.
-- `~/SWE/unirig-mac` — ML rigger port (MIT except vendored GPL
+- `~/SWE/blender/unirig-mac` — ML rigger port (MIT except vendored GPL
   michelangelo subtree; never call it MIT-clean). Optional: the
   bake-off (docs/bakeoff/final.md) went to rigforge on hero and
   creature quality, and this repo's own auto-placement covers

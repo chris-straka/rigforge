@@ -29,7 +29,7 @@ template to the mesh; it does not invent topology.
 
 ## 2. Findings: how unirig places joints (read-only study)
 
-Source: `~/SWE/unirig-mac` tree (another session owns it; nothing written
+Source: `~/SWE/blender/unirig-mac` tree (another session owns it; nothing written
 there) + its PORT.md / bake-off half.
 
 - **Skeleton stage** (`src/model/unirig_ar.py`): a GPT-like causal

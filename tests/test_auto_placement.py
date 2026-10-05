@@ -695,7 +695,7 @@ else:
 # when the stalker landmarks are in hand).
 uh = load_tool("ap_unirig_hints", "unirig_hints.py")
 HINTS_SAMPLE = os.path.expanduser(
-    "~/SWE/unirig-mac/tools/joints_samples/stalker_seed42.json"
+    "~/SWE/blender/unirig-mac/tools/joints_samples/stalker_seed42.json"
 )
 if not os.path.exists(HINTS_SAMPLE):
     print(f"hints: SKIP (missing {HINTS_SAMPLE})")
