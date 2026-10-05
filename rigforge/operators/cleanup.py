@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Cleanup operator (thin UI over weights.cleanup, W4).
 
-Whole-mesh weight hygiene: limit influences per vert (Godot/mobile
+Whole-mesh weight hygiene: limit influences per vert (mobile GPU
 budgets), normalize, prune specks, mirror L/R, smooth. Undoable.
 By default only the deform-bone groups of the mesh's rig are touched:
 masks, cloth pins and other non-bone groups keep their weights.

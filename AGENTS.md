@@ -2,7 +2,7 @@
 
 Fork of Blender's Rigify (0.6.10, copied from the Blender 5.2 app
 bundle), module renamed `rigforge` to coexist with bundled Rigify.
-Goal: game-ready rigs for HLL (Godot 4.7) characters and creatures —
+Goal: game-ready rigs for HLL (Bevy, Rust) characters and creatures —
 beat upstream on auto-placement, skinning, presets, and export.
 
 ## Standing rules
@@ -39,7 +39,8 @@ beat upstream on auto-placement, skinning, presets, and export.
   creature quality, and this repo's own auto-placement covers
   unirig's zero-touch win. unirig survives only as an optional
   joint-hints source (coordinates in, never code).
-- `~/SWE/games/hll` — the game (Godot 4.7 + C#). Its chars are the test
+- `~/SWE/games/hll` — the game (Bevy, Rust; the Godot project was
+  removed 2026-10-05). Its chars are the test
   subjects; never commit game assets outside that repo.
 - NOTE (2026-09-30): other agent sessions are active in this area
   (`retopoforge`, `SWE` workspaces). Check `git status`/`git log`

@@ -22,7 +22,7 @@ else. Context: `~/SWE/games/tools/roadmap.md` section 3.3.
    robust inpainting (Abdrashitov et al., SIGGRAPH Asia 2023): copy
    where the piece is close to the body, inpaint smoothly where it hangs
    away (cape hem, long hair), instead of plain nearest-surface copy.
-4. **Cleanup ops**: limit to 4 influences per vertex (Godot/mobile),
+4. **Cleanup ops**: limit to 4 influences per vertex (mobile GPUs),
    normalize, mirror L/R, smooth, prune tiny weights.
 
 ## Architecture

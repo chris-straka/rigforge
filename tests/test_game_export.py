@@ -431,35 +431,25 @@ if not found_target:
     fail("jaw mesh missing from the mobile re-import")
 print("mobile re-import: dropped groups gone, jaw weights on target")
 
-# 7. Godot import check (skipped when Godot is absent).
-godot_bin = os.environ.get("GODOT_BIN", "/Applications/Godot.app/Contents/MacOS/Godot")
-if not (os.path.isfile(godot_bin) and os.access(godot_bin, os.X_OK)):
-    print("godot: skipped (no Godot binary)")
+# 7. Bevy import check (HLL's engine; skipped when the glbkit Bevy
+#    checker is not built, see tools/bevy_import_check.py). Bone counts
+#    are already pinned by the Blender re-imports above; this proves
+#    Bevy's loader turns both skins into SkinnedMesh entities.
+proc = subprocess.run(
+    [sys.executable, "tools/bevy_import_check.py", GLB_PATH, mobile_path],
+    capture_output=True,
+    text=True,
+    timeout=900,
+)
+print(proc.stdout.strip())
+if proc.returncode == 2:
+    print("bevy: skipped (no Bevy checker binary)")
+elif proc.returncode != 0:
+    fail(f"bevy import check failed: {proc.stdout[-800:]} {proc.stderr[-500:]}")
 else:
-    proc = subprocess.run(
-        [
-            sys.executable,
-            "tools/godot_import_check.py",
-            GLB_PATH,
-            mobile_path,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    print(proc.stdout.strip())
-    if proc.returncode != 0:
-        fail(f"godot import check failed: {proc.stdout} {proc.stderr[-500:]}")
-    bones_by_path = {}
-    for line in proc.stdout.splitlines():
-        if "GODOT_STAT" not in line:
-            continue
-        parts = dict(kv.split("=", 1) for kv in line.split()[1:] if "=" in kv)
-        bones_by_path[parts["path"]] = int(parts["bones"])
-    if bones_by_path.get(GLB_PATH) != len(def_bones):
-        fail(f"godot full bones wrong: {bones_by_path}")
-    if bones_by_path.get(mobile_path) != len(kept):
-        fail(f"godot mobile bones wrong: {bones_by_path}")
-    print("godot: both GLBs import with full/mobile skeletons")
+    stats = [ln for ln in proc.stdout.splitlines() if ln.startswith("BEVY_STAT ok")]
+    if len(stats) != 2 or any(" 0 SkinnedMesh" in ln for ln in stats):
+        fail(f"bevy: expected two skinned loads, got {stats}")
+    print("bevy: both GLBs load with skinned meshes")
 
 print("RIGFORGE_EXPORT_TEST_OK")

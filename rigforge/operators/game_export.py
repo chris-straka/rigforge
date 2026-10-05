@@ -212,7 +212,7 @@ class WM_OT_rigforge_game_export(bpy.types.Operator, ExportHelper):
     bl_label = "Export Game Rig GLB"
     bl_description = (
         "Export the active generated rig and its skinned meshes "
-        "as a deform-bones-only GLB for game engines (Godot)"
+        "as a deform-bones-only GLB for game engines (Bevy)"
     )
 
     filename_ext = ".glb"

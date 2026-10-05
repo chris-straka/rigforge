@@ -5,7 +5,7 @@ Pipeline: Mixamo skeleton (FBX clip, or a procedurally-built walk cycle)
 -> per-frame rotation transfer with rest-pose compensation onto the
 generated HLL hero rig's DEF bones -> root-motion transfer with stride
 scaling -> foot-slide measure + cleanup pass -> existing game_export
-baked-anim path -> GLB (Godot-ready).
+baked-anim path -> GLB (game-ready).
 
 Headless, from the repo root (addon overlay needed for generate+export):
 

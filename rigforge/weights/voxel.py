@@ -26,7 +26,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
-K_DEFAULT = 4  # bones per voxel/vert (Godot/mobile 4-influence budget)
+K_DEFAULT = 4  # bones per voxel/vert (mobile 4-influence budget)
 BLEND_REF = 0.016  # reference blend scale (m): smoothing passes are
 # (BLEND_REF / cell)^2, so the physical blend width stays constant
 # across grid resolutions (calibrated: 6 passes at 6.5 mm cells).

@@ -44,6 +44,15 @@
       external-asset suites); this rig stays the target, no
       portability crusade.
 
+- [x] genforge repair-rig adapter (2026-10-05): tools/genforge_adapter.sh
+      wraps auto_rig.py in genforge's adapter contract (README);
+      tests/test_genforge_adapter.py (broken one-bone rig -> 160 DEF).
+- [x] HLL moved to Bevy (2026-10-05): the Godot import check
+      (tools/godot_import_check.*) is replaced by
+      tools/bevy_import_check.py (glbkit's headless Bevy 0.19.1 loader,
+      skipped when not built); docs say Bevy. Items below that mention
+      Godot are history.
+
 ## Refactor / codebase health backlog
 
 - [x] Lint debt (2026-10-02): all rigforge-authored code clean

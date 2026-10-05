@@ -47,7 +47,7 @@ class WM_OT_rigforge_voxel_weights(bpy.types.Operator):
     )
     max_influences: IntProperty(
         name="Max Influences",
-        description="Bones kept per vertex (4 fits the Godot/mobile budget)",
+        description="Bones kept per vertex (4 fits the mobile GPU budget)",
         default=4,
         min=1,
         max=8,
