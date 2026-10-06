@@ -34,8 +34,9 @@ beat upstream on auto-placement, skinning, presets, and export.
 - `~/SWE/retopoforge` — mesh stage (MIT engine + GPL extension).
   Strategy hub: `retopoforge/docs/rigging-strategy.md`. Read it first.
 - `~/SWE/blender/skintokens` — ML rigger (SkinTokens/TokenRig, UniRig's
-  successor; MIT code and weights, Michelangelo-derived GPL encoder, so
-  never call it MIT-clean). The optional joint-hints source since
+  successor; Rust since 2026-10-05; MIT code and weights, the
+  Michelangelo-derived encoder is its own GPL-3.0 crate, so never call
+  the binary MIT-clean). The optional joint-hints source since
   2026-10-05: `skintokens joints` writes skintokens-joints/1, which
   `--hints` reads (coordinates in, never code).
 - `~/SWE/blender/unirig-mac` — retired 2026-10-05 (replaced by
