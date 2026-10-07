@@ -31,7 +31,7 @@ beat upstream on auto-placement, skinning, presets, and export.
 
 ## Siblings (separate repos, separate sessions)
 
-- `~/SWE/retopoforge` — mesh stage (MIT engine + GPL extension).
+- `~/SWE/blender/retopoforge` — mesh stage (MIT engine + GPL extension).
   Strategy hub: `retopoforge/docs/rigging-strategy.md`. Read it first.
 - `~/SWE/blender/skintokens` — ML rigger (SkinTokens/TokenRig, UniRig's
   successor; Rust since 2026-10-05; MIT code and weights, the
