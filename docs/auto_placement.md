@@ -29,7 +29,7 @@ template to the mesh; it does not invent topology.
 
 ## 2. Findings: how unirig places joints (read-only study)
 
-Source: `~/SWE/blender/unirig-mac` tree (another session owns it; nothing written
+Source: `~/Games/_blender/unirig-mac` tree (another session owns it; nothing written
 there) + its PORT.md / bake-off half.
 
 - **Skeleton stage** (`src/model/unirig_ar.py`): a GPT-like causal
@@ -678,7 +678,7 @@ are pre-existing HEAD debt). Bake-off re-run with the fitter:
 
 ## 12. Hint source: SkinTokens (2026-10-05)
 
-unirig-mac is retired; the ML hint source is now `~/SWE/blender/skintokens`
+unirig-mac is retired; the ML hint source is now `~/Games/_blender/skintokens`
 (SkinTokens/TokenRig, UniRig's successor). `skintokens joints RIG.glb
 OUT.json` writes `skintokens-joints/1`: the unirig-joints/1 schema
 (names, parents, world + bbox-normalized positions, null confidence)

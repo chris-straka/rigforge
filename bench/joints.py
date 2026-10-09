@@ -5,7 +5,7 @@
     python3 bench/joints.py [--tag NAME] [--only a,b]
 
 Inputs: the shared CC0 corpus (8 MPFB2 characters in clothes, varied body
-types, 3k-21k verts; ~/SWE/blender/weightforge/bench/corpus/fetch.sh puts
+types, 3k-21k verts; ~/Games/_blender/weightforge/bench/corpus/fetch.sh puts
 them in $FORGE_BENCH/corpus). Each comes with MPFB2's own skeleton, fitted
 to that body by MakeHuman: the ground truth for where joints belong.
 
@@ -13,7 +13,7 @@ Per character: strip the rig, run tools/auto_rig.py (hll_hero), and
 measure joint placement against the truth (hips, neck, head, shoulders,
 upper arms, elbows, wrists, hips joints, knees, ankles, toes), in % of the
 character's height; also wall time, success, and rfcheck on the GLB when
-the binary is built (~/SWE/rfcheck/target/release/rfcheck). Free baseline:
+the binary is built (~/Games/_blender/rfcheck/target/release/rfcheck). Free baseline:
 Blender's stock Rigify human metarig scaled to the character's height (what
 you start from before placing bones by hand). Writes
 bench/results/<tag>/{summary.json,scorecard.md} and copies both to
@@ -34,7 +34,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 FORGE = os.environ.get("FORGE_BENCH", os.path.expanduser("~/.cache/forge-bench"))
 CORPUS = os.path.join(FORGE, "corpus")
-RFCHECK = os.environ.get("RFCHECK", os.path.expanduser("~/SWE/rfcheck/target/release/rfcheck"))
+RFCHECK = os.environ.get("RFCHECK", os.path.expanduser("~/Games/_blender/rfcheck/target/release/rfcheck"))
 
 # rigforge / Rigify bone head -> MPFB2 game_engine bone head (same joint).
 TRUTH = {"DEF-spine": "pelvis", "DEF-spine.004": "neck_01", "DEF-spine.006": "head",

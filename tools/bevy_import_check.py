@@ -10,7 +10,7 @@ the default scene and requires every declared skin to become SkinnedMesh
 entities with joint indices and weights.
 
 Checker binary: $BEVY_GLB_CHECK, else the build-tree default
-~/SWE/rfcheck/glbkit/compat/bevy/target/release/examples/check (build it
+~/Games/_blender/rfcheck/glbkit/compat/bevy/target/release/examples/check (build it
 with `cargo build --release --example check` in that folder; Bevy is a
 long first build).
 
@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 DEFAULT = os.path.expanduser(
-    "~/SWE/rfcheck/glbkit/compat/bevy/target/release/examples/check"
+    "~/Games/_blender/rfcheck/glbkit/compat/bevy/target/release/examples/check"
 )
 
 

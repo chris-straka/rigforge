@@ -629,7 +629,7 @@ print("quad CLI gate: full_auto")
 # 10g. HLL stalker mesh (read-only, skip-if-absent): the reference
 # subject runs landmarks -> fit -> strict gate with every driver
 # joint closed; the tail stays honestly unverified (no geometry).
-STALKER_MESH = "/Users/c/SWE/games/hll/enemies/stalker/models/glb/stalker.glb"
+STALKER_MESH = "/Users/c/Games/hll/enemies/stalker/models/glb/stalker.glb"
 s_landmarks = None
 if not os.path.exists(STALKER_MESH):
     print(f"subject stalker: SKIP (missing {STALKER_MESH})")
@@ -695,7 +695,7 @@ else:
 # when the stalker landmarks are in hand).
 uh = load_tool("ap_unirig_hints", "unirig_hints.py")
 HINTS_SAMPLE = os.path.expanduser(
-    "~/SWE/blender/unirig-mac/tools/joints_samples/stalker_seed42.json"
+    "~/Games/_blender/unirig-mac/tools/joints_samples/stalker_seed42.json"
 )
 if not os.path.exists(HINTS_SAMPLE):
     print(f"hints: SKIP (missing {HINTS_SAMPLE})")
@@ -757,7 +757,7 @@ else:
 # unirig-mac retired; read-only sample, skip-if-absent): same structural
 # properties as 10h, and a hinted stalker fit still gates strict.
 ST_HINTS = os.path.expanduser(
-    "~/SWE/blender/skintokens/tools/joints_samples/stalker_seed0.json"
+    "~/Games/_blender/skintokens/tools/joints_samples/stalker_seed0.json"
 )
 if not os.path.exists(ST_HINTS):
     print(f"skintokens hints: SKIP (missing {ST_HINTS})")

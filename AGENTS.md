@@ -31,19 +31,19 @@ beat upstream on auto-placement, skinning, presets, and export.
 
 ## Siblings (separate repos, separate sessions)
 
-- `~/SWE/blender/retopoforge` — mesh stage (MIT engine + GPL extension).
+- `~/Games/_blender/retopoforge` — mesh stage (MIT engine + GPL extension).
   Strategy hub: `retopoforge/docs/rigging-strategy.md`. Read it first.
-- `~/SWE/blender/skintokens` — ML rigger (SkinTokens/TokenRig, UniRig's
+- `~/Games/_blender/skintokens` — ML rigger (SkinTokens/TokenRig, UniRig's
   successor; Rust since 2026-10-05; MIT code and weights, the
   Michelangelo-derived encoder is its own GPL-3.0 crate, so never call
   the binary MIT-clean). The optional joint-hints source since
   2026-10-05: `skintokens joints` writes skintokens-joints/1, which
   `--hints` reads (coordinates in, never code).
-- `~/SWE/blender/unirig-mac` — retired 2026-10-05 (replaced by
+- `~/Games/_blender/unirig-mac` — retired 2026-10-05 (replaced by
   skintokens). Its unirig-joints/1 files still load as legacy hints.
   The bake-off (docs/bakeoff/final.md) went to rigforge on hero and
   creature quality either way.
-- `~/SWE/games/hll` — the game (Bevy, Rust; the Godot project was
+- `~/Games/hll` — the game (Bevy, Rust; the Godot project was
   removed 2026-10-05). Its chars are the test
   subjects; never commit game assets outside that repo.
 - NOTE (2026-09-30): other agent sessions are active in this area

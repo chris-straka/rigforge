@@ -27,7 +27,7 @@ Blender invocation). Binaries resolve via env with same-machine
 defaults: `BLENDER_BIN` (default
 `/Applications/Blender.app/Contents/MacOS/Blender`), `BEVY_GLB_CHECK`
 (glbkit's headless Bevy loader check, default
-`~/SWE/rfcheck/glbkit/compat/bevy/target/release/examples/check`, used
+`~/Games/_blender/rfcheck/glbkit/compat/bevy/target/release/examples/check`, used
 by `tools/bevy_import_check.py`; skipped when not built). The Godot
 import check was removed with the Godot version of HLL (2026-10-05).
 Suites needing files outside the repo (e.g.
