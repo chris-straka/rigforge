@@ -8,8 +8,8 @@ Run (from the repo root, after syncing the overlay):
       --background --factory-startup --python tests/test_weights_w1.py
 
 Deformation test per ~/SWE/retopoforge/docs/deformation-test.md: three
-procedural fixtures (tube limb, synthetic biped + fitted hll_hero,
-coarsened synthetic quadruped + fitted hll_stalker), each skinned twice
+procedural fixtures (tube limb, synthetic biped + fitted biped_hero,
+coarsened synthetic quadruped + fitted quadruped_stalker), each skinned twice
 (Blender automatic weights vs rigforge.weights.voxel) unless robust,
 posed from tests/fixtures/weights_poses/*.json, measured per joint
 region (verts with either joint-bone weight > 0.1): p95 stretch +
@@ -408,7 +408,7 @@ def _maybe_smooth(mesh):
 def build_hero():
     mesh, _spec = build_synthetic()
     bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.object.rigforge_hll_hero_metarig_add()
+    bpy.ops.object.rigforge_biped_hero_metarig_add()
     meta = bpy.context.view_layer.objects.active
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="DESELECT")
@@ -437,7 +437,7 @@ def build_quad():
     mod.voxel_size = 0.015
     mod.adaptivity = 0.0
     bpy.ops.object.modifier_apply(modifier=mod.name)
-    bpy.ops.object.rigforge_hll_stalker_metarig_add()
+    bpy.ops.object.rigforge_quadruped_stalker_metarig_add()
     meta = bpy.context.view_layer.objects.active
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="DESELECT")

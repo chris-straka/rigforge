@@ -14,7 +14,7 @@ Blender: `--python tools/genforge_adapter.py -- repair-rig ...`).
 Steps: import IN.glb, drop its armature (meshes return to rest; old
 bone vertex groups removed; materials and textures kept), export the
 bare meshes to a temp GLB, run auto_rig.py on it with the class preset
-(humanoid -> hll_hero, quadruped -> hll_stalker) and write OUT.glb.
+(humanoid -> biped_hero, quadruped -> quadruped_stalker) and write OUT.glb.
 genforge re-standardizes the result (motionforge) before rechecking it,
 so the rerig lands on the same canonical skeleton as every character.
 
@@ -38,7 +38,7 @@ import tempfile
 import bpy
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
-PRESET_FOR_CLASS = {"humanoid": "hll_hero", "quadruped": "hll_stalker"}
+PRESET_FOR_CLASS = {"humanoid": "biped_hero", "quadruped": "quadruped_stalker"}
 OK_MARK = "RIGFORGE_AUTO_RIG_OK"
 FAIL_MARK = "RIGFORGE_AUTO_RIG_FAIL"
 

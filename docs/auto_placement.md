@@ -15,11 +15,11 @@ split the verdict three ways:
 |---|---|---|---|
 | hero joints | 160 DEF (+face/fingers/twists) | 28, body only | 33, weak |
 | wall time | ~30 min scripted | ~7 min, 0 touch | ~15 min web UI |
-| per-character manual delta | fit-delta (e.g. Andras hands ~5 cm off) + bind | cleanup only | retarget setup |
+| per-character manual delta | fit-delta (e.g. the hero's hands ~5 cm off) + bind | cleanup only | retarget setup |
 
 rigforge wins quality; unirig wins automation. The zero-touch gap is
 exactly the per-character **metarig fit-delta**: today a preset goes in
-as authored (`tools/make_hll_presets.py` constants measured per subject
+as authored (`tools/make_presets.py` constants measured per subject
 *class*), and a rigger would still nudge bones per subject. Close that
 delta and rigforge keeps its quality lead with unirig-class touch time.
 
@@ -60,8 +60,8 @@ fixed and our subjects are known classes (stylized biped, quadruped).
 
 ## 3. Findings: how rigforge fits today
 
-- Presets are **generated modules** (`rigforge/metarigs/hll_hero.py`,
-  `hll_stalker.py`, 159 / 70 bones): stock metarig + rigid,
+- Presets are **generated modules** (`rigforge/metarigs/biped_hero.py`,
+  `quadruped_stalker.py`, 159 / 70 bones): stock metarig + rigid,
   square-preserving subtree transforms from class-level constants
   (`HERO_HEIGHT`, `HERO_ARM_DROP_DEG`, stance widths), encoded with
   `rigforge.utils.rig.write_metarig`.
@@ -132,7 +132,7 @@ Driver bones take landmark targets; everything else follows rigidly:
   features is explicitly out of scope — presets already fit).
 - stalker drivers: `spine.001..006`, `neck.001..004` + `head`/`skull`,
   per-leg chains, `tail.001..005`. Head/neck stay a connected rigid chain
-  (the head rig requires it — same constraint as in `make_hll_presets.py`).
+  (the head rig requires it — same constraint as in `make_presets.py`).
 
 Solve order per chain (root outward): set head from parent/proximal
 landmark, set tail from distal landmark, then rigid-move the subtree for
@@ -166,25 +166,25 @@ for the corresponding driver bones (needs a unirig-name -> metarig-bone
 correspondence map, ~20 entries for a biped). This is the strategy hub's
 endgame ("auto-placement feeding hand-grade output") with a clean license
 boundary (coordinates only). Recommended only if slice/blob landmarks
-prove insufficient on real HLL meshes — try deterministic first.
+prove insufficient on real game meshes — try deterministic first.
 
 ## 5. Work plan
 
 - [x] Phase 1: landmark detector prototype (`tools/detect_landmarks.py`):
       slice/blob analysis, JSON landmarks, headless, synthetic-mesh test.
-- [x] Phase 1b (hero): detector run on the Andras hero mesh
-      (`rigforge_andras.glb`, read-only); see Section 6.
+- [x] Phase 1b (hero): detector run on the reference hero mesh
+      (`rigforge_hero.glb`, read-only); see Section 6.
 - [x] Phase 1b (stalker): quadruped detector variant (longitudinal
       spine analysis + legs from below); see Section 10.
 - [x] Phase 2: fitter (`tools/fit_metarig.py`): correspondence + solve,
-      reusing `make_hll_presets` machinery; fitted preset must generate.
-      DONE (Section 7): Andras fit-delta closed to 0.0 cm on all driver
+      reusing `make_presets` machinery; fitted preset must generate.
+      DONE (Section 7): the hero fit-delta closed to 0.0 cm on all driver
       joints, fitted metarig generates headless (706 rig / 160 DEF bones).
 - [x] Phase 3: validation gate + `tests/test_auto_placement.py` (fit,
       generate, export, fit-delta numbers); hardened per Section 8.
       Re-run bake-off comparison still open.
 - [x] Phase 4: quadruped fitter + gate + `auto_rig.py --preset
-      hll_stalker` route; stalker blockout runs end to end, strict
+      quadruped_stalker` route; stalker blockout runs end to end, strict
       PASS (see Section 10).
 - [x] Phase 4.5: unirig-joints/1 hints as soft priors with
       agree-vs-measure arbitration (`tools/unirig_hints.py`,
@@ -202,7 +202,7 @@ plus `tests/test_presets.py` stay green — the addon itself is untouched, so
 no regressions are possible outside the new `tools/` file. `ruff check`
 and `ruff format --check` are clean on the new file.
 
-Andras hero run (read-only input, envelope remesh at height/150):
+The hero run (read-only input, envelope remesh at height/150):
 
 ```json
 {"height": 1.1375, "neck_z": 0.9244, "armpit_z": 0.7253,
@@ -234,10 +234,10 @@ assumed) as -Y from foot asymmetry. Four findings for Phase 2:
 ## 7. Phase 2 status (this change)
 
 `tools/fit_metarig.py` implements Section 4.3 end to end: subject mesh +
-landmark JSON in, fitted `hll_hero` metarig module out (headless), with
+landmark JSON in, fitted `biped_hero` metarig module out (headless), with
 an in-session headless generate as proof. Reuses `descendants()` /
 `apply()` / `about()` / `reconnect_from()` from
-`tools/make_hll_presets.py` and the analysis (`import_mesh` /
+`tools/make_presets.py` and the analysis (`import_mesh` /
 `envelope_copy` / slice tracking) from `tools/detect_landmarks.py` —
 no reinvented machinery. Solve is root-outward per driver chain onto
 landmark targets, `.L` solved and `.R` mirrored, rolls preserved unless
@@ -252,12 +252,12 @@ Section 6 findings, resolved:
    upper-arm length — lands at z 0.864, 14 cm above the armpit run
    start (0.725), as predicted. Upper arm holds elbow y (tracked flat);
    a guard clamps the shoulder above armpit + 2 cm.
-3. Ankle sole offset: fired on Andras via the implausible-z trigger
+3. Ankle sole offset: fired on the reference hero via the implausible-z trigger
    (0.1186 > 0.085 x height; dip 0.0358 was strong but mid-boot),
    ankle placed at zmin + 0.044 x height = 0.0502. A weak-dip trigger
    (< 0.010) covers boot-smoothed profiles; both triggers verified
    with a doctored JSON. Gauntlet wrists get the same pattern
-   (hand_tip + palm length when wrist_dip < 0.004); Andras wrist_dip
+   (hand_tip + palm length when wrist_dip < 0.004); the hero wrist_dip
    0.006 reads weak-but-usable, so the measured 0.5547 stands —
    the arm profile shows a textbook wrist (taper -> waist at 0.545 ->
    palm flare -> finger splits at 0.479).
@@ -265,7 +265,7 @@ Section 6 findings, resolved:
    the wrist only; leg axis fits above the foot flare (z > 0.11 x
    height, 31 bands).
 
-Andras fit-delta (driver-joint distance to target, cm), before = preset
+The hero fit-delta (driver-joint distance to target, cm), before = preset
 as-is, after = fitted:
 
 | joint | before | after | joint | before | after |
@@ -285,7 +285,7 @@ detaching the neck — generate fails loudly otherwise (observed).
 Closure max gap 0.0, symmetry 0.0, input L/R asym 4.4 mm (< 1 cm);
 rolls realigned on 4 limb bones per the 5-deg rule.
 
-Validation beyond Andras: synthetic-mesh run (12.4 cm wrist delta,
+Validation beyond the hero: synthetic-mesh run (12.4 cm wrist delta,
 no fallbacks, no cautions) fits and generates 706/160 — the machinery
 is not overfit to one subject. Torso has no direct landmarks (follows
 coarse scale + neck distribution); limb y uses measured centroids only
@@ -300,7 +300,7 @@ and session blend are build artifacts under `/tmp`, not committed.
 
 ## 8. Phase 3 gate hardening: four eyeball findings (this change)
 
-Fitted-Andras overlay eyeballing (`gate_*.png`) caught four placements
+Fitted-hero overlay eyeballing (`gate_*.png`) caught four placements
 the gate missed or mis-reported. All fixes live in
 `tools/validate_fit.py` + `tests/test_auto_placement.py`; the gate
 stays warn-only for placement (hard fails are still closure /
@@ -309,7 +309,7 @@ inside+margin / symmetry only).
 1. FINGERS (fan offset laterally, thumb out): the gate measured chain
    angle only. Added fingertip containment (any of the four tips
    outside the envelope warns) with per-finger lateral-vs-axis vectors
-   naming the nudge. Andras now warns `angle + outside:all four`
+   naming the nudge. The hero now warns `angle + outside:all four`
    (pinky 46.2 deg, laterals 3.2-4.3 cm, all tips 0-vote outside)
    vs synthetic ok (tips inside, pinky 38.4 deg = the preset's natural
    fan). Two calibration notes: (a) the old sub-wrist vert set caught
@@ -318,8 +318,8 @@ inside+margin / symmetry only).
    the old "pinky 32 deg fine" reading is obsolete, superseded by the
    decontaminated 46 deg on that same bone. (b) No lateral threshold
    exists: healthy synthetic reads 4.9 cm (fat hand box, same medial
-   fitter bias as Andras's 4.3 cm), so laterals stay diagnostic.
-   Thumb: included in the angle check (Andras 25.5 deg, synthetic
+   fitter bias as the reference hero's 4.3 cm), so laterals stay diagnostic.
+   Thumb: included in the angle check (the hero 25.5 deg, synthetic
    22.6 deg — it tracks the fan; the old "points sideways" rationale
    was wrong for this metarig). Thumb tip grazes 6 mm off the surface
    (knuckle exits at 0.2 mm depth): real but mm-scale, reported
@@ -330,9 +330,9 @@ inside+margin / symmetry only).
    the skullcap, face bottom above the chin floor; brow clearance,
    face frac, and per-part ring containment reported, never gated.
    Honest limit: calibration forbids a riding-high threshold —
-   healthy synthetic reads -0.3 cm brow clearance vs Andras's +2.1 cm
+   healthy synthetic reads -0.3 cm brow clearance vs the reference hero's +2.1 cm
    (hair inflates the skullcap reference the wrong way), so the gate
-   trips only on gross misplacement. Andras passes the tripwire while
+   trips only on gross misplacement. The hero passes the tripwire while
    the eyeball finding stands (eyes 1.6 cm above the widest ring, brow
    in the narrowing hair-spike bands): the real fix is fitter-side, a
    hair-robust head-top target (skullcap instead of zmax). Slices
@@ -341,7 +341,7 @@ inside+margin / symmetry only).
 3. TOES (wrong direction + short of foot end): the gate checked
    tip-inside + overshoot only. Added toe-axis yaw vs mesh foot
    direction (front/back-half split; warns past 45 deg, same pattern
-   as fingers). Andras yaw reads 2.7 deg — direction is fine; the
+   as fingers). The hero yaw reads 2.7 deg — direction is fine; the
    sideways stubs the eyeball read as toes are the heel.02
    reverse-foot pivots, correct by design. The genuine toe issues are
    shortfall (tip 3.3 cm short of the foot front, reported, ungated —
@@ -361,11 +361,11 @@ inside+margin / symmetry only).
    set equals the fitted set (159 bones, no `Bone`).
 
 Threshold justifications, tied to verdicts: `FINGER_WARN_DEG` 45 kept
-(above the 38 deg natural fan; corrected Andras pinky 46.2 deg fires
+(above the 38 deg natural fan; the corrected hero pinky 46.2 deg fires
 correctly); `MARGIN_DEFAULT` 1 cm kept (7.2 mm toe breach deemed
-real); `HEAD_WARN` 3 cm kept (Andras -1.3 mm; hair-inclusive by
+real); `HEAD_WARN` 3 cm kept (the hero -1.3 mm; hair-inclusive by
 fitter contract); `TOE_WARN` 2 mm kept (no overshoot observed);
-`TOE_DIR_WARN` 45 new (same-pattern yaw; Andras 2.7 deg, synthetic
+`TOE_DIR_WARN` 45 new (same-pattern yaw; the hero 2.7 deg, synthetic
 0.0 deg, twisted-toe red test 90.0 deg). No lateral / shortfall /
 brow thresholds — each was attempted and killed by calibration (see
 above), not by preference.
@@ -380,12 +380,12 @@ red-on-known-bad coverage (shifted fan, floated face, twisted toe —
 and the old angle check proven blind to pure translation on the same
 bad fit); smoke (`RIGFORGE_SMOKE_OK`) and `tests/test_presets.py`
 green; `ruff check` + `ruff format --check` clean on both touched
-files. Andras final: hard FAIL on toe margin (unchanged), fingers
+files. The hero final: hard FAIL on toe margin (unchanged), fingers
 warn, toes/face warn-quiet with diagnostics, head ok.
 
 ## 9. Fitter follow-ups: production meshes through the strict gate
 
-The Section 8 gate failed every production mesh (Andras: toe margin;
+The Section 8 gate failed every production mesh (reference hero: toe margin;
 Hunyuan elf: shoulder/foot/toe outside; Hunyuan millennial: untested
 merge case). All fixes below are fitter-side
 (`tools/fit_metarig.py`); the gate's thresholds and verdicts are
@@ -437,7 +437,7 @@ Before/after (strict `auto_rig.py`, no `--no-validate`):
 
 | subject | before | after |
 |---|---|---|
-| Andras | FAIL: toe.L/R margin 7.2/8.5 mm; pinky 46.2 deg + tips outside | PASS (min 12.4 mm); fingers quiet |
+| hero | FAIL: toe.L/R margin 7.2/8.5 mm; pinky 46.2 deg + tips outside | PASS (min 12.4 mm); fingers quiet |
 | elf | FAIL: shoulder/foot/toe L/R outside | PASS (min 10.5 mm); fingers quiet; elbow re-derived, shoulder marched 0.75, ankle forefoot trigger |
 | millennial | FAIL (untested): shoulder/hand outside, upper-arm margin 3.6 mm, toe.R 9.0 mm | PASS (min 12.6 mm); hand mesh-fit + nudge; finger angle near-miss 45.5/46.9 (open, below) |
 
@@ -465,8 +465,8 @@ suites green; ruff clean on both touched files.
 ## 10. Quadruped pipeline + unirig hints (this change)
 
 The stalker-class path: longitudinal landmark detection, a connected-
-chain fitter for the `hll_stalker` preset, a structural gate driver
-set, the `auto_rig.py --preset hll_stalker` route, and unirig-joints/1
+chain fitter for the `quadruped_stalker` preset, a structural gate driver
+set, the `auto_rig.py --preset quadruped_stalker` route, and unirig-joints/1
 hints as arbitrated soft priors. The biped path is untouched in
 behavior (same functions, same thresholds, same expectations — §1-9
 of the suite pass unmodified).
@@ -504,7 +504,7 @@ the tail tip test excludes only above-spine blobs.
 
 ### 10.2 Fitter: connected chains onto measured 3D targets
 
-`fit_metarig.py --preset hll_stalker` (defaulted from the landmarks
+`fit_metarig.py --preset quadruped_stalker` (defaulted from the landmarks
 kind, must match): coarse scale from the spine length, then
 root-outward connected-chain solves — spine.001..006 along the
 measured line, neck.001..head as ONE connected rigid chain through
@@ -555,7 +555,7 @@ Synthetic gate: PASS, 32 drivers (tail gated), min 13.9 mm
 
 ### 10.4 auto_rig route + end-to-end verdicts
 
-`auto_rig.py --preset hll_stalker` routes `--kind quadruped`,
+`auto_rig.py --preset quadruped_stalker` routes `--kind quadruped`,
 `--preset` passthrough, and `STALKER_OPEN` (neck.001, pelvis,
 shoulder, tail.001, thigh, upper_arm — the stock preset's floated
 sockets). Orientation: the Y-up test additionally requires ymin
@@ -630,7 +630,7 @@ Verified: `tests/test_auto_placement.py` §10 green (synthetic
 quad end to end + strict gate with tail drivers, red head
 check, stalker strict PASS, hints structural + trusted-target
 test) with §1-9 unchanged-green; `auto_rig.py --preset
-hll_stalker` strict exits 0 (80/80 DEF); hinted run strict
+quadruped_stalker` strict exits 0 (80/80 DEF); hinted run strict
 exits 0; smoke (`RIGFORGE_SMOKE_OK`), presets, game-export,
 rename suites green; hero `auto_rig` regression green; `ruff
 check` + `ruff format --check` clean on all touched files.
@@ -639,7 +639,7 @@ check` + `ruff format --check` clean on all touched files.
 
 The Section 5 checkbox is done: `wm.rigforge_auto_place` (Armature
 properties > Rigforge panel > Auto-Place to Mesh, or headless via
-`bpy.ops.wm.rigforge_auto_place()`) fits the active HLL metarig onto
+`bpy.ops.wm.rigforge_auto_place()`) fits the active preset metarig onto
 the selected mesh(es) in-session. Same pipeline as `auto_rig.py`
 (detect -> fit -> strict gate), same numbers: on the synthetic
 fixtures the operator run gates PASS (hero 23 drivers / 15.7 mm,
@@ -655,7 +655,7 @@ loud-cancel paths).
 
 To share the code instead of forking it, the implementation moved
 into the addon: `rigforge/auto_place/` now holds `detect_landmarks`,
-`fit_metarig`, `validate_fit`, `unirig_hints`, `make_hll_presets`
+`fit_metarig`, `validate_fit`, `unirig_hints`, `make_presets`
 (verbatim, except sibling `load_tool` calls became package imports),
 and `tools/*.py` are thin shims that re-export them and preserve
 every CLI contract (argv, markers, exit codes) for `auto_rig.py` and
@@ -685,7 +685,7 @@ OUT.json` writes `skintokens-joints/1`: the unirig-joints/1 schema
 under its own name. `unirig_hints.load_hints` accepts both formats; the
 module and CLI keep their names so every argv and import stays valid.
 
-Measured on the HLL stalker (`tests/test_auto_placement.py` §10i, sample
+Measured on the quadruped stalker (`tests/test_auto_placement.py` §10i, sample
 `skintokens/tools/joints_samples/stalker_seed0.json`, 11 joints): every
 joint classified, 0 trusted, 0 supporting, 11 measurement-wins, and the
 hinted fit still gates strict. UniRig's seed-42 sample scored 1 trusted +

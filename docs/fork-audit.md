@@ -70,7 +70,7 @@ to its commit and classified.
 - `operators/`: `game_export`, `auto_place`, `voxel_weights`,
   `nudge`, `transfer`, `cleanup` (6).
 - `weights/`: `__init__`, `voxel`, `nudge`, `transfer`, `cleanup` (5).
-- `metarigs/`: `hll_hero`, `hll_stalker` (2, dir-scan discovered —
+- `metarigs/`: `biped_hero`, `quadruped_stalker` (2, dir-scan discovered —
   no registration edit needed).
 
 ## Old-file edits (functional, all movable)
@@ -89,7 +89,7 @@ to its commit and classified.
   `auto_place/fit_metarig.py`, `operators/auto_place.py`).
   Companion imports it from `rigify.utils.bones` — identical API.
 - **Presets:** `metarig_menu.py` discovers metarigs by directory
-  scan (`os.listdir`), so the HLL presets are pure file adds. A
+  scan (`os.listdir`), so the rigforge presets are pure file adds. A
   companion needs its own small menu hook to expose its own
   `metarigs/` dir (new code, no stock edits).
 - **Generated rigs don't import the addon** (no `import

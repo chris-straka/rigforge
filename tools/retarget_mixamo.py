@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Retarget Mixamo animations onto the HLL hero deform rig (v1, headless).
+"""Retarget Mixamo animations onto the biped hero deform rig (v1, headless).
 
 Pipeline: Mixamo skeleton (FBX clip, or a procedurally-built walk cycle)
 -> per-frame rotation transfer with rest-pose compensation onto the
-generated HLL hero rig's DEF bones -> root-motion transfer with stride
+generated biped hero rig's DEF bones -> root-motion transfer with stride
 scaling -> foot-slide measure + cleanup pass -> existing game_export
 baked-anim path -> GLB (game-ready).
 
@@ -26,7 +26,7 @@ Live validation with a real Mixamo clip (needs the user's Adobe account):
 Math (no eyeballing): for each mapped pair, the source bone's local
 motion d (its matrix_basis channels) is conjugated into armature space
 (A = R_src @ d @ R_src^-1, R = rest orientation), yaw-corrected for the
-Mixamo(+Y)/HLL(-Y) facing difference (A' = Q @ A @ Q^-1), then
+Mixamo(+Y)/rigforge-hero(-Y) facing difference (A' = Q @ A @ Q^-1), then
 re-expressed in the target bone's posed-parent local frame
 (basis = R_tgt^-1 @ P^-1 @ A' @ P @ R_tgt). Bone heads stay glued to
 their posed parents, so chains never disconnect. Hips translation is
@@ -65,7 +65,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 # ---------------------------------------------------------------------------
-# Correspondence map: Mixamo short bone name -> HLL hero DEF bone.
+# Correspondence map: Mixamo short bone name -> biped hero DEF bone.
 # Keys omit the "mixamorig:" FBX prefix (see norm_src_name); extend by
 # adding rows. 32 entries: 6 spine + 16 limbs + 10 finger proximals.
 # ---------------------------------------------------------------------------
@@ -813,7 +813,7 @@ def clean_scene():
 
 def generate_hero():
     # NOTE: no mode_set here — clean_scene leaves no active object behind.
-    bpy.ops.object.rigforge_hll_hero_metarig_add()
+    bpy.ops.object.rigforge_biped_hero_metarig_add()
     bpy.ops.object.mode_set(mode="OBJECT")
     meta = bpy.context.view_layer.objects.active
     bpy.ops.pose.rigforge_generate()
@@ -935,7 +935,7 @@ def run_pipeline(src, tgt, frames, fps, out_path, do_pin, action_name):
 
 def main(argv):
     parser = argparse.ArgumentParser(
-        description="Retarget Mixamo clips onto the HLL hero rig"
+        description="Retarget Mixamo clips onto the biped hero rig"
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(

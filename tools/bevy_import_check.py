@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Verify rigforge GLBs load in Bevy (HLL's engine) headless.
+"""Verify rigforge GLBs load in Bevy (the games' engine) headless.
 
 Usage: tools/bevy_import_check.py <glb> [<glb> ...]
 
@@ -16,7 +16,7 @@ long first build).
 
 Exit 0: every file loads with its skins. Exit 1: a file failed. Exit 2:
 no checker binary (callers skip). Replaces the Godot import check, which
-went away with the Godot version of HLL (2026-10-05).
+went away when the games moved off Godot (2026-10-05).
 """
 
 import os

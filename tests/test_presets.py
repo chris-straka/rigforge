@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Headless test: HLL metarig presets add, fit their subjects, and generate.
+"""Headless test: rigforge metarig presets add, fit their subjects, and generate.
 
 Run (from the repo root, after syncing the overlay):
     rsync -a --delete rigforge/ /tmp/rf_scripts/addons/rigforge/
@@ -65,7 +65,9 @@ def check_hero(obj):
         hand.tail_local.z < 0.65 and abs(hand.tail_local.x) < 0.30,
         f"hero hand not in A-pose: tail={list(hand.tail_local)}",
     )
-    check(bones["toe.L"].tail_local.y < 0, "hero should face -Y like Andras")
+    check(
+        bones["toe.L"].tail_local.y < 0, "hero should face -Y like the reference hero"
+    )
 
 
 def check_stalker(obj):
@@ -97,8 +99,8 @@ def check_stalker(obj):
 
 
 PRESETS = (
-    ("rigforge_hll_hero_metarig_add", "hero", check_hero),
-    ("rigforge_hll_stalker_metarig_add", "stalker", check_stalker),
+    ("rigforge_biped_hero_metarig_add", "hero", check_hero),
+    ("rigforge_quadruped_stalker_metarig_add", "stalker", check_stalker),
 )
 
 bpy.ops.preferences.addon_enable(module="rigforge")

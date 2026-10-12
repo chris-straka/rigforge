@@ -431,7 +431,7 @@ if not found_target:
     fail("jaw mesh missing from the mobile re-import")
 print("mobile re-import: dropped groups gone, jaw weights on target")
 
-# 7. Bevy import check (HLL's engine; skipped when the glbkit Bevy
+# 7. Bevy import check (the games' engine; skipped when the glbkit Bevy
 #    checker is not built, see tools/bevy_import_check.py). Bone counts
 #    are already pinned by the Blender re-imports above; this proves
 #    Bevy's loader turns both skins into SkinnedMesh entities.

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Fit an HLL metarig to a subject mesh (auto-placement Phase 2+).
+"""Fit a preset metarig to a subject mesh (auto-placement Phase 2+).
 
 Headless (from the repo root; the preset + generate need the addon overlay):
     rsync -a --delete rigforge/ /tmp/rf_scripts/addons/rigforge/
@@ -7,10 +7,10 @@ Headless (from the repo root; the preset + generate need the addon overlay):
       /Applications/Blender.app/Contents/MacOS/Blender --background \\
       --factory-startup --python tools/fit_metarig.py -- \\
       MESH LANDMARKS.json [--out FILE] [--blend FILE] [--no-generate]
-      [--preset hll_hero|hll_stalker] [--hints HINTS.json] [--hints-rotated]
+      [--preset biped_hero|quadruped_stalker] [--hints HINTS.json] [--hints-rotated]
 
---preset defaults from the landmarks kind (biped -> hll_hero,
-quadruped -> hll_stalker) and must match it. --hints feeds a
+--preset defaults from the landmarks kind (biped -> biped_hero,
+quadruped -> quadruped_stalker) and must match it. --hints feeds a
 skintokens-joints/1 (or legacy unirig-joints/1) document as soft priors (agree -> trust, disagree ->
 measurement wins + divergence report; see tools/unirig_hints.py).
 
@@ -30,7 +30,7 @@ more than ~5 deg. Joint x/z come from landmark heights plus tracked limb
 axes; y uses measured centroids only where sections are slim and
 interpolated (arms, knee), the nearest band at the ankle, and preset
 anatomy at torso-attached joints. .L is solved from landmark magnitudes
-and .R is mirrored. Reuses tools/make_hll_presets.py machinery (descendants /
+and .R is mirrored. Reuses tools/make_presets.py machinery (descendants /
 apply / about / reconnect_from) and tools/detect_landmarks.py analysis
 (import_mesh / envelope_copy / slice_signature / tracking).
 
@@ -67,11 +67,11 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 from . import detect_landmarks as _detect
-from . import make_hll_presets as _presets
+from . import make_presets as _presets
 from . import unirig_hints as _hints
 from . import validate_fit as _validate
 
-# --- Fit triggers (see module docstring; Andras values in docs) ---
+# --- Fit triggers (see module docstring; reference-hero values in docs) ---
 ANKLE_DIP_MIN = 0.010  # below: boot hides the narrowing -> sole offset
 ANKLE_MAX_Z_FRAC = 0.085  # above: dip is mid-boot, not the joint
 ANKLE_SOLE_FRAC = 0.048  # ankle joint above the sole (~8 cm at 1.7 m)
@@ -1159,7 +1159,7 @@ def joint_positions(bones, edit):
     }
 
 
-def emit_module(obj, out_path, mesh_path, lm_path, preset="hll_hero"):
+def emit_module(obj, out_path, mesh_path, lm_path, preset="biped_hero"):
     from rigforge.utils.rig import write_metarig
 
     code = write_metarig(
@@ -1216,7 +1216,7 @@ def check_symmetry(bones):
 
 
 def fit_hero(hp, align_roll, obj, lm, axes, rv):
-    """Solve the hll_hero metarig `obj` onto landmarks; returns fit record.
+    """Solve the biped_hero metarig `obj` onto landmarks; returns fit record.
 
     Call in OBJECT mode with `obj` active (switches to EDIT internally,
     like fit_stalker). Mutates `obj` in place; ends in EDIT mode. Shared
@@ -1228,7 +1228,7 @@ def fit_hero(hp, align_roll, obj, lm, axes, rv):
 
     bpy.ops.object.mode_set(mode="EDIT")
     bones = obj.data.edit_bones
-    for b in bones:  # as in make_hll_presets: no connected dragging
+    for b in bones:  # as in make_presets: no connected dragging
         b.use_connect = False
     hp.apply(bones, [b.name for b in bones], Matrix.Scale(s, 4))  # coarse fit
     spine_before = {
@@ -1259,7 +1259,7 @@ def fit_hero(hp, align_roll, obj, lm, axes, rv):
     realigned_bones = [b for b in angles if angles[b] > ROLL_RECOMPUTE_DEG]
     mirror_subtree(hp, bones, "shoulder.L")
     mirror_subtree(hp, bones, "thigh.L")
-    hp.reconnect_from(obj, "rigforge_hll_hero_metarig_add")
+    hp.reconnect_from(obj, "rigforge_biped_hero_metarig_add")
     fingers_fixed = fit_fingers(rv, axes["env"], lm, obj, cautions)
 
     max_gap, open_drivers = check_closure(obj)
@@ -1587,7 +1587,7 @@ def fit_stalker(hp, obj, targets, s, snap, cautions):
     """
     bpy.ops.object.mode_set(mode="EDIT")
     bones = obj.data.edit_bones
-    for b in bones:  # as in make_hll_presets: no connected dragging
+    for b in bones:  # as in make_presets: no connected dragging
         b.use_connect = False
     hp.apply(bones, [b.name for b in bones], Matrix.Scale(s, 4))  # coarse fit
 
@@ -1681,7 +1681,7 @@ def fit_stalker(hp, obj, targets, s, snap, cautions):
     mirror_subtree(hp, bones, "shoulder.L")
     mirror_subtree(hp, bones, "pelvis.L")
     mirror_bones(bones, ["breast.L"])
-    hp.reconnect_from(obj, "rigforge_hll_stalker_metarig_add")
+    hp.reconnect_from(obj, "rigforge_quadruped_stalker_metarig_add")
     return angles
 
 
@@ -1716,7 +1716,7 @@ def hint_target_overrides(uh, lm, hints_path, rotated):
 
 
 def fit_stalker_object(hp, rv, obj, lm, env, targets, cautions):
-    """Solve the hll_stalker metarig `obj` onto targets; returns fit record.
+    """Solve the quadruped_stalker metarig `obj` onto targets; returns fit record.
 
     Call in OBJECT mode with `obj` active. `targets` is the (possibly
     hint-overridden) stalker_targets dict; spine insets mutate it in
@@ -1824,16 +1824,16 @@ def main_stalker(args, mesh_path, lm_path, lm, out_path, blend_path, want_genera
     # mode via a throwaway metarig-free length ratio is overkill; the
     # fraction comes from the stock preset proportions below).
     bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.object.rigforge_hll_stalker_metarig_add()
+    bpy.ops.object.rigforge_quadruped_stalker_metarig_add()
     obj = bpy.context.view_layer.objects.active
     fit = fit_stalker_object(hp, rv, obj, lm, env, targets, cautions)
 
-    emit_module(obj, out_path, mesh_path, lm_path, preset="hll_stalker")
+    emit_module(obj, out_path, mesh_path, lm_path, preset="quadruped_stalker")
     generate = run_generate(obj) if want_generate else None
     if blend_path:
         bpy.ops.wm.save_as_mainfile(filepath=blend_path)
     report = {
-        "preset": "hll_stalker",
+        "preset": "quadruped_stalker",
         "subject": mesh_path,
         "facing": lm["facing"],
         "length": lm["length"],
@@ -1867,13 +1867,13 @@ def main():
     preset = (
         args[args.index("--preset") + 1]
         if "--preset" in args
-        else {"biped": "hll_hero", "quadruped": "hll_stalker"}.get(kind)
+        else {"biped": "biped_hero", "quadruped": "quadruped_stalker"}.get(kind)
     )
-    if preset not in ("hll_hero", "hll_stalker"):
-        fail(f"--preset must be hll_hero or hll_stalker, got {preset!r}")
-    if (preset == "hll_stalker") != (kind == "quadruped"):
+    if preset not in ("biped_hero", "quadruped_stalker"):
+        fail(f"--preset must be biped_hero or quadruped_stalker, got {preset!r}")
+    if (preset == "quadruped_stalker") != (kind == "quadruped"):
         fail(f"preset {preset} needs kind={kind!r} landmarks")
-    tag = "stalker" if preset == "hll_stalker" else "hero"
+    tag = "stalker" if preset == "quadruped_stalker" else "hero"
     out_path = (
         args[args.index("--out") + 1]
         if "--out" in args
@@ -1888,7 +1888,7 @@ def main():
     if "--no-blend" in args:
         blend_path = None
 
-    if preset == "hll_stalker":
+    if preset == "quadruped_stalker":
         main_stalker(args, mesh_path, lm_path, lm, out_path, blend_path, want_generate)
         return
 
@@ -1930,7 +1930,7 @@ def main():
     axes = track_axes(dl, mesh_path, lm)
 
     bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.object.rigforge_hll_hero_metarig_add()
+    bpy.ops.object.rigforge_biped_hero_metarig_add()
     obj = bpy.context.view_layer.objects.active
     fit = fit_hero(hp, align_bone_z_axis, obj, lm, axes, rv)
 

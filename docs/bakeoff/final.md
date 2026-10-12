@@ -1,4 +1,4 @@
-# Bake-off final: rigforge vs unirig-mac vs Mixamo (Andras hero)
+# Bake-off final: rigforge vs unirig-mac vs Mixamo (stylized hero)
 
 Date: 2026-09-30. Inputs differ slightly (see caveats). All three import
 clean in Godot 4.7.1 headless.
@@ -24,14 +24,14 @@ clean in Godot 4.7.1 headless.
 - Convenience + mocap library: Mixamo. Weakest rig, but unlocks
   the animation library via retarget, which neither local tool gives.
 - Recommendation (unchanged): hybrid. Rigforge heroes, unirig
-  volume/background, Mixamo mocap looted via retarget onto HLL rigs.
+  volume/background, Mixamo mocap looted via retarget onto game rigs.
 
 ## Caveats
 
 - Mixamo ran on v3 (24k verts, T-posed, 1.5x); unirig on raw 97k
-  A-pose; rigforge on raw via hll_hero preset. Not identical inputs.
+  A-pose; rigforge on raw via biped_hero preset. Not identical inputs.
 - rfcheck prefix findings on unirig/Mixamo are contract mismatches
-  (HLL DEF- convention), not quality verdicts.
+  (standard DEF- convention), not quality verdicts.
 - Mixamo license: free incl. commercial games via Adobe account;
   user holds the account, not the repo.
 
@@ -43,9 +43,9 @@ Binaries stay out of the repo. Originals live in `~/Downloads/bakeoff/`
 [rigforge_half.md](rigforge_half.md).
 
 
-- rigforge_andras.glb / rf_hero_fit_*.png — rigforge hero
+- rigforge_hero.glb / rf_hero_fit_*.png — rigforge hero
 - unirig GLBs in /tmp/bakeoff (peer originals), fit PNGs here
-- mixamo_andras_v3_t_pose.fbx — Mixamo rigged download
-- mixamo_andras.glb in /tmp/bakeoff/godot — Godot-checked GLB
+- mixamo_hero_v3_t_pose.fbx — Mixamo rigged download
+- mixamo_hero.glb in /tmp/bakeoff/godot — Godot-checked GLB
 - mixamo_fit_front.png — Mixamo result preview
-- mixamo_andras_v4.fbx — unused fallback (v3 worked)
+- mixamo_hero_v4.fbx — unused fallback (v3 worked)

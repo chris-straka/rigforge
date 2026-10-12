@@ -93,7 +93,7 @@ check(hasattr(bpy.ops.wm, "rigforge_auto_place"), "operator not registered")
 # --- Hero: fit + gate + determinism + cleanup ---
 synth, _spec = dl.build_synthetic()
 bpy.ops.object.mode_set(mode="OBJECT")
-bpy.ops.object.rigforge_hll_hero_metarig_add()
+bpy.ops.object.rigforge_biped_hero_metarig_add()
 hero = bpy.context.view_layer.objects.active
 stock = bone_map(hero)
 select_for_place(synth, hero)
@@ -129,7 +129,7 @@ check(not temps, f"temp objects left behind: {temps}")
 bpy.ops.object.mode_set(mode="OBJECT")
 qsynth, _qspec = dl.build_synthetic_quadruped()
 bpy.ops.object.mode_set(mode="OBJECT")
-bpy.ops.object.rigforge_hll_stalker_metarig_add()
+bpy.ops.object.rigforge_quadruped_stalker_metarig_add()
 stalker = bpy.context.view_layer.objects.active
 qstock = bone_map(stalker)
 select_for_place(qsynth, stalker)
@@ -157,7 +157,7 @@ print(
 # Fresh fixtures: the quadruped builder above wiped the hero scene.
 synth, _spec = dl.build_synthetic()
 bpy.ops.object.mode_set(mode="OBJECT")
-bpy.ops.object.rigforge_hll_hero_metarig_add()
+bpy.ops.object.rigforge_biped_hero_metarig_add()
 hero = bpy.context.view_layer.objects.active
 
 
@@ -189,7 +189,7 @@ check(
 )
 
 bpy.ops.object.mode_set(mode="OBJECT")
-bpy.ops.object.rigforge_hll_hero_metarig_add()
+bpy.ops.object.rigforge_biped_hero_metarig_add()
 broken = bpy.context.view_layer.objects.active
 bpy.ops.object.mode_set(mode="EDIT")
 broken.data.edit_bones.remove(broken.data.edit_bones["foot.L"])
@@ -198,8 +198,8 @@ expect_cancelled(bpy.ops.wm.rigforge_auto_place, "foot.L")
 
 select_for_place(synth, hero)
 expect_cancelled(
-    lambda: bpy.ops.wm.rigforge_auto_place(preset="HLL_STALKER"),
-    "Preset=hll_stalker",
+    lambda: bpy.ops.wm.rigforge_auto_place(preset="QUADRUPED_STALKER"),
+    "Preset=quadruped_stalker",
 )
 
 bpy.ops.object.mode_set(mode="OBJECT")

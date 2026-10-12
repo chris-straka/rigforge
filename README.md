@@ -1,7 +1,7 @@
 # rigforge
 
 Fork of Blender's Rigify (0.6.10, copied from the Blender 5.2 app bundle)
-aimed at game-ready rigs: HLL (Bevy, Rust) characters and creatures, rigged
+aimed at game-ready rigs: Bevy (Rust) game characters and creatures, rigged
 in Blender, exported clean.
 
 - License: GPL-2.0-or-later (same as upstream; Blender addons must be GPL).
@@ -29,9 +29,9 @@ defaults: `BLENDER_BIN` (default
 (glbkit's headless Bevy loader check, default
 `~/Games/_blender/rfcheck/glbkit/compat/bevy/target/release/examples/check`, used
 by `tools/bevy_import_check.py`; skipped when not built). The Godot
-import check was removed with the Godot version of HLL (2026-10-05).
+import check was removed when the games moved off Godot (2026-10-05).
 Suites needing files outside the repo (e.g.
-`test_auto_placement.py`'s HLL subjects) skip absent subjects
+`test_auto_placement.py`'s real-mesh subjects) skip absent subjects
 instead of failing.
 
 No Blender install (cloud sessions, CI): `pip install bpy` (5.0.1,
@@ -48,16 +48,16 @@ Rigforge Game Export > Export Game GLB — writes a deform-bones-only
 GLB (game-engine settings, loads in Bevy) with all meshes bound via Armature
 modifiers. Headless: `bpy.ops.wm.rigforge_game_export(filepath=...)`.
 
-Presets: `hll_hero` (stylized biped, Andras-scale) and `hll_stalker`
+Presets: `biped_hero` (stylized biped, reference-hero-scale) and `quadruped_stalker`
 (quadruped, stalker-scale) metarigs in Add > Armature > Rigify
 Meta-Rigs. Generated modules — rebuild with
-`--python tools/make_hll_presets.py -- .` after tuning constants.
+`--python tools/make_presets.py -- .` after tuning constants.
 
-Auto-place: with the HLL metarig active and the subject mesh(es)
+Auto-place: with the preset metarig active and the subject mesh(es)
 selected, Armature properties > Rigforge > Auto-Place to Mesh fits
 the metarig to the mesh in place (strict validation gate, metarig
 restored untouched on failure). Headless: one command per subject,
-`--python tools/auto_rig.py -- MESH --preset hll_hero|hll_stalker
+`--python tools/auto_rig.py -- MESH --preset biped_hero|quadruped_stalker
 --out RIGGED.glb` (see `docs/bakeoff/rerun.md` for numbers).
 
 genforge adapter (repair-rig): genforge's `gen character` chain rerigs
@@ -68,7 +68,7 @@ tools/genforge_adapter.sh repair-rig IN.glb OUT.glb RESULT.json [--class humanoi
 ```
 
 It drops the input's armature (meshes, materials and textures stay),
-runs `tools/auto_rig.py` with `hll_hero` (humanoid) or `hll_stalker`
+runs `tools/auto_rig.py` with `biped_hero` (humanoid) or `quadruped_stalker`
 (quadruped) and writes the 160-bone deform GLB plus a `result.json` in
 genforge's adapter schema (`{"ok", "outputs", "tool": "rigforge", ...}`;
 exit 0 rigged, 1 an auto-rig stage failed, 2 error with no result).

@@ -12,7 +12,7 @@ Headless (from the repo root; needs the addon overlay):
       /Applications/Blender.app/Contents/MacOS/Blender --background \\
       --factory-startup --python tools/fit_metarig.py -- \\
       MESH LANDMARKS.json [--out FILE] [--blend FILE] [--no-generate]
-      [--preset hll_hero|hll_stalker] [--hints HINTS.json] [--hints-rotated]
+      [--preset biped_hero|quadruped_stalker] [--hints HINTS.json] [--hints-rotated]
 """
 
 from rigforge.auto_place.fit_metarig import *  # noqa: F403

@@ -1,10 +1,10 @@
 # Bake-off: rigforge half (interim, 2026-09-30)
 
-Workflow per subject, fully headless: HLL preset metarig (used as
+Workflow per subject, fully headless: rigforge preset metarig (used as
 shipped, no per-subject tweaking) -> generate -> bone-heat bind ->
 one-click game export -> rfcheck -> Godot 4.7.1 import.
 
-## Andras (hero, 97k-vert mesh)
+## Hero (97k-vert mesh)
 
 - Metarig 159 bones -> rig 706 bones -> **160 DEF joints**, 1 mesh.
 - Timings: generate 2s, heat bind 20s, export 2s (~24s machine time).
@@ -28,7 +28,7 @@ Machine time is ~25s per subject and not the point. Human tweak time
 in this run: zero — presets went in as authored. The *remaining*
 manual delta a rigger would close by hand (see overlay renders):
 
-- Andras hands land ~5cm inboard/high of the mesh hands.
+- The hero's hands land ~5cm inboard/high of the mesh hands.
 - Stalker per-part bind can seam-split under big poses; an artist
   might join-then-bind instead (~minutes, one decision).
 - Deletable nub bones (mane fingers, ears, breast copies): seconds.
@@ -42,5 +42,5 @@ inference + cleanup vs our fit-delta + generate + bind.
 
 - unirig half (granite-larissa running; stalker weights under
   diagnosis on their side).
-- Mixamo hero baseline (owner uploading `mixamo_andras.fbx`).
+- Mixamo hero baseline (owner uploading `mixamo_hero.fbx`).
 - Final comparison table once all three land.

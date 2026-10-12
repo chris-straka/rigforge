@@ -22,7 +22,7 @@ pipeline, naming bones and what to fix):
 
 - closure: every connected driver joint gap < 1e-4 (same epsilon as
   `reconnect_from`), or the open bone is explicitly listed via --open.
-  (The hll_hero stock preset floats 7 driver joints by design — socket,
+  (The biped_hero stock preset floats 7 driver joints by design — socket,
   hip, and neck pivots with real gaps — so a fitted hero needs
   --open shoulder.L,shoulder.R,spine.004,thigh.L,thigh.R,upper_arm.L,upper_arm.R.)
 - inside-mesh WITH MARGIN: each driver-bone midpoint must raycast inside
@@ -40,7 +40,7 @@ Warn-only placement reports (never fail the gate):
   containment — any fingertip outside the envelope warns, with
   per-finger lateral-vs-axis vectors naming the nudge (reported, never
   gated: healthy and bad fits share the same medial bias magnitude).
-  Thumb included in the angle check: it measures ~26 deg on Andras,
+  Thumb included in the angle check: it measures ~26 deg on the reference hero,
   i.e. it tracks the fan in this metarig — the old "points sideways"
   rationale did not match the rig (its tip distance stays reported
   separately, ungated: the thumb grazes the surface by anatomy).
@@ -58,7 +58,7 @@ Warn-only placement reports (never fail the gate):
   the face bottom must clear the chin floor (gross-misplacement
   tripwires only). Brow clearance, face frac, and per-part geometry are
   reported, never gated — calibration forbids a threshold (healthy
-  synthetic reads -0.3 cm brow clearance vs Andras's +2.1 cm: hair
+  synthetic reads -0.3 cm brow clearance vs the reference hero's +2.1 cm: hair
   inflates the cap reference). Heuristic only: slices cannot see mesh
   features (eyes/nose/mouth) and cannot separate hair from skull.
 
@@ -94,24 +94,24 @@ MARGIN_DEFAULT = 0.01  # inside-mesh margin: silhouette rule, not just inside
 FINGER_WARN_DEG = 45.0  # finger chain vs mesh finger direction
 # Kept at 45: the preset's natural fan reads 38 deg on the outer fingers
 # (clean synthetic mesh), so the threshold stays above accepted anatomy
-# with headroom. (The old "pinky 32 deg fine" Andras reading is obsolete:
+# with headroom. (The old "pinky 32 deg fine" reference-hero reading is obsolete:
 # it was measured against a sole-contaminated reference; the corrected
 # reference reads 46 deg on that same pinky, consistent with its 4.3 cm
 # offset and outside-mesh parity.)
 # No lateral threshold: the healthy synthetic fit reads 4.9 cm of fan-vs-
-# axis lateral (fat hand box, same medial bias as Andras's 4.3 cm), so no
+# axis lateral (fat hand box, same medial bias as the reference hero's 4.3 cm), so no
 # lateral line separates healthy from bad. The gate warns on tip
 # containment (binary, anatomical); lateral vectors stay as diagnostics.
 TOE_WARN = 0.002  # toe-tip overshoot past the mesh foot front
 TOE_DIR_WARN = 45.0  # toe-axis yaw vs mesh foot direction
 # No shortfall threshold: the healthy synthetic fit reads 6.7 cm short
-# (crude 22 cm foot box, rigid preset toe) against Andras's 3.3 cm, so
+# (crude 22 cm foot box, rigid preset toe) against the reference hero's 3.3 cm, so
 # no shortfall line separates healthy from bad. Shortfall stays a
 # reported diagnostic; the hard margin gate already fails a toe riding
-# the surface (Andras toe.L 7.2 mm, eyeballed a real breach).
+# the surface (reference hero toe.L 7.2 mm, eyeballed a real breach).
 HEAD_WARN = 0.03  # head-top vs skullcap estimate
 # No brow-clearance threshold: the healthy synthetic fit reads -0.3 cm
-# (cap noise underestimates the ball top) against Andras's +2.1 cm, so
+# (cap noise underestimates the ball top) against the reference hero's +2.1 cm, so
 # the ordering inverts — hair inflates the skullcap reference in exactly
 # the wrong direction. Brow clearance, face frac, and per-part geometry
 # stay reported diagnostics; the gate trips only on gross misplacement
@@ -398,7 +398,7 @@ def centroid(vs):
 def finger_slab(env, lm, side):
     """Hand-slab verts: below the wrist but above the fingertip floor.
 
-    The old unbounded sub-wrist set caught boot soles at z~0 (Andras:
+    The old unbounded sub-wrist set caught boot soles at z~0 (reference hero:
     266 of 853 verts), dragging the finger reference toward the floor.
     """
     sx = lm["wrist_x"] if side == "L" else -lm["wrist_x"]
@@ -448,7 +448,7 @@ def report_fingers(meta, env, eval_env, lm):
     """Warn-only: finger-chain angles + fingertip containment.
 
     Angles catch wrong-direction chains; containment catches a fan
-    sitting sideways of the mesh fingers (eyeballed on Andras: old
+    sitting sideways of the mesh fingers (eyeballed on the reference hero: old
     angle-only gate green while fingertips floated outside the mesh).
     Per-finger lateral-vs-axis vectors name the nudge but never gate:
     they cannot separate a healthy fit from a bad one (see note above).
@@ -935,7 +935,7 @@ def run_gate(env, meta, lm, signature, margin=MARGIN_DEFAULT, open_allow=()):
     )
     report = {
         "margin": margin,
-        "preset": "hll_stalker" if is_quad else "hll_hero",
+        "preset": "quadruped_stalker" if is_quad else "biped_hero",
         "tail_gated": tail_gated,
         "closure": {
             "max_gap": round(closure["max_gap"], 6),
@@ -1275,12 +1275,18 @@ def main():
 
     # Rung 2: stock preset as-is + its own report (explicit operator choice).
     bpy.ops.object.mode_set(mode="OBJECT")
-    op = "rigforge_hll_stalker_metarig_add" if quad else "rigforge_hll_hero_metarig_add"
+    op = (
+        "rigforge_quadruped_stalker_metarig_add"
+        if quad
+        else "rigforge_biped_hero_metarig_add"
+    )
     getattr(bpy.ops.object, op)()
     preset = bpy.context.view_layer.objects.active
     fallback = run_gate(env, preset, lm, signature, margin, open_allow)
     fallback["subject"] = mesh_path
-    fallback["metarig"] = f"stock {'hll_stalker' if quad else 'hll_hero'} preset as-is"
+    fallback["metarig"] = (
+        f"stock {'quadruped_stalker' if quad else 'biped_hero'} preset as-is"
+    )
     report["ladder"] = "preset_as_is"
     report["fallback_preset"] = fallback
     with open(report_path, "w", encoding="utf-8") as f:

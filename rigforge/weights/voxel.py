@@ -44,7 +44,7 @@ SEED_OUT_CELLS = 4.0  # past this the bone is out of flesh: excluded
 # (slop for slightly misplaced bones and sub-cell bones).
 CUTOFF_LEN_MULT = 6.0  # per-bone Dijkstra cutoff vs bone length ...
 CUTOFF_CELL_MULT = 8.0  # ... vs cell size (whichever binds wider) ...
-CUTOFF_MAX = 0.35  # ... capped at this (HLL scale; torso-spanning)
+CUTOFF_MAX = 0.35  # ... capped at this (1-2 m character scale; torso-spanning)
 RAY_EPS = 1e-5  # ray-walk step past each shell crossing
 RAY_TILT = Vector((1e-4, 2e-4, 1.0)).normalized()  # dodge edge-on rays
 MIN_INFLUENCE = 0.0001  # mirrors tools/auto_rig.py (same joint assignment)

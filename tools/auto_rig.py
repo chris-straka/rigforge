@@ -7,15 +7,15 @@ STABLE CLI CONTRACT (an external eval harness shells out to this — keep it):
     BLENDER_USER_SCRIPTS=/tmp/rf_scripts \\
       /Applications/Blender.app/Contents/MacOS/Blender --background \\
       --factory-startup --python tools/auto_rig.py -- \\
-      MESH --preset hll_hero|hll_stalker --out RIGGED.glb [--blend FILE]
+      MESH --preset biped_hero|quadruped_stalker --out RIGGED.glb [--blend FILE]
       [--no-validate]
 
 Arguments:
 
 - MESH: subject mesh file (glb/gltf/fbx/obj — whatever
   tools/detect_landmarks.py imports). Read-only; never modified.
-- --preset: metarig preset. hll_hero runs the biped pipeline
-  (transverse slices); hll_stalker runs the quadruped pipeline
+- --preset: metarig preset. biped_hero runs the biped pipeline
+  (transverse slices); quadruped_stalker runs the quadruped pipeline
   (longitudinal spine analysis + legs from below; see
   docs/auto_placement.md). Each preset routes its own detector kind,
   fitter preset, and gate driver set.
@@ -46,7 +46,7 @@ Orientation (part of the landmarks stage): generator meshes arrive Y-up
 (height along +Y) while the chain expects Z-up. A Y-up subject is
 rotated +90 deg about X and run from a normalized copy in the workdir
 (the input file is never modified); Z-up inputs pass through untouched.
-For hll_stalker the Y-up test additionally requires the Y span to start
+For quadruped_stalker the Y-up test additionally requires the Y span to start
 at the ground: a Z-up quadruped's longest span is its body length
 (ymin well below zero), which must not trigger the rotation.
 
@@ -110,7 +110,7 @@ STALKER_OPEN = (
     "upper_arm.R",
 )
 
-PRESETS = ("hll_hero", "hll_stalker")
+PRESETS = ("biped_hero", "quadruped_stalker")
 
 STAGES_OK = "RIGFORGE_AUTO_RIG_OK"
 STAGES_FAIL = "RIGFORGE_AUTO_RIG_FAIL"
@@ -172,7 +172,7 @@ def normalize_orientation(mesh_path, workdir, preset):
     corner = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
     spans = [max(c[i] for c in corner) - min(c[i] for c in corner) for i in range(3)]
     y_up = spans[1] > spans[0] and spans[1] > spans[2]
-    if y_up and preset == "hll_stalker":
+    if y_up and preset == "quadruped_stalker":
         ymin = min(c[1] for c in corner)
         y_up = abs(ymin) < 0.05 * spans[1]
     if not y_up:
@@ -207,7 +207,7 @@ def payload_between(output, begin, end, stage, what):
 
 def stage_landmarks(mesh_path, preset, workdir):
     """Landmarks via tools/detect_landmarks.py; returns the landmarks dict."""
-    kind = "quadruped" if preset == "hll_stalker" else "biped"
+    kind = "quadruped" if preset == "quadruped_stalker" else "biped"
     out, code = run_tool("detect_landmarks.py", [mesh_path, "--kind", kind])
     if code is not None:
         raise StageFail("landmarks", one_line(str(code) or "detector failed"))
@@ -259,7 +259,7 @@ def stage_fit(mesh_path, lm_path, workdir, preset, hints, hints_rotated):
 def stage_validate(mesh_path, fitted, lm_path, workdir, preset):
     """Gate via tools/validate_fit.py (fail-stop; names bones and fixes)."""
     report_path = os.path.join(workdir, "validate_report.json")
-    allow = STALKER_OPEN if preset == "hll_stalker" else HERO_OPEN
+    allow = STALKER_OPEN if preset == "quadruped_stalker" else HERO_OPEN
     out, code = run_tool(
         "validate_fit.py",
         [
@@ -577,7 +577,8 @@ def parse_args(argv):
         i += 1
     if len(positional) != 1:
         raise StageFail(
-            "usage", "usage: auto_rig.py MESH --preset hll_hero|hll_stalker --out FILE"
+            "usage",
+            "usage: auto_rig.py MESH --preset biped_hero|quadruped_stalker --out FILE",
         )
     if preset not in PRESETS:
         raise StageFail("usage", f"--preset must be one of {PRESETS}, got {preset!r}")

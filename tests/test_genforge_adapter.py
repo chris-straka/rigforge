@@ -5,7 +5,7 @@ Run: tools/run_test.sh tests/test_genforge_adapter.py
 (or python tools/run_test_bpy.py tests/test_genforge_adapter.py)
 
 A synthetic hero with a deliberately broken one-bone rig goes in; the
-adapter must drop that rig, auto-rig the mesh with hll_hero, write a
+adapter must drop that rig, auto-rig the mesh with biped_hero, write a
 deform-only GLB and a result.json in genforge's schema (exit 0). Error
 paths: custom class -> ok false (exit 1, result written); missing input
 or unknown stage -> exit 2 with no result.
@@ -83,7 +83,7 @@ check(written["ok"] is True, f"ok false: {written}")
 check(written["tool"] == "rigforge", "tool name")
 check(written["outputs"] == ["output.glb"], f"outputs {written['outputs']}")
 details = written["repair-rig"]
-check(details["preset"] == "hll_hero", "preset")
+check(details["preset"] == "biped_hero", "preset")
 check(details["bones_before"] == 1, f"bones_before {details['bones_before']}")
 print(f"repair-rig: {details}")
 

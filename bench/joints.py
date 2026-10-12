@@ -9,7 +9,7 @@ types, 3k-21k verts; ~/Games/_blender/weightforge/bench/corpus/fetch.sh puts
 them in $FORGE_BENCH/corpus). Each comes with MPFB2's own skeleton, fitted
 to that body by MakeHuman: the ground truth for where joints belong.
 
-Per character: strip the rig, run tools/auto_rig.py (hll_hero), and
+Per character: strip the rig, run tools/auto_rig.py (biped_hero), and
 measure joint placement against the truth (hips, neck, head, shoulders,
 upper arms, elbows, wrists, hips joints, knees, ankles, toes), in % of the
 character's height; also wall time, success, and rfcheck on the GLB when
@@ -99,7 +99,7 @@ def main():
         zs = [v[2] for v in truth.values()]
         meta = json.load(open(os.path.join(CORPUS, n, "meta.json")))
         rigged = os.path.join(w, "rigged.glb")
-        p, dt = bl(blender, os.path.join(ROOT, "tools", "auto_rig.py"), "--", mesh, "--preset", "hll_hero",
+        p, dt = bl(blender, os.path.join(ROOT, "tools", "auto_rig.py"), "--", mesh, "--preset", "biped_hero",
                    "--out", rigged, env=env)
         verdict = (p.stdout.strip().splitlines() or [""])[-1]
         row = {"verts": meta["verts"], "seconds": dt, "ok": os.path.exists(rigged) and "OK" in verdict,
@@ -149,7 +149,7 @@ def write_scorecard(s, path):
          f"{len(C)} CC0 MPFB2 characters; joint placement error vs MPFB2's fitted skeleton, % of height "
          f"(1% ~ 1.8 cm on an adult). rigforge succeeded on {ok}/{len(C)}.", "",
          "| method | mean | worst | spine/head | arms | legs |", "|---|---|---|---|---|---|"]
-    for m, label in (("rigforge", "rigforge auto_rig (hll_hero)"), ("metarig", "Rigify metarig, scaled (free baseline)")):
+    for m, label in (("rigforge", "rigforge auto_rig (biped_hero)"), ("metarig", "Rigify metarig, scaled (free baseline)")):
         mn, mx = allm(m)
         L.append(f"| {label} | {mn:.2f} | {mx:.2f} | {grp(m, 'spine/head'):.2f} | {grp(m, 'arms'):.2f} | {grp(m, 'legs'):.2f} |")
     L += ["", "| character | verts | ok | seconds | rigforge mean % | metarig mean % | verdict |", "|---|---|---|---|---|---|---|"]

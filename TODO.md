@@ -5,8 +5,8 @@
       coexists with bundled Rigify (smoke loads our copy, generates 706 bones)
 - [x] One-click game export: deform-bones-only GLB with Godot settings
       (`wm.rigforge_game_export`, Armature panel button, tests/test_game_export.py)
-- [x] HLL presets: stylized biped + creature metarig starting points
-      (hll_hero + hll_stalker, built by tools/make_hll_presets.py,
+- [x] rigforge presets: stylized biped + creature metarig starting points
+      (biped_hero + quadruped_stalker, built by tools/make_presets.py,
       covered by tests/test_presets.py; baked-anim export in
       tests/test_game_export.py)
 - [x] Bake-off vs ../unirig-mac on one hero + one creature (joints,
@@ -37,7 +37,7 @@
       — 160 -> 65 joints, originals untouched, anims on kept joints.
       Both GLBs import clean in headless Godot 4.7.1 (160/65 bones).
       In-game FPS-side skinning measurement stays a game-side step
-      (needs HLL scenes + profiler, hll repo).
+      (needs a game's scenes + profiler, in the game repo).
 - [x] Public-repo follow-ups (2026-10-02): smart paths where cheap
       (BLENDER_BIN env override with this machine's Blender as
       default, tools/run_test.sh runner, skip-if-missing for
@@ -47,7 +47,7 @@
 - [x] genforge repair-rig adapter (2026-10-05): tools/genforge_adapter.sh
       wraps auto_rig.py in genforge's adapter contract (README);
       tests/test_genforge_adapter.py (broken one-bone rig -> 160 DEF).
-- [x] HLL moved to Bevy (2026-10-05): the Godot import check
+- [x] The games moved to Bevy (2026-10-05): the Godot import check
       (tools/godot_import_check.*) is replaced by
       tools/bevy_import_check.py (glbkit's headless Bevy 0.19.1 loader,
       skipped when not built); docs say Bevy. Items below that mention

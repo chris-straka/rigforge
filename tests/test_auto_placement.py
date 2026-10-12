@@ -8,12 +8,12 @@ Run (from the repo root, after syncing the overlay):
       --background --factory-startup --python tests/test_auto_placement.py
 
 End to end on the synthetic A-pose biped (no external assets): build mesh,
-detect landmarks, fit the hll_hero metarig, run the validation gate
+detect landmarks, fit the biped_hero metarig, run the validation gate
 (in-session and CLI), generate, game-export, and prove the fit-delta
 numbers. Also proves the failure path (a failed gate stops the pipeline
 naming bones) and the preset-as-is fallback rung.
 
-Section 8 adds the production regression subjects (Andras + two Hunyuan
+Section 8 adds the production regression subjects (a stylized hero + two Hunyuan
 meshes, read-only external files): landmarks, fit with generate, and the
 in-session gate must pass on each. Subjects whose files are absent are
 skipped (external assets may rot); present subjects must pass.
@@ -37,7 +37,7 @@ TOOLS = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"
 )
 TMP = "/tmp/rigforge_ap_test"
-# Driver joints the hll_hero stock preset floats by design (socket/hip/neck
+# Driver joints the biped_hero stock preset floats by design (socket/hip/neck
 # pivots with real gaps) — explicitly listed as intentionally open.
 OPEN = (
     "shoulder.L",
@@ -48,7 +48,7 @@ OPEN = (
     "upper_arm.L",
     "upper_arm.R",
 )
-# Same for the hll_stalker stock preset (neck socket, shoulder/pelvis
+# Same for the quadruped_stalker stock preset (neck socket, shoulder/pelvis
 # sockets, tail root, leg sockets) — mirrors auto_rig.STALKER_OPEN.
 Q_OPEN = (
     "neck.001",
@@ -259,7 +259,7 @@ for stem in ("f_index", "f_middle", "f_ring", "f_pinky"):
     for mid in ("01", "02", "03"):
         b = shifted.data.edit_bones.get(f"{stem}.{mid}.L")
         check(b is not None, f"missing {stem}.{mid}.L for perturbation")
-        b.head.x -= 0.03  # medial, out of the hand box (the Andras bias)
+        b.head.x -= 0.03  # medial, out of the hand box (the reference-hero bias)
         b.tail.x -= 0.03
         moved += 1
 check(moved == 12, f"shifted {moved} finger bones, expected 12")
@@ -383,11 +383,11 @@ check("fallback_preset" in rung, "no fallback preset report attached")
 print(f"ladder rung 2 OK (preset verdict: {rung['fallback_preset']['verdict']})")
 
 # 9. Production regression subjects (read-only external meshes, Section 9).
-# Andras: toe margin 7.2/8.5 mm + pinky warn; elf: shoulder/foot/toe
+# hero: toe margin 7.2/8.5 mm + pinky warn; elf: shoulder/foot/toe
 # outside (ponytail-dragged elbow, flat-shoe ankle); millennial: merge
 # case (shoulder/hand outside, upper-arm margin). Absent files skip.
 SUBJECTS = [
-    ("andras", "/tmp/bakeoff/andras_body_raw.glb"),
+    ("hero", "/tmp/bakeoff/hero_body_raw.glb"),
     ("elf", os.path.expanduser("~/Downloads/hunyuan_elf.glb")),
     ("mill", os.path.expanduser("~/Downloads/hunyuan_millennial.glb")),
 ]
@@ -436,14 +436,14 @@ for tag, mesh_path in SUBJECTS:
         f"{tag}: rebuilt bone set differs",
     )
     s_bones = s_gate["inside"]["bones"]
-    if tag == "andras":
+    if tag == "hero":
         check(
             s_bones["toe.L"]["mid"] >= 0.01 and s_bones["toe.R"]["mid"] >= 0.01,
-            "andras: toe margin regressed",
+            "hero: toe margin regressed",
         )
         for side in ("L", "R"):
             finger = s_gate["warns"]["fingers"][side]
-            check(finger["status"] == "ok", f"andras: finger warn: {finger}")
+            check(finger["status"] == "ok", f"hero: finger warn: {finger}")
     elif tag == "elf":
         for bone in (
             "shoulder.L",
@@ -483,7 +483,7 @@ for tag, mesh_path in SUBJECTS:
 
 # 10. Quadruped pipeline (stalker-class, docs Section 10): synthetic
 # blockout end to end (landmarks, fit + generate, in-session + CLI gate,
-# export), the HLL stalker mesh (skip-if-absent), and unirig-hints
+# export), the quadruped stalker mesh (skip-if-absent), and unirig-hints
 # arbitration (skip-if-absent sample).
 Q_TMP = os.path.join(TMP, "quad")
 os.makedirs(Q_TMP, exist_ok=True)
@@ -527,7 +527,7 @@ print(
 # 10c. Fit (includes headless generate) and prove the fit-delta numbers.
 qf_out, qf_code = run_tool(
     "fit_metarig.py",
-    [Q_MESH, Q_LM, "--out", Q_FITTED, "--preset", "hll_stalker"],
+    [Q_MESH, Q_LM, "--out", Q_FITTED, "--preset", "quadruped_stalker"],
 )
 check(qf_code is None, f"quad fit exited {qf_code!r}")
 check("RIGFORGE_FIT_OK" in qf_out, "quad fit missing RIGFORGE_FIT_OK")
@@ -626,10 +626,10 @@ check(q_cli_code is None, f"quad CLI gate exited {q_cli_code!r}")
 check("RIGFORGE_VALIDATE_OK" in q_cli_out, "quad CLI gate not VALIDATE_OK")
 print("quad CLI gate: full_auto")
 
-# 10g. HLL stalker mesh (read-only, skip-if-absent): the reference
+# 10g. quadruped stalker mesh (read-only, skip-if-absent): the reference
 # subject runs landmarks -> fit -> strict gate with every driver
 # joint closed; the tail stays honestly unverified (no geometry).
-STALKER_MESH = "/Users/c/Games/hll/enemies/stalker/models/glb/stalker.glb"
+STALKER_MESH = os.environ.get("RIGFORGE_STALKER_MESH", "/tmp/bakeoff/stalker.glb")
 s_landmarks = None
 if not os.path.exists(STALKER_MESH):
     print(f"subject stalker: SKIP (missing {STALKER_MESH})")
@@ -654,7 +654,7 @@ else:
     )
     fit_out, fit_code = run_tool(
         "fit_metarig.py",
-        [STALKER_MESH, s_lm_path, "--out", s_fitted, "--preset", "hll_stalker"],
+        [STALKER_MESH, s_lm_path, "--out", s_fitted, "--preset", "quadruped_stalker"],
     )
     check(fit_code is None, f"stalker: fit exited {fit_code!r}")
     s_fit = parse_report(fit_out, "RIGFORGE_FIT_BEGIN", "RIGFORGE_FIT_OK")
@@ -732,7 +732,7 @@ else:
                 "--out",
                 h_fit_path,
                 "--preset",
-                "hll_stalker",
+                "quadruped_stalker",
                 "--hints",
                 HINTS_SAMPLE,
             ],
@@ -788,7 +788,7 @@ else:
                 "--out",
                 st_fit_path,
                 "--preset",
-                "hll_stalker",
+                "quadruped_stalker",
                 "--hints",
                 ST_HINTS,
             ],

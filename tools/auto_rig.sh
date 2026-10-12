@@ -4,7 +4,7 @@
 # For external harnesses (e.g. unirig-mac eval triage) that can only run a
 # single executable with no shell features: this wraps the addon overlay
 # sync + headless Blender invocation. CLI contract lives in
-# tools/auto_rig.py: MESH --preset hll_hero|hll_stalker --out FILE ...
+# tools/auto_rig.py: MESH --preset biped_hero|quadruped_stalker --out FILE ...
 # Exit 0 + GLB on success; exit 1 naming stage+reason on failure.
 set -euo pipefail
 

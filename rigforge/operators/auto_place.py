@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """One-click metarig auto-placement (thin UI over the headless fitter).
 
-Select the subject mesh object(s), keep the HLL metarig active, run
+Select the subject mesh object(s), keep the preset metarig active, run
 wm.rigforge_auto_place: the same detect -> fit -> gate pipeline as
 tools/auto_rig.py runs in-session (rigforge.auto_place, shared code —
 UI and headless fits cannot drift apart) and the metarig is solved
@@ -16,7 +16,7 @@ from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 from ..auto_place import detect_landmarks as _detect
 from ..auto_place import fit_metarig as _fit
-from ..auto_place import make_hll_presets as _presets
+from ..auto_place import make_presets as _presets
 from ..auto_place import unirig_hints as _hints
 from ..auto_place import validate_fit as _gate
 from ..utils.bones import align_bone_z_axis
@@ -57,7 +57,7 @@ def _missing_bones(meta, kind):
     are required exactly when mirror_subtree would fail on them.
     """
     bones = meta.data.bones
-    if kind == "hll_stalker":
+    if kind == "quadruped_stalker":
         want = {
             *_fit.STALKER_SPINE,
             *_fit.STALKER_NECK,
@@ -158,7 +158,7 @@ def _restore_bones(meta, snap):
 
 def _detect_landmarks(env, kind, facing):
     """Slice analysis + landmark detection (mirrors the detector CLI)."""
-    if kind == "hll_stalker":
+    if kind == "quadruped_stalker":
         long_sig, ymin, ymax = _detect.slice_signature_axis(env, SLICES, "y")
         trans_sig, zmin, zmax = _detect.slice_signature_axis(env, SLICES, "z")
         xs = [v.co.x for v in env.data.vertices]
@@ -207,7 +207,7 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
     bl_idname = "wm.rigforge_auto_place"
     bl_label = "Auto-Place Metarig to Mesh"
     bl_description = (
-        "Fit the active HLL metarig to the selected mesh(es) with the "
+        "Fit the active preset metarig to the selected mesh(es) with the "
         "deterministic landmark fitter (same solve as the headless tools)"
     )
     bl_options = {"REGISTER", "UNDO"}
@@ -217,8 +217,8 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
         description="Metarig class to fit (Auto detects tail.001 = stalker)",
         items=[
             ("AUTO", "Auto", "Detect from the metarig bones"),
-            ("HLL_HERO", "HLL Hero", "Stylized biped metarig"),
-            ("HLL_STALKER", "HLL Stalker", "Quadruped metarig"),
+            ("BIPED_HERO", "Biped Hero", "Stylized biped metarig"),
+            ("QUADRUPED_STALKER", "Quadruped Stalker", "Quadruped metarig"),
         ],
         default="AUTO",
     )
@@ -226,8 +226,8 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
         name="Facing",
         description="Which way the subject faces (same default as headless)",
         items=[
-            ("-Y", "-Y", "Faces Blender -Y (HLL heroes)"),
-            ("+Y", "+Y", "Faces Blender +Y (HLL creatures)"),
+            ("-Y", "-Y", "Faces Blender -Y (biped heroes)"),
+            ("+Y", "+Y", "Faces Blender +Y (quadruped creatures)"),
         ],
         default="-Y",
     )
@@ -260,13 +260,13 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
     def execute(self, context):
         meta = context.active_object
         if meta is None or meta.type != "ARMATURE":
-            self.report({"ERROR"}, "Active object must be the HLL metarig")
+            self.report({"ERROR"}, "Active object must be the preset metarig")
             return {"CANCELLED"}
         if "rig_id" in meta.data:
             self.report(
                 {"ERROR"},
                 "Active armature is a generated rig, not a metarig: "
-                "auto-place needs an hll_hero/hll_stalker metarig",
+                "auto-place needs a biped_hero/quadruped_stalker metarig",
             )
             return {"CANCELLED"}
         meshes = [o for o in context.selected_objects if o.type == "MESH" and o != meta]
@@ -279,15 +279,19 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
             return {"CANCELLED"}
 
         is_stalker = "tail.001" in meta.data.bones
-        kind = "hll_stalker" if is_stalker else "hll_hero"
+        kind = "quadruped_stalker" if is_stalker else "biped_hero"
         if self.preset != "AUTO":
-            want = "hll_stalker" if self.preset == "HLL_STALKER" else "hll_hero"
+            want = (
+                "quadruped_stalker"
+                if self.preset == "QUADRUPED_STALKER"
+                else "biped_hero"
+            )
             if want != kind:
                 self.report(
                     {"ERROR"},
                     f"metarig {'has' if is_stalker else 'lacks'} tail.001 "
                     f"but Preset={want}: set Preset to Auto or add the "
-                    "matching HLL metarig",
+                    "matching preset metarig",
                 )
                 return {"CANCELLED"}
         missing = _missing_bones(meta, kind)
@@ -296,11 +300,11 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
             self.report(
                 {"ERROR"},
                 f"metarig lacks {len(missing)} {kind} bones ({shown}): "
-                "add a fresh hll_hero/hll_stalker metarig",
+                "add a fresh biped_hero/quadruped_stalker metarig",
             )
             return {"CANCELLED"}
-        if self.hints and kind != "hll_stalker":
-            self.report({"ERROR"}, "Hints apply to hll_stalker only")
+        if self.hints and kind != "quadruped_stalker":
+            self.report({"ERROR"}, "Hints apply to quadruped_stalker only")
             return {"CANCELLED"}
 
         prev_selected = list(context.selected_objects)
@@ -317,7 +321,7 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
             # Removing the probe clears the active object; the ops below
             # need one.
             context.view_layer.objects.active = subject
-            if kind == "hll_stalker":
+            if kind == "quadruped_stalker":
                 targets = _fit.stalker_targets(landmarks)
                 hints_report = None
                 if self.hints:
@@ -352,7 +356,7 @@ class WM_OT_rigforge_auto_place(bpy.types.Operator):
                     landmarks,
                     signature,
                     _gate.MARGIN_DEFAULT,
-                    HERO_OPEN if kind == "hll_hero" else STALKER_OPEN,
+                    HERO_OPEN if kind == "biped_hero" else STALKER_OPEN,
                 )
                 if gate["verdict"] != "pass":
                     _restore_bones(meta, snap)

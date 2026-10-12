@@ -83,7 +83,7 @@ def limb_balls(points):
     return parts
 
 
-# Facing -Y (Andras convention: toes toward -Y). Units: meters.
+# Facing -Y (reference-hero convention: toes toward -Y). Units: meters.
 # Calibrated against actual detector output; values must stay anatomically
 # sane (ordered neck > armpit > elbow > wrist > hand, crotch > knee > ankle)
 # and the --check tolerance below guards regressions.
