@@ -18,7 +18,7 @@ import sys
 
 import bpy
 
-argv = sys.argv[sys.argv.index("--") + 1:]
+argv = sys.argv[sys.argv.index("--") + 1 :]
 
 
 def clear():
@@ -28,16 +28,17 @@ def clear():
 
 def heads(arm):
     mw = arm.matrix_world
-    return {b.name: list(mw @ b.head_local) for b in arm.data.bones} | \
-        {b.name + "@tail": list(mw @ b.tail_local) for b in arm.data.bones}
+    return {b.name: list(mw @ b.head_local) for b in arm.data.bones} | {
+        b.name + "@tail": list(mw @ b.tail_local) for b in arm.data.bones
+    }
 
 
 def strip(ref, mesh_out, truth):
     clear()
     bpy.ops.import_scene.gltf(filepath=ref)
-    arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+    arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
     json.dump(heads(arm), open(truth, "w"), indent=1)
-    meshes = [o for o in bpy.data.objects if o.type == 'MESH' and o.visible_get()]
+    meshes = [o for o in bpy.data.objects if o.type == "MESH" and o.visible_get()]
     for o in meshes:
         mw = o.matrix_world.copy()
         for m in list(o.modifiers):
@@ -46,26 +47,32 @@ def strip(ref, mesh_out, truth):
         o.matrix_world = mw
         o.vertex_groups.clear()
     bpy.data.objects.remove(arm)
-    bpy.ops.object.select_all(action='DESELECT')
+    bpy.ops.object.select_all(action="DESELECT")
     for o in meshes:
         o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=mesh_out, use_selection=True, export_materials='NONE',
-                              export_skins=False, export_animations=False)
+    bpy.ops.export_scene.gltf(
+        filepath=mesh_out,
+        use_selection=True,
+        export_materials="NONE",
+        export_skins=False,
+        export_animations=False,
+    )
 
 
 def joints(rigged, out):
     clear()
     bpy.ops.import_scene.gltf(filepath=rigged, bone_heuristic="TEMPERANCE")
-    arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+    arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
     json.dump(heads(arm), open(out, "w"), indent=1)
 
 
 def metarig(mesh, out):
     import addon_utils
+
     addon_utils.enable("rigify", default_set=True)
     clear()
     bpy.ops.import_scene.gltf(filepath=mesh)
-    ms = [o for o in bpy.data.objects if o.type == 'MESH' and o.visible_get()]
+    ms = [o for o in bpy.data.objects if o.type == "MESH" and o.visible_get()]
     zs = [(o.matrix_world @ v.co) for o in ms for v in o.data.vertices]
     lo = min(p.z for p in zs)
     hi = max(p.z for p in zs)
@@ -73,7 +80,9 @@ def metarig(mesh, out):
     cy = (min(p.y for p in zs) + max(p.y for p in zs)) / 2
     bpy.ops.object.armature_human_metarig_add()
     rig = bpy.context.active_object
-    bz = [rig.matrix_world @ b.head_local for b in rig.data.bones] + [rig.matrix_world @ b.tail_local for b in rig.data.bones]
+    bz = [rig.matrix_world @ b.head_local for b in rig.data.bones] + [
+        rig.matrix_world @ b.tail_local for b in rig.data.bones
+    ]
     rlo = min(p.z for p in bz)
     rhi = max(p.z for p in bz)
     rcx = (min(p.x for p in bz) + max(p.x for p in bz)) / 2
@@ -83,7 +92,14 @@ def metarig(mesh, out):
     rig.location = (cx - rcx * k, cy - rcy * k, lo - rlo * k)
     bpy.context.view_layer.update()
     h = heads(rig)
-    json.dump({("DEF-" + n if not n.endswith("@tail") else "DEF-" + n): v for n, v in h.items()}, open(out, "w"), indent=1)
+    json.dump(
+        {
+            ("DEF-" + n if not n.endswith("@tail") else "DEF-" + n): v
+            for n, v in h.items()
+        },
+        open(out, "w"),
+        indent=1,
+    )
 
 
 {"strip": strip, "joints": joints, "metarig": metarig}[argv[0]](*argv[1:])
