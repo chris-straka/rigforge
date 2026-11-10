@@ -1,5 +1,7 @@
 # rigforge — agent notes
 
+One rules file only: this `AGENTS.md` is it — never create a `CLAUDE.md` in this folder (Muse ignores it and warns while both exist).
+
 Fork of Blender's Rigify (0.6.10, copied from the Blender 5.2 app
 bundle), module renamed `rigforge` to coexist with bundled Rigify.
 Goal: game-ready rigs for Bevy (Rust) game characters and creatures —
